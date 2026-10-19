@@ -176,6 +176,12 @@
       font-weight: 700
     }
 
+    .logo .logo-cup {
+      width: 46px;
+      height: 46px;
+      margin: -10px -4px 0
+    }
+
     .nav {
       display: flex;
       gap: 6px
@@ -1571,6 +1577,32 @@
     .ex-h {
       font-size: 22px;
       line-height: 1.25
+    }
+
+    /* desktop: whole sidebar scrolls, search stays pinned so results are never squeezed */
+    @media (min-width:821px) {
+      .ex-side {
+        overflow-y: auto
+      }
+
+      .ex-top {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--paper);
+        border-bottom: 0
+      }
+
+      .ex-filters {
+        padding: 2px 20px 16px;
+        border-bottom: 1px solid var(--line)
+      }
+
+      .ex-side .ex-list {
+        flex: none;
+        overflow: visible;
+        min-height: 60%
+      }
     }
 
     .srch {
@@ -4067,7 +4099,7 @@
         display: none
       }
 
-      .ex-top .fdesk {
+      .ex-side .fdesk {
         display: none
       }
 
@@ -4147,6 +4179,19 @@
 
       .fpanel.mopen {
         display: flex
+      }
+
+      .fpanel .fdesk {
+        display: none
+      }
+
+      .cf-mrow {
+        margin-bottom: 14px
+      }
+
+      .cf-mrow .srch {
+        flex: 1;
+        min-width: 0
       }
 
       .mf-open {

@@ -331,7 +331,7 @@ function toast(msg, ok) { const t = document.createElement('div'); t.className =
 
 /* ================= header ================= */
 function renderHeaderBits() {
-  $('#logoIc').innerHTML = I.house; $('#locPill').innerHTML = I.pin + ' Сүхбаатар дүүрэг'; renderSndBtn(); renderFavCount();
+  $('#locPill').innerHTML = I.pin + ' Сүхбаатар дүүрэг'; renderSndBtn(); renderFavCount();
   $('#tabbar').innerHTML = [['home', I.home, 'Нүүр'], ['explore', I.map, 'Газрын зураг'], ['cafes', I.grid, 'Кафенууд'], ['about', I.info, 'Тухай'], ['partner', I.hand, 'Хамтрах']].map(([h, ic, l]) => `<a href="#${h}" data-nav="${h}">${ic}<span>${l}</span></a>`).join('')
 }
 function renderSndBtn() { $('#sndBtn').innerHTML = Prefs.sound ? I.sndOn : I.sndOff; $('#sndBtn').setAttribute('aria-pressed', Prefs.sound) }
@@ -368,7 +368,7 @@ function cafeCard(c) {
 /* ================= pages ================= */
 const app = $('#app');
 function footer() {
-  return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff">${I.house}<span><b>Live</b>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
+  return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff"><b>Live</b><img class="logo-cup" src="logo.webp" alt=""><span>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
  <div><h4>ЦЭС</h4><a href="#explore">Газрын зураг</a><a href="#cafes">Кафенууд</a><a href="#about">Бидний тухай</a><a href="#partner">Хамтын ажиллагаа</a></div>
  <div><h4>КАФЕ ЭЗЭМШИГЧ</h4><a href="#staff">Ажилтны шууд хяналт</a><a href="#partner">Кафегаа нэмэх</a><span style="display:block;padding:4px 0">Улаанбаатар, Монгол</span></div></div>
  <div class="ft-b"><span>© 2026 LiveSpace</span><span>Прототип · бүх утга демо өгөгдөл</span></div></div></footer>`}
@@ -432,8 +432,8 @@ function renderExplore() {
    <div class="sh-handle" id="shHandle" role="button" tabindex="0" aria-label="Жагсаалтыг томруулах"><span></span></div>
    <div class="ex-top"><h1 class="ex-h">Яг одоо ямар газар хэрэгтэй вэ?</h1>
     <div class="mrow"><label class="srch">${I.search}<input id="q2" placeholder="Кафе хайх" aria-label="Кафе хайх" value=""></label><button class="btn btn-o" id="mFilter" style="padding:10px 14px">${I.filter}<span id="mfCount"></span></button></div>
-    <label class="srch fdesk">${I.search}<input id="q" placeholder="Кафе хайх" aria-label="Кафе хайх"></label>
-    <div class="fdesk fbox">${filtersHTML(false)}</div></div>
+    <label class="srch fdesk">${I.search}<input id="q" placeholder="Кафе хайх" aria-label="Кафе хайх"></label></div>
+   <div class="fdesk fbox ex-filters">${filtersHTML(false)}</div>
    <div class="ex-active" id="exActive"></div>
    <div class="ex-list" id="exList"></div>
   </aside>
@@ -441,7 +441,7 @@ function renderExplore() {
    <div class="compass" aria-hidden="true"><svg width="52" height="52" viewBox="0 0 52 52"><path d="M26 6l5 20-5 20-5-20z" fill="#B6771D"/><path d="M26 6l5 20h-10z" fill="#FF9D00"/><text x="26" y="5" text-anchor="middle" font-size="7" font-weight="800" fill="#7B542F" font-family="Manrope">Хойд</text></svg></div>
    <div class="map-legend"><div>${crowdMini(30)} Хүмүүс</div><div><span class="sg">${ssGlyph(2)}</span> Дуу чимээ</div><div>${wifiSVG(3, 18)} Wi-Fi</div></div></div>
  </section>`;
-  $$('#q,#q2').forEach(i => { i.value = F.q; i.oninput = () => { F.q = i.value; $$('#q,#q2').forEach(o => { if (o !== i) o.value = i.value }); refreshResults() } });
+  $$('#q,#q2').forEach(i => { i.value = F.q; i.oninput = () => { F.q = i.value; $$('#q,#q2').forEach(o => { if (o !== i) o.value = i.value }); refreshResults(); if (F.q.trim()) revealResults() } });
   mapCtl = buildMap($('#exMap'), { onSelect: (id, from) => selectCafe(id, from) });
   refreshResults = updateExplore; updateExplore();
   const list = $('#exList');
@@ -460,6 +460,12 @@ function renderExplore() {
   h.addEventListener('pointerup', e => { if (!sd) return; side.classList.remove('drag'); side.style.transform = ''; if (sd.moved) { const dy = e.clientY - sd.y; setFull(sd.full ? dy < 80 : dy < -60) } setTimeout(() => sd = null, 0) });
   $('#mFilter').onclick = () => { Snd.ui('whoosh'); openModal(`<div class="mdl-h"><h2>Шүүлтүүр</h2><button class="pv-x" data-close aria-label="Хаах" style="margin-left:auto">${I.x}</button></div><div style="display:flex;flex-direction:column;gap:18px">${filtersHTML(true)}</div><div style="display:flex;gap:10px;margin-top:22px"><button class="btn btn-g" data-reset>Цэвэрлэх</button><button class="btn btn-p" data-close style="flex:1" id="mfApply">Үр дүн харах</button></div>`) };
   if (selId) setTimeout(() => selectCafe(selId, 'list', true), 60);
+}
+// desktop: scroll the sidebar past the filters so search results sit right under the sticky search box
+function revealResults() {
+  if (isMobile()) return; const side = $('#exSide'), act = $('#exActive'), top = $('.ex-top', side); if (!side || !act) return;
+  const y = side.scrollTop + act.getBoundingClientRect().top - side.getBoundingClientRect().top - top.offsetHeight;
+  if (y > side.scrollTop) side.scrollTo({ top: y, behavior: Prefs.reduced ? 'auto' : 'smooth' })
 }
 function updateExplore() {
   const res = CAFES.filter(matches); const set = new Set(res.map(c => c.id));
@@ -500,10 +506,14 @@ function selectCafe(id, from, silent) {
 function renderCafes() {
   app.innerHTML = `<div class="page"><div class="lamps-hd">${lamp('3%', 0, '#FF9D00', 0, '', 'l1')}${lamp('13%', 60, '#B6771D', 1, '', 'l2')}${lamp('23%', 30, '#FFCF71', 0, '', 'l3')}${lamp('72%', 40, '#FFCF71', 1, '', 'l4')}${lamp('82%', 10, '#7B542F', 2, '', 'l5')}${lamp('91%', 50, '#FF9D00', 1, '', 'l6')}
   <div><h1>Бүх кафе</h1><p id="cfCount"></p></div></div>
- <div class="wrap"><button class="btn btn-o mf-open" id="mfo" style="margin-bottom:14px">${I.filter} Шүүлтүүр <span id="mfc"></span></button>
- <div class="cafes"><aside class="fpanel" id="fpanel"><h2>Шүүлтүүр <button data-reset>Цэвэрлэх</button></h2><label class="srch">${I.search}<input id="q" placeholder="Кафе хайх" aria-label="Кафе хайх"></label>${filtersHTML(true)}</aside>
+ <div class="wrap"><div class="mrow cf-mrow"><label class="srch">${I.search}<input id="q2" placeholder="Кафе хайх" aria-label="Кафе хайх" enterkeyhint="search"></label><button class="btn btn-o mf-open" id="mfo">${I.filter} Шүүлтүүр <span id="mfc"></span></button></div>
+ <div class="cafes"><aside class="fpanel" id="fpanel"><h2>Шүүлтүүр <button data-reset>Цэвэрлэх</button></h2><label class="srch fdesk">${I.search}<input id="q" placeholder="Кафе хайх" aria-label="Кафе хайх"></label>${filtersHTML(true)}</aside>
  <div><div class="ex-active" id="exActive" style="padding:0 0 14px"></div><div class="cgrid2" id="cgrid"></div></div></div></div>${footer()}</div>`;
-  const q = $('#q'); q.value = F.q; q.oninput = () => { F.q = q.value; updateCafes() };
+  $$('#q,#q2').forEach(i => {
+    i.value = F.q;
+    i.oninput = () => { F.q = i.value; $$('#q,#q2').forEach(o => { if (o !== i) o.value = i.value }); $('#fpanel').classList.remove('mopen'); updateCafes() };
+    i.onkeydown = e => { if (e.key === 'Enter') { i.blur(); $('#cgrid').scrollIntoView({ block: 'start', behavior: Prefs.reduced ? 'auto' : 'smooth' }) } }
+  });
   $('#mfo').onclick = () => { $('#fpanel').classList.toggle('mopen'); Snd.ui('whoosh') };
   refreshResults = updateCafes; updateCafes()
 }
