@@ -5797,10 +5797,9 @@
       width: min(112px, 100%, 13vh)
     }
 
-    @media (max-height:560px) {
-      .hero-map.ex-map {
-        display: none
-      }
+    /* the search lives on the map, so the map never hides — it just keeps room for the search bar */
+    .hero-map.ex-map {
+      min-height: 120px
     }
 
     /* cafe detail: roof is back and carries the cafe's info */
@@ -6038,5 +6037,117 @@
       .hp-ic {
         width: 30px;
         height: 30px
+      }
+    }
+
+    /* hero search sits under the text, magnifier button on the right */
+    .arch .hsearch {
+      position: relative;
+      z-index: 7;
+      width: 100%;
+      margin-top: clamp(4px, 1vh, 10px);
+      gap: 6px;
+      padding: 5px 5px 5px 6px;
+      border-radius: 12px;
+      cursor: auto;
+      box-shadow: 0 4px 14px rgba(62, 42, 23, .18)
+    }
+
+    .arch .hsearch input {
+      padding: 8px 10px
+    }
+
+    .hs-go {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--brown);
+      color: #fff;
+      cursor: pointer;
+      transition: background .2s
+    }
+
+    .hs-go:hover {
+      background: var(--brown2)
+    }
+
+    .arch .hsearch .hs-go svg {
+      width: 20px;
+      height: 20px;
+      margin: 0;
+      color: #fff
+    }
+
+    @media (max-width:820px) {
+      .hs-go {
+        width: 34px;
+        height: 34px
+      }
+    }
+
+    /* desktop: the map fills the whole arch; kicker, title, text and search float on top of it */
+    @media (min-width:1000px) {
+      .arch {
+        overflow: hidden;
+        padding: clamp(44px, 7vh, 64px) 48px 18px
+      }
+
+      .arch::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        background: radial-gradient(ellipse 72% 46% at 50% 14%, rgba(255, 249, 236, .96) 40%, rgba(255, 249, 236, .75) 62%, rgba(255, 249, 236, 0) 82%)
+      }
+
+      .arch>.hero-kick,
+      .arch>h1,
+      .arch>p,
+      .arch>.hsearch {
+        position: relative;
+        z-index: 3
+      }
+
+      .arch>p {
+        color: var(--ink)
+      }
+
+      .arch .hsearch {
+        width: min(520px, 100%);
+        margin-top: 2px
+      }
+
+      .hero-map.ex-map {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        height: auto;
+        min-height: 0;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none
+      }
+
+      .hero-purp {
+        margin-top: auto
+      }
+
+      .hm-legend,
+      .hm-open {
+        bottom: 84px
+      }
+
+      .hm-legend {
+        left: 24px
+      }
+
+      .hm-open {
+        right: 24px
       }
     }

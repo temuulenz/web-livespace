@@ -408,10 +408,10 @@ function renderHome() {
    <span class="hero-kick">${I.map}Газрын зурагтай кафе хайгч</span>
    <h1>Өнөөдөр <em>хаана</em><br>суух вэ?</h1>
    <p>Кафе хайх эсвэл зорилгоо сонгоход газрын зураг танд тохирохыг тодруулна.</p>
-   <form class="hsearch" id="hs">${I.search}<input id="hq" placeholder="Кафе хайх, жишээ нь «Кафе A»" aria-label="Кафе хайх" autocomplete="off"><button class="btn btn-p">${I.map}<span>Газрын зураг</span></button></form>
-   <div class="hero-map ex-map" id="miniMap" role="link" tabindex="0" aria-label="Газрын зураг нээх">
+   <form class="hsearch" id="hs" role="search"><input id="hq" placeholder="Кафе хайх, жишээ нь «Кафе A»" aria-label="Кафе хайх" autocomplete="off" enterkeyhint="search"><button class="hs-go" aria-label="Хайх" title="Хайх">${I.search}</button></form>
+   <div class="hero-map ex-map" id="miniMap" aria-label="Газрын зураг">
     <div class="hm-legend" aria-hidden="true"><span>${seatRow(40)}</span><span class="sg">${ssGlyph(1)}</span><span>${wifiSVG(4, 16)}</span></div>
-    <span class="hm-open">Газрын зураг нээх ${I.arr}</span>
+    <a class="hm-open" href="#explore">Газрын зураг нээх ${I.arr}</a>
    </div>
    <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${[['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Wi-Fi, залгуур'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']].map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
   </div>
@@ -428,8 +428,7 @@ function renderHome() {
   <div class="band"><div><h2>Кафе эзэмшигч үү?</h2><p>Кафегаа LiveSpace-д нэмж, илүү олон зочинд хүрээрэй.</p></div><a class="btn btn-y" href="#partner">Хамтран ажиллах →</a></div>
  </div>${footer()}</div>`;
   homeMini = buildMap($('#miniMap'), { interactive: false, onSelect: id => { if (id) { Snd.ui('pop'); selId = id; location.hash = 'explore' } } });
-  $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.mk')) { Snd.ui('whoosh'); location.hash = 'explore' } });
-  $('#miniMap').addEventListener('keydown', e => { if (e.key === 'Enter') location.hash = 'explore' });
+  $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.mk,.hsearch')) { Snd.ui('whoosh'); location.hash = 'explore' } });
   $$('[data-go-purpose]').forEach(b => b.onclick = () => { F.purpose.clear(); F.purpose.add(b.dataset.goPurpose); Snd.ui('pop'); location.hash = 'explore' });
   // live search: results light up on the hero map as you type
   $('#hq').oninput = () => { const q = $('#hq').value.trim().toLowerCase(); const set = new Set(CAFES.filter(c => !q || c.name.toLowerCase().includes(q)).map(c => c.id)); homeMini.dim(set); homeMini.hits(q ? set : null) };
