@@ -1,0 +1,6 @@
+{
+  "originalSha256": "864fe70841ad3c31f3430381ff2527e2ba384d03538be85fbbfd82697f952877",
+  "deduplicatedSha256": "957d4c98aa6ce153b485faf1e62333057e6d65dccee0703c943fee8ed661f503",
+  "removedRule": ".ibtn svg { width: 20px; height: 20px }",
+  "sourceCommit": "f7f64a7"
+}
