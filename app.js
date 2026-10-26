@@ -1,238 +1,20 @@
-"use strict";
-/* ================= utils ================= */
-const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const store = { get(k, d) { try { const v = localStorage.getItem('ls_' + k); return v == null ? d : JSON.parse(v) } catch (e) { return d } }, set(k, v) { try { localStorage.setItem('ls_' + k, JSON.stringify(v)) } catch (e) { } } };
-const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-const Prefs = { sound: store.get('sound', true), reduced: store.get('reduced', mq.matches) };
-const isMobile = () => window.matchMedia('(max-width:820px)').matches;
+import { $, $$, clamp, isMobile } from './js/dom.js';
+import { store } from './js/storage.js';
+import { Prefs, F, favs } from './js/state.js';
+import { I, pinSVG, cardPin } from './js/icons.js';
+import { Snd } from './js/audio.js';
+import { SS, WIFI, WIFI_S, TOTAL_SEATS, getCafes, byId } from './js/cafes.js';
+import { freePct, crowdCat, tone, mood, nowHour, profile } from './js/cafe-metrics.js';
+import { ssGlyph, ssArt, wifiSVG, seatRow, mSeat, mSound, mWifi, tagPills } from './js/components/atmosphere.js';
+import { buildMap } from './js/map.js';
+import { FloorPlan, ZONES } from './js/simulation/floor-plan.js';
+import { pageTasks } from './js/lifecycle.js';
+import { countUp, animNum } from './js/animations.js';
+import { openModal, closeModal, toast } from './js/components/feedback.js';
 
-/* ================= icons ================= */
-const I = {
-  house: '<svg viewBox="0 0 28 28" fill="none"><path d="M3 13.5 14 4l11 9.5" stroke="#3E2A17" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><path d="M6.5 12.5V24h15V12.5L14 6.3z" fill="#B6771D"/><path d="M11.5 24v-5.5a2.5 2.5 0 0 1 5 0V24z" fill="#FFF4DC"/></svg>',
-  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
-  heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z" fill="none"/></svg>',
-  sndOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
-  sndOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5m0-5-5 5"/></svg>',
-  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>',
-  filter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
-  chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
-  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
-  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-  minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>',
-  locate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>',
-  cmp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v17M8 20.5h8M4.5 7h15M12 3.5 9.5 7M12 3.5 14.5 7"/><path d="M4.5 7 2 13a2.6 2.6 0 0 0 5 0zM19.5 7 17 13a2.6 2.6 0 0 0 5 0z"/></svg>',
-  arr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
-  walk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.5" r="1.8"/><path d="m9 21 2.5-6.5L14 17v4M7.5 11.5 10 8.5l3.5-.5 2 3.5 3 1M11.5 14.5l1-5"/></svg>',
-  guestIn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="8" r="3.4"/><path d="M3.5 20c.6-3.8 3.2-6 6.5-6s5.9 2.2 6.5 6M19 7v6M16 10h6"/></svg>',
-  guestOut: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="8" r="3.4"/><path d="M3.5 20c.6-3.8 3.2-6 6.5-6s5.9 2.2 6.5 6M16 10h6"/></svg>',
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
-  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>',
-  stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
-  seat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v8H7zM5 12h14M7 12v8M17 12v8"/></svg>',
-  plug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></svg>',
-  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5.5c3-1.3 6-1.3 9 .8 3-2.1 6-2.1 9-.8V19c-3-1.3-6-1.3-9 .8-3-2.1-6-2.1-9-.8z"/><path d="M12 6.3V19.8"/></svg>',
-  laptop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M2.5 19h19"/></svg>',
-  people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.5 3-5.5 6-5.5s5.4 2 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.5c2.4.2 4 1.9 4.5 5"/></svg>',
-  sofa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 11V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v3"/><path d="M3 12a2 2 0 0 1 4 0v2h10v-2a2 2 0 0 1 4 0v5H3z"/><path d="M5 17v2M19 17v2"/></svg>',
-  map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m9 4-5.5 2v14L9 18l6 2 5.5-2V4L15 6z"/><path d="M9 4v14M15 6v14"/></svg>',
-  cup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5c-.8 1 .8 2 0 3M12 3.5c-.8 1 .8 2 0 3"/></svg>',
-  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
-  menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>',
-  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
-  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>',
-  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h16M7 16v-4M12 16V8M17 16v-7"/></svg>',
-  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>',
-  target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/></svg>',
-  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 11 12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/></svg>',
-  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>',
-  hand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12.5 4.8 10.3a1.7 1.7 0 0 0-2.4 2.4l5 5.3A6 6 0 0 0 11.8 20H14a6 6 0 0 0 6-6V8.5a1.5 1.5 0 0 0-3 0V12M14 11V5.5a1.5 1.5 0 0 0-3 0V11M11 11V6.5a1.5 1.5 0 0 0-3 0v6"/></svg>',
-  lamp: '<svg viewBox="0 0 15 18"><path d="M7.5 0v4" stroke="currentColor" stroke-width="1.4"/><path d="M2 11 5 4h5l3 7z" fill="currentColor"/><path d="M5.5 11h4l-2 4z" fill="currentColor" opacity=".45"/></svg>'
-};
-const pinSVG = (fill = '#FF9D00', inner = '#3E2A17') => `<svg viewBox="0 0 40 48"><path d="M20 47S4 30.5 4 18.5a16 16 0 0 1 32 0C36 30.5 20 47 20 47z" fill="${fill}" stroke="#fff" stroke-width="2.5"/><path d="M11.5 19.5 20 12l8.5 7.5" stroke="${inner}" stroke-width="2.6" stroke-linejoin="round" fill="none"/><path d="M14 18.5v7.5h12v-7.5L20 13.6z" fill="${inner}"/><path d="M18.2 26v-3.6a1.8 1.8 0 0 1 3.6 0V26z" fill="${fill}"/></svg>`;
-const cardPin = (gray) => `<svg class="pinic${gray ? ' gray' : ''}" viewBox="0 0 40 48"><path d="M20 47S3 30 3 18a17 17 0 0 1 34 0c0 12-17 29-17 29z" fill="currentColor"/><path d="M11.5 19 20 11.5l8.5 7.5" stroke="#3E2A17" stroke-width="2.6" stroke-linejoin="round" fill="none"/><path d="M14 18v8h12v-8l-6-5z" fill="#3E2A17"/><path d="M18.2 26v-3.6a1.8 1.8 0 0 1 3.6 0V26z" fill="#B6771D"/></svg>`;
-
-/* ================= sound engine (Web Audio, no files) ================= */
-const Snd = {
-  ctx: null, nbuf: null, amb: null,
-  ensure() { if (!this.ctx) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; try { this.ctx = new C() } catch (e) { return null } } if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx },
-  noiseBuf() { const c = this.ctx; if (this.nbuf) return this.nbuf; const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0); let l = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; l = (l + .02 * w) / 1.02; d[i] = w * .5 + l * 3 } this.nbuf = b; return b },
-  tone(f, dur, { type = 'sine', vol = .15, to = null, delay = 0, dest = null } = {}) { const c = this.ensure(); if (!c) return; const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur * .8); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + dur); o.connect(g).connect(dest || c.destination); o.start(t); o.stop(t + dur + .05) },
-  burst(dur, { vol = .08, f = 2000, q = 1, type = 'bandpass', delay = 0, to = null, dest = null } = {}) { const c = this.ensure(); if (!c) return; const t = c.currentTime + delay, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); s.buffer = this.noiseBuf(); fl.type = type; fl.frequency.setValueAtTime(f, t); if (to) fl.frequency.exponentialRampToValueAtTime(to, t + dur); fl.Q.value = q; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + dur); s.connect(fl).connect(g).connect(dest || c.destination); s.start(t, Math.random()); s.stop(t + dur + .05) },
-  ui(name) {
-    if (!Prefs.sound) return; const s = this; ({
-      pop() { s.tone(380, .14, { to: 820, vol: .16 }); s.tone(1240, .08, { vol: .04, delay: .03, type: 'triangle' }) },
-      click() { s.burst(.035, { vol: .09, f: 3200, q: 2.5 }) },
-      whoosh() { s.burst(.28, { vol: .05, f: 500, to: 2200, q: .8 }) },
-      chime() { s.tone(784, .32, { type: 'triangle', vol: .1 }); s.tone(1175, .45, { type: 'triangle', vol: .08, delay: .09 }) },
-      sit() { s.tone(170, .16, { to: 95, vol: .17 }); s.burst(.06, { vol: .05, f: 900, q: 1 }) },
-      leave() { s.tone(220, .12, { to: 330, vol: .09, type: 'triangle' }) },
-      err() { s.tone(330, .15, { vol: .1, type: 'triangle' }); s.tone(247, .2, { vol: .1, type: 'triangle', delay: .12 }) },
-      tick() { s.tone(1800, .03, { vol: .04, type: 'square' }) }
-    })[name]?.()
-  },
-  stopAmb() { if (this.amb) { const a = this.amb; this.amb = null; try { const t = this.ctx.currentTime; a.g.gain.cancelScheduledValues(t); a.g.gain.setValueAtTime(a.g.gain.value, t); a.g.gain.linearRampToValueAtTime(0, t + .35); setTimeout(() => a.nodes.forEach(n => { try { n.stop() } catch (e) { } }), 450); a.timers.forEach(clearInterval) } catch (e) { } a.onEnd && a.onEnd() } },
-  ambience(level, onEnd) {
-    this.stopAmb(); const c = this.ensure(); if (!c) return; const g = c.createGain(); g.gain.value = 0; g.connect(c.destination); const nodes = [], timers = []; const t = c.currentTime;
-    const bed = (f, q, vol, type = 'lowpass', lfo = 0, depth = 0) => { const s = c.createBufferSource(); s.buffer = this.noiseBuf(); s.loop = true; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const gg = c.createGain(); gg.gain.value = vol; if (lfo) { const o = c.createOscillator(), og = c.createGain(); o.frequency.value = lfo; og.gain.value = vol * depth; o.connect(og).connect(gg.gain); o.start(); nodes.push(o) } s.connect(fl).connect(gg).connect(g); s.start(); nodes.push(s) };
-    const every = (ms, fn) => timers.push(setInterval(fn, ms));
-    if (level === 1) { bed(500, .5, .18); every(1500, () => { if (Math.random() < .6) this.burst(.18, { vol: .05, f: 4200, to: 2500, q: 1.4, dest: g }) }) }
-    if (level === 2) { bed(700, .6, .35); every(900, () => { if (Math.random() < .45) this.tone(2400 + Math.random() * 900, .18, { type: 'sine', vol: .05, dest: g }) }) }
-    if (level === 3) { bed(800, .6, .35); bed(900, 1.4, .5, 'bandpass', 4.5, .6); bed(1500, 1.2, .3, 'bandpass', 6.3, .7); every(700, () => { if (Math.random() < .4) this.tone(2600 + Math.random() * 700, .15, { vol: .05, dest: g }) }) }
-    if (level === 4) { bed(900, .6, .6); bed(1000, 1, .8, 'bandpass', 7, .6); bed(1700, 1, .5, 'bandpass', 9, .7); bed(300, .8, .4, 'lowpass'); every(450, () => { if (Math.random() < .5) this.tone(2000 + Math.random() * 1500, .12, { vol: .06, dest: g }) }) }
-    if (level === 5) { bed(900, .6, .7); bed(1100, 1, .9, 'bandpass', 8, .6); bed(1900, 1, .6, 'bandpass', 11, .7); bed(250, .8, .5, 'lowpass'); let beat = 0; every(300, () => { const strong = beat++ % 2 === 0; this.tone(strong ? 90 : 120, .22, { to: 50, vol: strong ? .45 : .25, dest: g }); this.burst(.08, { vol: .08, f: 1800, q: 1, dest: g }) }) }
-    g.gain.linearRampToValueAtTime(.32, t + .4);
-    this.amb = { g, nodes, timers, onEnd };
-    setTimeout(() => { if (this.amb && this.amb.g === g) this.stopAmb() }, 4200)
-  }
-};
-
-/* ================= data ================= */
-const SS = [null,
-  { k: 1, t: 'Номын сан шиг нам гүм', s: 'Хуудас эргүүлэх чимээ л сонсогдоно', short: 'Нам гүм' },
-  { k: 2, t: 'Цай буцлах чимээ шиг намуухан', s: 'Аяга халбаганы чимээ, шивнэх яриа', short: 'Намуухан' },
-  { k: 3, t: 'Айлын зочны өрөө шиг яриа хөөрөөтэй', s: 'Яриа тод сонсогдоно, дулаахан уур амьсгал', short: 'Яриатай' },
-  { k: 4, t: 'Үдийн цайны газар шиг шуугиантай', s: 'Олон хүний яриа давхцана, төвлөрөхөд хэцүү', short: 'Шуугиантай' },
-  { k: 5, t: 'Сургуулийн завсарлага шиг чимээтэй', s: 'Хашгираан, инээд, гүйлдээн — ярихдаа хоолойгоо өндөрсгөнө', short: 'Чанга' }];
-const WIFI = ['Хэмжилт алга', 'Сул', 'Дундаж', 'Сайн', 'Маш сайн'];
-const WIFI_S = ['Мэдээлэл ороогүй', 'Мессеж, имэйлд л хангалттай', 'Вэб үзэх, хичээл уншихад', 'Видео дуудлага хийхэд болно', 'Том файл, видео дуудлага хоёул'];
-const CAFES = [
-  { id: 'A', x: 470, y: 250, dist: '480 м', walk: 6, hours: '08:00–22:00', open: true, tags: ['Сурах', 'Ажиллах'], occ: 36, sound: 2, wifi: 4, mbps: 64, plugs: [6, 8], note: 'Цонхны гэрэлтэй, чимээгүй булантай' },
-  { id: 'I', x: 612, y: 248, dist: '260 м', walk: 3, hours: '08:00–21:00', open: true, tags: ['Сурах', 'Ажиллах'], occ: 55, sound: 3, wifi: 3, mbps: 58, plugs: [5, 8], note: 'Урт ширээтэй, багаар ажиллахад тохиромжтой' },
-  { id: 'F', x: 545, y: 128, dist: '560 м', walk: 7, hours: '08:00–20:00', open: true, tags: ['Найзуудтай'], occ: 86, sound: 4, wifi: 2, mbps: 45, plugs: [2, 8], note: 'Оюутнуудын дуртай, үргэлж хөл хөдөлгөөнтэй' },
-  { id: 'O', x: 640, y: 470, dist: '470 м', walk: 6, hours: '09:00–23:00', open: false, opens: 'Маргааш 09:00', tags: ['Сурах', 'Ажиллах'], occ: 0, sound: 0, wifi: 0, mbps: null, plugs: null, note: '' },
-  { id: 'T', x: 810, y: 440, dist: '700 м', walk: 9, hours: '09:00–22:00', open: true, tags: ['Сурах'], occ: 45, sound: 3, wifi: 3, mbps: 47, plugs: [4, 8], note: 'Номын тавиуртай, тухтай буйдантай' },
-  { id: 'J', x: 330, y: 470, dist: '820 м', walk: 10, hours: '08:00–22:00', open: true, tags: ['Найзуудтай'], occ: 70, sound: 4, wifi: 2, mbps: 32, plugs: [2, 6], note: 'Том цонхтой, хөгжимтэй' },
-  { id: 'K', x: 855, y: 228, dist: '1.1 км', walk: 14, hours: '07:30–21:00', open: true, tags: ['Сурах', 'Ажиллах'], occ: 30, sound: 1, wifi: 4, mbps: 71, plugs: [7, 8], note: 'Чимээгүй бүстэй, ширээ бүрт залгууртай' },
-  { id: 'B', x: 230, y: 575, dist: '1.4 км', walk: 17, hours: '10:00–00:00', open: true, tags: ['Найзуудтай'], occ: 92, sound: 5, wifi: 1, mbps: null, plugs: [1, 6], note: 'Орой амьд хөгжимтэй арга хэмжээ болдог' },
-  { id: 'L', x: 160, y: 420, dist: '1.6 км', walk: 19, hours: '10:00–20:00', open: true, tags: ['Сурах', 'Тухтай'], occ: 22, sound: 1, wifi: 3, mbps: 35, plugs: [4, 8], note: 'Хамгийн нам гүм — номын сангийн уур амьсгал' },
-  { id: 'P', x: 385, y: 330, dist: '2.8 км', walk: 32, hours: '11:00–22:00', open: true, tags: ['Найзуудтай', 'Тухтай'], occ: 60, sound: 3, wifi: 0, mbps: null, plugs: [3, 8], note: 'Дээврийн тагттай, оройн гэрэлтүүлэг гоё' },
-  { id: 'Q', x: 915, y: 575, dist: '910 м', walk: 11, hours: '12:00–20:00', open: false, opens: 'Өнөөдөр 12:00', tags: ['Найзуудтай', 'Сурах'], occ: 0, sound: 0, wifi: 0, mbps: null, plugs: null, note: '' },
-  { id: 'H', x: 705, y: 610, dist: '1.2 км', walk: 15, hours: '08:00–22:00', open: true, tags: ['Тухтай', 'Ажиллах'], occ: 15, sound: 2, wifi: 3, mbps: 51, plugs: [5, 6], note: 'Цэцэрлэгт хүрээлэнгийн хажууд, тайван' }
-].map(c => ({ ...c, name: 'Кафе ' + c.id }));
-const byId = id => CAFES.find(c => c.id === id);
-const TOTAL_SEATS = 20;
-const freePct = c => c.open ? 100 - c.occ : null;
-const crowdCat = o => o < 20 ? ['Маш сул', 1] : o < 40 ? ['Сул', 2] : o < 60 ? ['Дунд зэрэг', 3] : o < 80 ? ['Завгүй', 4] : ['Маш их хүнтэй', 5];
-const tone = c => !c.open ? '' : c.occ >= 75 || c.sound >= 4 ? 'y' : c.occ >= 50 || c.sound === 3 ? 'b' : 'q';
-const toneVar = t => ({ q: 'var(--sage)', b: 'var(--amb)', y: 'var(--terra)' }[t] || 'var(--closed)');
-function mood(c) {
-  if (!c.open) return 'Одоо хаалттай байна.';
-  if (c.sound <= 2 && c.occ < 50) return c.wifi >= 3 ? 'Яг одоо тайван — ажиллахад тохиромжтой цаг.' : 'Яг одоо тайван — ном уншиж, амрахад сайхан.';
-  if (c.sound >= 4 || c.occ >= 80) return 'Яг одоо хөл хөдөлгөөнтэй — найзуудтайгаа уулзахад тохирно.';
-  return 'Дунд зэрэг ачаалалтай — богино ажил, уулзалтад болно.'
-}
-const nowHour = () => clamp(new Date().getHours(), 8, 22);
-const SHAPE = [.35, .5, .6, .7, .85, .95, .8, .65, .7, .85, 1, .95, .75, .55, .4];
-function profile(c) { const f = c.occ / SHAPE[nowHour() - 8]; return SHAPE.map(s => clamp(Math.round(s * f), 3, 98)) }
-
-/* ================= state ================= */
-const F = { q: '', purpose: new Set(), sound: 0, wifi: 'any', seats: 'any', openOnly: false, more: false };
-const favs = new Set(store.get('favs', []));
+const CAFES = getCafes();
 let cmpIds = [];
 let selId = null, mapCtl = null, fp = null, homeMini = null;
-
-/* ================= atmosphere components ================= */
-function ssGlyph(l) {
-  return ['',
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6c3-1.2 6-1.2 9 .6 3-1.8 6-1.8 9-.6v12c-3-1.2-6-1.2-9 .6-3-1.8-6-1.8-9-.6z"/><path d="M12 6.6v12.6"/></svg>',
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M5 10h11v4a4.5 4.5 0 0 1-4.5 4.5h-2A4.5 4.5 0 0 1 5 14z"/><path d="M16 11h1.5a2.2 2.2 0 0 1 0 4.4H16M9 4c-.8 1 .8 2 0 3.2M12.5 4c-.8 1 .8 2 0 3.2"/></svg>',
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 6.5h12a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H9l-4 3.5V16a2 2 0 0 1-1-1.8V8.5a2 2 0 0 1 2-2z"/></svg>',
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 4.5h10a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 12.5H7.5l-3.5 3v-3A1.5 1.5 0 0 1 3 11V6a1.5 1.5 0 0 1 0-1.5z"/><path d="M17 9h3a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 20 17v3l-3.5-3H12a1.5 1.5 0 0 1-1.5-1.5V15"/></svg>',
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5v3A1.5 1.5 0 0 0 4.5 15H6l9 4.5v-15L6 9H4.5A1.5 1.5 0 0 0 3 10.5z"/><path d="M6.5 15.5 8 20h2.5l-1-4M18.5 9a4 4 0 0 1 0 6M20.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>'][l] || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2 3"><circle cx="12" cy="12" r="8"/></svg>'
-}
-function ssArt(l, w = 120) {
-  const h = w * 2 / 3; let b = '';
-  const waves = n => { let s = ''; for (let i = 0; i < n; i++)s += `<path class="wv" d="M${88 + i * 9} ${40 - 10 - i * 5}q${6 + i * 2} ${10 + i * 5} 0 ${20 + i * 10}" stroke="#7B542F" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".7"/>`; return s };
-  if (l === 1) b = `<rect x="22" y="58" width="76" height="4" rx="2" fill="#E3D5BF"/><path d="M60 26c-10-6-22-6-34-2v32c12-4 24-4 34 2z" fill="#FFF9EC" stroke="#7B542F" stroke-width="2.4" stroke-linejoin="round"/><path d="M60 26c10-6 22-6 34-2v32c-12-4-24-4-34 2z" fill="#FFF9EC" stroke="#7B542F" stroke-width="2.4" stroke-linejoin="round"/><path class="flip" d="M60 26c8-5 18-5.5 28-3v31c-10-2.5-20-2-28 2z" fill="#FFF4DC" stroke="#B6771D" stroke-width="1.6"/><path d="M33 33h20M33 40h20M33 47h14M68 33h20M68 40h20" stroke="#E3D5BF" stroke-width="2" stroke-linecap="round"/>`;
-  if (l === 2) b = `<ellipse cx="54" cy="62" rx="30" ry="5" fill="#E3D5BF"/><path d="M34 32h40v14a16 16 0 0 1-16 16h-8a16 16 0 0 1-16-16z" fill="#FFF9EC" stroke="#7B542F" stroke-width="2.6"/><path d="M74 36h5a6 6 0 0 1 0 12h-5" fill="none" stroke="#7B542F" stroke-width="2.6"/><ellipse cx="54" cy="33" rx="18" ry="3" fill="#B6771D"/><path class="stm" d="M46 26c-3-4 3-6 0-10" stroke="#B6771D" stroke-width="2.2" fill="none" stroke-linecap="round"/><path class="stm" d="M55 25c-3-4 3-6 0-10" stroke="#B6771D" stroke-width="2.2" fill="none" stroke-linecap="round"/><path class="stm" d="M64 26c-3-4 3-6 0-10" stroke="#B6771D" stroke-width="2.2" fill="none" stroke-linecap="round"/><path class="wv" d="M92 30q6 10 0 20" stroke="#7B542F" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".5"/>`;
-  if (l === 3) b = `<circle cx="36" cy="54" r="9" fill="#7B542F"/><circle cx="36" cy="44" r="7" fill="#EBD5B3"/><circle cx="74" cy="54" r="9" fill="#C08A4A"/><circle cx="74" cy="44" r="7" fill="#D9B07A"/><g class="bub"><rect x="12" y="10" width="32" height="20" rx="8" fill="#fff" stroke="#7B542F" stroke-width="2"/><path d="M24 30l-3 6 8-6" fill="#fff" stroke="#7B542F" stroke-width="2" stroke-linejoin="round"/><circle cx="21" cy="20" r="2" fill="#7B542F"/><circle cx="28" cy="20" r="2" fill="#7B542F"/><circle cx="35" cy="20" r="2" fill="#7B542F"/></g><g class="bub b2"><rect x="62" y="8" width="32" height="20" rx="8" fill="#FFF4DC" stroke="#7B542F" stroke-width="2"/><path d="M74 28l-1 6 6-6" fill="#FFF4DC" stroke="#7B542F" stroke-width="2" stroke-linejoin="round"/><path d="M70 18h16" stroke="#7B542F" stroke-width="2" stroke-linecap="round"/></g>${waves(1)}`;
-  if (l === 4) { const hs = [[22, '#7B542F'], [40, '#C08A4A'], [58, '#5E3F22'], [76, '#9C6B36']]; b = hs.map(([x, cl]) => `<circle cx="${x}" cy="62" r="7" fill="${cl}"/><circle cx="${x}" cy="54" r="5.5" fill="#EBD5B3"/>`).join('') + [[6, 6, 'b1'], [34, 2, 'b2'], [58, 10, 'b3'], [22, 24, 'b4']].map(([x, y, k]) => `<g class="bub ${k}"><rect x="${x}" y="${y}" width="26" height="16" rx="7" fill="#fff" stroke="#7B542F" stroke-width="1.8"/><path d="M${x + 7} ${y + 8}h12" stroke="#7B542F" stroke-width="1.8" stroke-linecap="round"/></g>`).join('') + waves(2) }
-  if (l === 5) b = `<g class="vib"><rect x="14" y="14" width="34" height="52" rx="6" fill="#5E3F22"/><circle cx="31" cy="48" r="11" fill="#C08A4A" stroke="#3E2A17" stroke-width="3"/><circle cx="31" cy="48" r="4" fill="#3E2A17"/><circle cx="31" cy="26" r="5" fill="#C08A4A" stroke="#3E2A17" stroke-width="2"/></g><g class="vib"><ellipse cx="68" cy="40" rx="14" ry="5" fill="#EBD5B3" stroke="#7B542F" stroke-width="2.4"/><path d="M54 40v16c0 3 6 5 14 5s14-2 14-5V40" fill="#B6771D" stroke="#7B542F" stroke-width="2.4"/><path d="M56 44l24 12M80 44 56 56" stroke="#FFF4DC" stroke-width="1.6"/></g><path class="stk" d="M76 22l-6 14" stroke="#3E2A17" stroke-width="3" stroke-linecap="round"/>${waves(3)}`;
-  if (!l) b = `<circle cx="60" cy="40" r="20" fill="none" stroke="#C9C2B4" stroke-width="2.5" stroke-dasharray="4 4"/><text x="60" y="46" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="18" fill="#9A8570">?</text>`;
-  return `<svg class="ss" data-l="${l}" style="--l:${l}" width="${w}" height="${h}" viewBox="0 0 120 80" aria-hidden="true">${b}</svg>`
-}
-function wifiSVG(l, w = 40) { return `<svg class="wf w${l}" width="${w}" height="${w * .8}" viewBox="0 0 40 32" style="color:${l ? 'var(--brown)' : 'var(--ink3)'}" aria-hidden="true"><path class="a a3${l >= 3 ? ' on' : ''}" d="M4 12.5a23 23 0 0 1 32 0"/><path class="a a2${l >= 2 ? ' on' : ''}" d="M9.5 18a15 15 0 0 1 21 0"/><path class="a a1 on" d="M15 23.5a7.5 7.5 0 0 1 10 0"/><circle class="d" cx="20" cy="28" r="2.6" fill="${l ? 'currentColor' : 'var(--line2)'}"/></svg>` }
-/* one value → one shape: seats are always a row of chairs — occupied = solid & bold, free = faint */
-function seatRow(occ, n = 5) { const k = clamp(Math.round(occ / 100 * n), 0, n); let s = ''; for (let i = 0; i < n; i++)s += `<i class="${i < k ? 'o' : ''}"></i>`; return `<span class="seats" aria-hidden="true">${s}</span>` }
-const mSeat = c => `<span class="m" title="Сул суудал · ${crowdCat(c.occ)[0]}">${seatRow(c.occ)}<b class="num">${freePct(c)}%</b></span>`;
-const mSound = l => `<span class="m" title="Дуу чимээ · ${SS[l].t}"><span class="sg">${ssGlyph(l)}</span><b>${SS[l].short}</b></span>`;
-const mWifi = l => `<span class="m" title="Wi-Fi · ${WIFI_S[l]}">${wifiSVG(l, 18)}<b>${WIFI[l]}</b></span>`;
-const TAGIC = { 'Сурах': I.book, 'Ажиллах': I.laptop, 'Найзуудтай': I.people, 'Тухтай': I.sofa };
-const tagPills = c => c.tags.map(t => `<span class="tagp2">${TAGIC[t] || ''}${t}</span>`).join('');
-
-/* ================= map ================= */
-function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
-const ROADS = [[[0, 150], [1000, 138], 22], [[0, 372], [1000, 308], 34], [[0, 525], [1000, 512], 22], [[120, 0], [110, 680], 20], [[300, 0], [318, 680], 22], [[560, 0], [548, 680], 30], [[760, 0], [770, 680], 20], [[935, 0], [925, 680], 24]];
-let MAP_SVG = null;
-function mapSVG() {
-  if (MAP_SVG) return MAP_SVG; const r = rng(7); let s = '';
-  const dseg = (px, py, [ax, ay], [bx, by]) => { const dx = bx - ax, dy = by - ay, t = clamp(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0, 1); return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) };
-  const river = t => [685 + Math.sin(t * 5) * 26, t * 680];
-  const zones = [[400, 170, 120, 90], [440, 560, 170, 110], [200, 560, 90, 90], [610, 520, 80, 70]];
-  const inZone = (x, y, w, h) => zones.some(([zx, zy, zw, zh]) => x + w > zx - 8 && x < zx + zw + 8 && y + h > zy - 8 && y < zy + zh + 8);
-  s += `<rect width="1000" height="680" fill="#EFE4CF"/>`;
-  // park
-  s += `<rect x="440" y="560" width="170" height="110" rx="18" fill="#E2D3B2"/><circle cx="525" cy="615" r="30" fill="none" stroke="#F6EBDA" stroke-width="7"/><path d="M440 615h55M555 615h55" stroke="#F6EBDA" stroke-width="7"/>`;
-  // river
-  let rp = 'M' + river(0).join(' '); for (let t = .02; t <= 1.001; t += .02)rp += ' L' + river(t).map(v => v.toFixed(1)).join(' ');
-  s += `<path d="${rp}" stroke="#D3DCD8" stroke-width="20" fill="none" stroke-linecap="round"/><path d="${rp}" stroke="#E6ECE8" stroke-width="6" fill="none" stroke-dasharray="14 22"/>`;
-  // roads
-  ROADS.forEach(([a, b, w]) => { s += `<path d="M${a[0]} ${a[1]}L${b[0]} ${b[1]}" stroke="#B49E80" stroke-width="${w}" stroke-linecap="square"/>` });
-  ROADS.forEach(([a, b, w]) => { if (w >= 26) s += `<path d="M${a[0]} ${a[1]}L${b[0]} ${b[1]}" stroke="#F4EFE4" stroke-width="2.5" stroke-dasharray="16 14"/>` });
-  // plaza & landmarks
-  s += `<rect x="400" y="170" width="120" height="90" rx="6" fill="#F6EBDA" stroke="#D9C3A0" stroke-width="2"/><rect x="420" y="186" width="80" height="36" rx="4" fill="#FBF7F0" stroke="#D9C3A0"/><circle cx="460" cy="242" r="7" fill="#9C6B36"/>`;
-  s += `<circle cx="245" cy="605" r="36" fill="#C08A4A"/><g stroke="#F6EBDA" stroke-width="2.5">${[0, 1, 2, 3, 4, 5].map(i => `<path d="M245 605L${245 + Math.cos(i * Math.PI / 3) * 34} ${605 + Math.sin(i * Math.PI / 3) * 34}"/>`).join('')}</g><circle cx="245" cy="605" r="9" fill="#F6EBDA"/>`;
-  s += `<rect x="615" y="525" width="70" height="60" rx="5" fill="#D9B07A" stroke="#B6771D" stroke-width="2"/><rect x="633" y="540" width="34" height="26" fill="#7B542F"/><circle cx="650" cy="547" r="5" fill="#FFCF71"/>`;
-  // buildings
-  const cols = ['#F6EBDA', '#EBD5B3', '#E2C497', '#D9B07A', '#F3E1C0', '#CFA36B', '#FBEEDC', '#E6CFA8']; const B = [];
-  for (let i = 0; i < 900 && B.length < 150; i++) {
-    const w = 20 + r() * 30, h = 16 + r() * 22, x = r() * (1000 - w), y = r() * (680 - h), cx = x + w / 2, cy = y + h / 2; const half = Math.hypot(w, h) / 2;
-    if (ROADS.some(([a, b, rw]) => dseg(cx, cy, a, b) < half + rw / 2 + 4)) continue; if (Math.abs(river(cy / 680)[0] - cx) < half + 16) continue; if (inZone(x, y, w, h)) continue;
-    if (CAFES.some(c => Math.abs(c.x - cx) < w / 2 + 22 && c.y - cy < h / 2 + 52 && cy - c.y < h / 2 + 30)) continue;
-    if (B.some(o => x < o[0] + o[2] + 6 && x + w > o[0] - 6 && y < o[1] + o[3] + 6 && y + h > o[1] - 6)) continue; B.push([x, y, w, h, cols[Math.floor(r() * cols.length)]])
-  }
-  B.forEach(([x, y, w, h, c]) => { s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"/><rect x="${x.toFixed(1)}" y="${(y + h * .62).toFixed(1)}" width="${w.toFixed(1)}" height="${(h * .38).toFixed(1)}" fill="#000" opacity=".08"/>`; if (w > 28) { for (let k = x + 5; k < x + w - 5; k += 7)s += `<rect x="${k.toFixed(1)}" y="${(y + h * .7).toFixed(1)}" width="3.5" height="3.5" fill="#fff" opacity=".7"/>` } });
-  // trees
-  for (let i = 0, n = 0; i < 500 && n < 90; i++) { const x = r() * 1000, y = r() * 680; if (ROADS.some(([a, b, rw]) => dseg(x, y, a, b) < rw / 2 + 8)) continue; if (Math.abs(river(y / 680)[0] - x) < 18) continue; if (B.some(o => x > o[0] - 6 && x < o[0] + o[2] + 6 && y > o[1] - 6 && y < o[1] + o[3] + 6)) continue; if (CAFES.some(c => Math.abs(c.x - x) < 26 && c.y - y < 54 && y - c.y < 30)) continue; const rr = 5 + r() * 4; s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rr.toFixed(1)}" fill="#CDB487"/><circle cx="${(x - 1.5).toFixed(1)}" cy="${(y - 1.5).toFixed(1)}" r="${(rr * .5).toFixed(1)}" fill="#DCC7A0"/>`; n++ }
-  // labels
-  const lab = (x, y, t, rot = 0) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="${-t.length * 3.3 - 8}" y="-10" width="${t.length * 6.6 + 16}" height="20" rx="10" fill="#fff" opacity=".92"/><text text-anchor="middle" y="4" font-family="Manrope,sans-serif" font-size="11" font-weight="700" fill="#5E3F22">${t}</text></g>`;
-  s += lab(460, 160, 'Сүхбаатарын талбай') + lab(180, 148, 'Жамъян гүний гудамж', -1) + lab(160, 358, 'Энхтайваны өргөн чөлөө', -3.7) + lab(553, 40, 'Чингисийн өргөн чөлөө', 90) + lab(245, 655, 'Улсын цирк') + lab(525, 575, 'Үндэсний парк') + lab(650, 505, 'Чойжин ламын сүм') + lab(930, 90, 'Их тойруу', 90);
-  // you are here
-  s += `<g transform="translate(575 292)"><circle class="you" r="18" fill="#1A73E8" opacity=".18"/><circle r="9" fill="#1A73E8" stroke="#fff" stroke-width="3"/></g><text x="594" y="296" font-family="Manrope" font-size="12" font-weight="800" fill="#1A73E8">Та энд</text>`;
-  MAP_SVG = `<svg class="base" viewBox="0 0 1000 680" aria-hidden="true"><style>.you{animation:you 2.2s ease-out infinite;transform-origin:center;transform-box:fill-box}@keyframes you{0%{transform:scale(.5);opacity:.5}100%{transform:scale(1.8);opacity:0}}</style>${s}</svg>`; return MAP_SVG
-}
-function markerHTML(c) {
-  const t = tone(c); const pd = { q: '3.4s', b: '2.4s', y: '1.5s' }[t] || '0s';
-  return `<button class="mk${c.open ? '' : ' closed'}" data-mk="${c.id}" style="left:${c.x}px;top:${c.y}px;--pc:${toneVar(t)};--pd:${pd}" aria-label="${c.name}: ${c.open ? freePct(c) + '% суудал сул, ' + SS[c.sound].short + ' дуу, Wi-Fi ' + WIFI[c.wifi] : 'хаалттай'}">
-  <span class="mk-name">${c.name}</span>
-  <span class="mk-pinw">${c.open ? '<span class="mk-ring"></span>' : ''}${pinSVG(c.open ? '#FF9D00' : '#C9C2B4')}</span>
-  <span class="mk-pill">${seatRow(c.occ)}<span class="sep"></span><span class="sg">${ssGlyph(c.sound)}</span><span class="sep"></span>${wifiSVG(c.wifi, 15)}</span>
- </button>`}
-function buildMap(vp, { interactive = true, onSelect = null, focus = null } = {}) {
-  vp.insertAdjacentHTML('beforeend', `<div class="map-inner">${mapSVG()}<div class="mk-layer">${CAFES.map(markerHTML).join('')}</div></div>`);
-  const inner = $('.map-inner', vp); const st = { s: 1, x: 0, y: 0, base: 1 }; let pvEl = null;
-  const sc = () => st.base * st.s;
-  function clampXY() { const w = vp.clientWidth, h = vp.clientHeight, W = 1000 * sc(), H = 680 * sc(); st.x = W <= w ? (w - W) / 2 : clamp(st.x, w - W, 0); st.y = H <= h ? (h - H) / 2 : clamp(st.y, h - H, 0) }
-  function apply(ease) { inner.classList.toggle('ease', !!ease); clampXY(); inner.style.transform = `translate(${st.x}px,${st.y}px) scale(${sc()})`; inner.style.setProperty('--inv', (1 / sc()).toFixed(3)); placePv() }
-  function fit() { const w = vp.clientWidth, h = vp.clientHeight; if (!w) return; const prev = sc(); st.base = Math.max(w / 1000, h / 680); if (!fit.done) { st.x = (w - 1000 * sc()) / 2; st.y = (h - 680 * sc()) / 2; fit.done = true } apply() }
-  function centerOn(x, y, zoom) { if (zoom) st.s = Math.max(st.s, zoom); const w = vp.clientWidth, h = vp.clientHeight; const offY = isMobile() ? -h * .18 : 0; st.x = w / 2 - x * sc() + (isMobile() ? 0 : 60); st.y = h / 2 - y * sc() + offY; apply(true) }
-  function zoomBy(f, cx, cy) { const w = vp.clientWidth, h = vp.clientHeight; cx = cx ?? w / 2; cy = cy ?? h / 2; const old = sc(); st.s = clamp(st.s * f, 1, 3); const k = sc() / old; st.x = cx - (cx - st.x) * k; st.y = cy - (cy - st.y) * k; apply(true) }
-  function placePv() { if (!pvEl || !pvEl.isConnected || isMobile()) return; const c = byId(pvEl.dataset.id); if (!c) return; const px = st.x + c.x * sc(), py = st.y + c.y * sc(); const w = vp.clientWidth, h = vp.clientHeight, pw = pvEl.offsetWidth, ph = pvEl.offsetHeight; let left = px + 34, ox = '0px'; if (left + pw > w - 12) { left = px - 34 - pw; ox = '100%' } left = clamp(left, 12, w - pw - 12); const top = clamp(py - ph / 2 - 20, 12, h - ph - 12); pvEl.style.left = left + 'px'; pvEl.style.top = top + 'px'; pvEl.style.setProperty('--ox', ox) }
-  let drag = null, moved = false;
-  if (interactive) {
-    vp.addEventListener('pointerdown', e => { if (e.target.closest('.map-ctrl,.pv,.map-legend,.map-note')) return; drag = { x: e.clientX, y: e.clientY, sx: st.x, sy: st.y, id: e.pointerId }; moved = false });
-    vp.addEventListener('pointermove', e => { if (!drag || drag.id !== e.pointerId) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (!moved && Math.hypot(dx, dy) > 5) { moved = true; vp.classList.add('drag'); try { vp.setPointerCapture(e.pointerId) } catch (_) { } } if (moved) { st.x = drag.sx + dx; st.y = drag.sy + dy; apply() } });
-    const end = () => { drag = null; vp.classList.remove('drag') }; vp.addEventListener('pointerup', end); vp.addEventListener('pointercancel', end);
-    vp.addEventListener('wheel', e => { e.preventDefault(); const r = vp.getBoundingClientRect(); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top) }, { passive: false });
-    vp.insertAdjacentHTML('beforeend', `<div class="map-ctrl"><button data-z="in" aria-label="Томруулах">${I.plus}</button><button data-z="out" aria-label="Жижигрүүлэх">${I.minus}</button><button data-z="me" aria-label="Миний байршил">${I.locate}</button></div>`);
-    $('.map-ctrl', vp).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Snd.ui('click'); if (b.dataset.z === 'in') zoomBy(1.3); else if (b.dataset.z === 'out') zoomBy(1 / 1.3); else { st.s = 1.4; centerOn(575, 292) } });
-  }
-  $('.mk-layer', vp).addEventListener('click', e => { const m = e.target.closest('.mk'); if (!m || moved) return; e.stopPropagation(); onSelect && onSelect(m.dataset.mk, 'map') });
-  if (interactive) vp.addEventListener('click', e => { if (moved || e.target.closest('.mk,.pv,.map-ctrl,.map-legend,.map-note')) return; onSelect && onSelect(null, 'map') });
-  const ro = new ResizeObserver(fit); ro.observe(vp); fit();
-  return { fit, centerOn, setPv(el) { pvEl = el; placePv() }, select(id) { $$('.mk', vp).forEach(m => m.classList.toggle('sel', m.dataset.mk === id)) }, hover(id, on) { const m = $(`.mk[data-mk="${id}"]`, vp); m && m.classList.toggle('hov', on) }, dim(set) { $$('.mk', vp).forEach(m => m.classList.toggle('dim', !set.has(m.dataset.mk))) }, hits(set) { $$('.mk', vp).forEach(m => m.classList.toggle('hit', !!set && set.has(m.dataset.mk))) }, destroy() { ro.disconnect() } }
-}
 
 /* ================= filters ================= */
 const PURPOSES = [['Сурах', I.book], ['Ажиллах', I.laptop], ['Найзуудтай', I.people], ['Тухтай', I.sofa]];
@@ -344,10 +126,7 @@ function openCompare() {
 }
 
 /* ================= modal / toast ================= */
-function openModal(html, wide) { const m = $('#modal'); m.innerHTML = `<div class="mdl-bg" data-bg><div class="mdl${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${html}</div></div>`; const bg = $('[data-bg]', m); bg.addEventListener('click', e => { if (e.target === bg || e.target.closest('[data-close]')) closeModal() }); setTimeout(() => { const f = $('button,a,input', bg); f && f.focus() }, 50) }
-function closeModal() { $('#modal').innerHTML = '' }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); $('#sndPop').hidden = true; $('#favPop').hidden = true; if (selId && location.hash.startsWith('#explore')) selectCafe(null) } });
-function toast(msg, ok) { const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = (ok ? `<span class="tk">${I.check}</span>` : '') + msg; $('#toasts').appendChild(t); setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320) }, 2400) }
 
 /* ================= header ================= */
 function renderHeaderBits() {
@@ -435,7 +214,6 @@ function renderHome() {
   $('#hs').onsubmit = e => { e.preventDefault(); F.q = $('#hq').value.trim(); const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
   countUp();
 }
-function countUp() { if (Prefs.reduced) return; $$('[data-count]').forEach(el => { const n = +el.dataset.count, suf = el.dataset.suf || ''; let t0 = null; const step = t => { t0 = t0 || t; const k = Math.min(1, (t - t0) / 900); el.textContent = Math.round(n * (1 - Math.pow(1 - k, 3))) + suf; if (k < 1) requestAnimationFrame(step) }; requestAnimationFrame(step) }) }
 
 /* ---------- explore ---------- */
 function listCard(c, i) {
@@ -461,7 +239,7 @@ function renderExplore() {
  </section>`;
   $$('#q,#q2').forEach(i => { i.value = F.q; i.oninput = () => { F.q = i.value; $$('#q,#q2').forEach(o => { if (o !== i) o.value = i.value }); refreshResults(); if (F.q.trim()) { revealResults(); searchOnMap() } } });
   mapCtl = buildMap($('#exMap'), { onSelect: (id, from) => selectCafe(id, from) });
-  refreshResults = updateExplore; updateExplore(); if (F.q.trim() && !selId) setTimeout(searchOnMap, 60);
+  refreshResults = updateExplore; updateExplore(); if (F.q.trim() && !selId) pageTasks.timeout(searchOnMap, 60);
   const list = $('#exList');
   list.addEventListener('click', e => { const c = e.target.closest('[data-card]'); if (c) selectCafe(c.dataset.card, 'list') });
   list.addEventListener('mouseover', e => { const c = e.target.closest('[data-card]'); if (c) mapCtl.hover(c.dataset.card, true) });
@@ -475,9 +253,9 @@ function renderExplore() {
   h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFull(!side.classList.contains('full')) } });
   h.addEventListener('pointerdown', e => { sd = { y: e.clientY, full: side.classList.contains('full'), moved: false, h: side.offsetHeight }; h.setPointerCapture(e.pointerId) });
   h.addEventListener('pointermove', e => { if (!sd) return; const dy = e.clientY - sd.y; if (Math.abs(dy) > 6) sd.moved = true; if (!sd.moved) return; side.classList.add('drag'); const base = sd.full ? 0 : sd.h - 236; side.style.transform = `translateY(${clamp(base + dy, 0, sd.h - 120)}px)` });
-  h.addEventListener('pointerup', e => { if (!sd) return; side.classList.remove('drag'); side.style.transform = ''; if (sd.moved) { const dy = e.clientY - sd.y; setFull(sd.full ? dy < 80 : dy < -60) } setTimeout(() => sd = null, 0) });
+  h.addEventListener('pointerup', e => { if (!sd) return; side.classList.remove('drag'); side.style.transform = ''; if (sd.moved) { const dy = e.clientY - sd.y; setFull(sd.full ? dy < 80 : dy < -60) } pageTasks.timeout(() => sd = null, 0) });
   $('#mFilter').onclick = () => { Snd.ui('whoosh'); openModal(`<div class="mdl-h"><h2>Шүүлтүүр</h2><button class="pv-x" data-close aria-label="Хаах" style="margin-left:auto">${I.x}</button></div><div style="display:flex;flex-direction:column;gap:18px">${filtersHTML(true)}</div><div style="display:flex;gap:10px;margin-top:22px"><button class="btn btn-g" data-reset>Цэвэрлэх</button><button class="btn btn-p" data-close style="flex:1" id="mfApply">Үр дүн харах</button></div>`) };
-  if (selId) setTimeout(() => selectCafe(selId, 'list', true), 60);
+  if (selId) pageTasks.timeout(() => selectCafe(selId, 'list', true), 60);
 }
 // desktop: scroll the sidebar past the filters so search results sit right under the sticky search box
 function revealResults() {
@@ -548,7 +326,7 @@ function renderCafe(id) {
   const c = byId(id); if (!c) { app.innerHTML = `<div class="wrap empty">${emptyArt()}<b>Кафе олдсонгүй</b><a class="btn btn-o" href="#explore">Газрын зураг руу буцах</a></div>`; return }
   selId = id;
   app.innerHTML = `<div class="wrap page"><div class="skel" style="height:150px;margin-top:24px"></div><div class="skel" style="height:420px;margin-top:20px"></div></div>`;
-  setTimeout(() => { if (location.hash === '#cafe-' + id) buildCafe(c) }, Prefs.reduced ? 0 : 380)
+  pageTasks.timeout(() => { if (location.hash === '#cafe-' + id) buildCafe(c) }, Prefs.reduced ? 0 : 380)
 }
 function buildCafe(c) {
   const t = tone(c), fp_ = freePct(c);
@@ -603,7 +381,6 @@ function updSeats(s) {
   $('#freeSub').textContent = `${s.total}-оос ${s.free} сул${s.unknown ? ` · ${s.unknown} мэдээлэлгүй` : ''}`;
   $('#chairs').innerHTML = s.list.map(st => `<i class="${st === 'occ' ? 'o' : ''}"></i>`).join('');
 }
-function animNum(el, to, suf) { const from = parseInt(el.textContent) || 0; if (from === to || Prefs.reduced) { el.textContent = to + suf; return } let t0 = null; const step = t => { t0 = t0 || t; const k = Math.min(1, (t - t0) / 600); el.textContent = Math.round(from + (to - from) * k) + suf; if (k < 1) requestAnimationFrame(step) }; requestAnimationFrame(step) }
 function logEvent(msg, kind) { const l = $('#elog'); if (!l) return; const d = document.createElement('div'); d.className = kind; d.textContent = msg; l.prepend(d); while (l.children.length > 4) l.lastChild.remove() }
 function seatInfo(s) {
   const box = $('#seatInfo'); if (!box) return; if (!s) { box.innerHTML = ''; return }
@@ -650,209 +427,6 @@ function openReport(c) {
     if (sel.wifi) { c.wifi = sel.wifi; renderWF(c.wifi, c); $$('[data-wfl]').forEach(x => x.classList.toggle('on', +x.dataset.wfl === c.wifi)) }
     if (sel.crowd) { c.occ = Math.round((c.occ + sel.crowd) / 2); fp.setTarget(100 - c.occ, false) }
     const ml = $('#moodLine'); if (ml) ml.textContent = mood(c); logEvent('Таны мэдээлэл нэмэгдлээ · жин 1.0 → 30 мин дараа 0.5', 'in')
-  }
-}
-
-/* ================= FLOOR PLAN (canvas, top-down) ================= */
-const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй, залгууртай.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' } };
-class FloorPlan {
-  constructor(wrap, cafe, o) {
-    this.wrap = wrap; this.cafe = cafe; this.o = o; this.W = 800; this.H = 520; this.sound = o.sound || 2; this.reduced = Prefs.reduced; this.zoom = isMobile() ? 1.5 : 1;
-    this.cv = document.createElement('canvas'); this.cv.setAttribute('role', 'img'); this.cv.setAttribute('aria-label', `${cafe.name}-ийн дээрээс харсан зураглал: сандал, ширээ, лангуу, гал тогоо`); wrap.appendChild(this.cv); this.ctx = this.cv.getContext('2d');
-    this.r = rng(cafe.id.charCodeAt(0) * 31); this.layout(); this.buildGrid(); this.bg = this.drawStatic();
-    this.people = []; this.parts = []; this.bubbles = []; this.fx = []; this.sel = null; this.t = 0; this.nextEv = 2600; this.nextBub = 1200; this.busyUntil = 0;
-    this.staff = [{ x: 690, y: 105, pts: [[650, 105], [720, 105], [745, 150], [690, 150]], i: 0, wait: 0, shirt: '#7B542F', hair: '#3E2A17', skin: '#F2C9A0', barista: true }, { x: 690, y: 330, pts: [[690, 335], [748, 335], [745, 450], [660, 450]], i: 0, wait: 0, shirt: '#FFFFFF', hair: '#1F1A17', skin: '#D9A57B', chef: true }];
-    const occ = Math.round(cafe.occ * this.countable() / 100); this.target = occ; const free = this.seats.filter(s => s.state === 'free'); for (let i = 0; i < occ && free.length; i++) { const s = free.splice(Math.floor(this.r() * free.length), 1)[0]; const p = this.newPerson(); p.state = 'seated'; p.seat = s; p.x = s.x; p.y = s.y; p.ang = s.ang; s.state = 'occ'; s.person = p; this.people.push(p) }
-    this.resize(); this.ro = new ResizeObserver(() => { cancelAnimationFrame(this.rz); this.rz = requestAnimationFrame(() => this.resize()) }); this.ro.observe(wrap);
-    this.cv.addEventListener('click', e => this.click(e)); this.cv.addEventListener('mousemove', e => { const p = this.pt(e); this.cv.style.cursor = this.hit(p) ? 'pointer' : 'default' });
-    this.emit(); this.last = performance.now(); this.alive = true; this.raf = requestAnimationFrame(t => this.frame(t))
-  }
-  countable() { return this.seats.filter(s => s.state !== 'unknown').length }
-  stats() { const c = this.seats.filter(s => s.state !== 'unknown'); return { free: c.filter(s => s.state === 'free').length, total: c.length, unknown: this.seats.length - c.length, list: c.map(s => s.state) } }
-  emit() { this.o.onStats && this.o.onStats(this.stats()) }
-  layout() {
-    const S = this.seats = []; let n = 0; const add = (x, y, ang, zone, label, state = 'free', kind = 'chair') => S.push({ id: n++, x, y, ang, zone, label, state, kind, person: null, res: false, flash: 0 });
-    [205, 290, 375, 460].forEach((x, i) => add(x, 78, -Math.PI / 2, 'bar', `Цонхны баар ${i + 1}`, 'free', 'stool'));
-    const round = (cx, cy, dirs, zone, name) => dirs.forEach((d, i) => { const a = { N: -Math.PI / 2, S: Math.PI / 2, E: 0, W: Math.PI }[d]; add(cx + Math.cos(a) * 38, cy + Math.sin(a) * 38, a + Math.PI, zone, `${name} · ${i + 1}-р суудал`) });
-    round(220, 205, ['N', 'E', 'S', 'W'], 't1', '1-р ширээ'); round(370, 205, ['N', 'E', 'S', 'W'], 't2', '2-р ширээ'); round(515, 215, ['N', 'S'], 't3', '3-р ширээ');
-    [200, 280, 360].forEach((x, i) => add(x, 312, Math.PI / 2, 'long', `Урт ширээ ${i + 1}`));[200, 280, 360].forEach((x, i) => add(x, 384, -Math.PI / 2, 'long', `Урт ширээ ${i + 4}`));
-    [470, 515, 560].forEach((x, i) => add(x, 478, -Math.PI / 2, 'sofa', `Буйдан ${i + 1}`, 'unknown', 'sofa'));
-    this.tables = [[220, 205], [370, 205], [515, 215]];
-    this.door = [90, 514]; this.order = [580, 112];
-  }
-  buildGrid() {
-    const C = 10, cols = 80, rows = 52, g = new Uint8Array(cols * rows); const R = [], Cc = []; const rect = (x, y, w, h, p = 9) => R.push([x - p, y - p, x + w + p, y + h + p]); const circ = (x, y, r) => Cc.push([x, y, r]);
-    rect(20, 20, 760, 8); rect(20, 20, 8, 484); rect(772, 20, 8, 484); rect(20, 496, 40, 8); rect(120, 496, 660, 8); rect(598, 20, 182, 484, 4); rect(0, 504, 50, 16, 0); rect(130, 504, 670, 16, 0); rect(0, 0, 800, 12, 0);
-    rect(165, 30, 350, 24); rect(160, 330, 240, 36); rect(430, 462, 168, 36); circ(515, 425, 32);
-    this.tables.forEach(([x, y]) => circ(x, y, 34)); this.seats.forEach(s => circ(s.x, s.y, s.kind === 'stool' ? 18 : 19));
-    [[45, 45, 25], [45, 300, 23], [150, 476, 23]].forEach(p => circ(...p));
-    for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) { const x = c * C + 5, y = r * C + 5; if (R.some(q => x >= q[0] && x <= q[2] && y >= q[1] && y <= q[3]) || Cc.some(q => Math.hypot(x - q[0], y - q[1]) < q[2])) g[r * cols + c] = 1 }
-    this.g = g; this.cols = cols; this.rows = rows
-  }
-  path(sx, sy, tx, ty) {
-    const C = 10, cols = this.cols, rows = this.rows, g = this.g; const ci = (x, y) => clamp(Math.floor(y / C), 0, rows - 1) * cols + clamp(Math.floor(x / C), 0, cols - 1);
-    const s = ci(sx, sy), t = ci(tx, ty); const free = i => i === t || i === s || !g[i];
-    const H = i => { const dx = Math.abs(i % cols - t % cols), dy = Math.abs((i / cols | 0) - (t / cols | 0)); return Math.max(dx, dy) + .414 * Math.min(dx, dy) };
-    const gs = new Float32Array(cols * rows).fill(1e9), from = new Int32Array(cols * rows).fill(-1), closed = new Uint8Array(cols * rows); gs[s] = 0;
-    const heap = [[H(s), s]]; const push = n => { heap.push(n); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break;[heap[p], heap[i]] = [heap[i], heap[p]]; i = p } };
-    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (; ;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break;[heap[m], heap[i]] = [heap[i], heap[m]]; i = m } } return top };
-    const D = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]]; let found = false;
-    while (heap.length) {
-      const [, cur] = pop(); if (cur === t) { found = true; break } if (closed[cur]) continue; closed[cur] = 1; const cx = cur % cols, cy = cur / cols | 0;
-      for (const [dx, dy, w] of D) { const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue; const ni = ny * cols + nx; if (!free(ni)) continue; if (dx && dy && (!free(cy * cols + nx) || !free(ny * cols + cx))) continue; const ng = gs[cur] + w; if (ng < gs[ni]) { gs[ni] = ng; from[ni] = cur; push([ng + H(ni), ni]) } }
-    }
-    if (!found) return [[tx, ty]]; const pts = []; for (let i = t; i !== -1; i = from[i])pts.push([i % cols * C + 5, (i / cols | 0) * C + 5]); pts.reverse(); pts[pts.length - 1] = [tx, ty];
-    const los = (a, b) => { const d = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.ceil(d / 4); for (let k = 1; k < n; k++) { const x = a[0] + (b[0] - a[0]) * k / n, y = a[1] + (b[1] - a[1]) * k / n; const i = ci(x, y); if (i !== t && i !== s && g[i]) return false } return true };
-    const out = [pts[0]]; let a = 0; while (a < pts.length - 1) { let b = pts.length - 1; while (b > a + 1 && !los(pts[a], pts[b])) b--; out.push(pts[b]); a = b } return out
-  }
-  newPerson() { const r = this.r; const P = ['#7B542F', '#B6771D', '#5E3F22', '#C08A4A', '#9C6B36', '#3E2A17', '#A8774A', '#D9B07A']; return { x: 0, y: 0, ang: 0, path: [], state: '', shirt: P[Math.floor(r() * P.length)], hair: ['#3E2A17', '#1F1A17', '#8A5A2B', '#C9A26B', '#2B2B2B'][Math.floor(r() * 5)], skin: ['#F2C9A0', '#E3B48B', '#C99167', '#A8744F'][Math.floor(r() * 4)], item: r() < .5 ? 'laptop' : r() < .6 ? 'book' : 'cup', spd: 52 + r() * 18, t: r() * 10, wait: 0, user: false, alpha: 1 } }
-  arrive(user) {
-    const free = this.seats.filter(s => s.state === 'free' && !s.res); if (!free.length) return false; let pool = free; if (this.sound <= 2) { const q = free.filter(s => s.zone === 'bar' || s.zone === 'long'); if (q.length && this.r() < .7) pool = q }
-    const s = pool[Math.floor(this.r() * pool.length)]; s.res = true; const p = this.newPerson(); p.user = user; p.seat = s; p.x = this.door[0]; p.y = this.door[1] + 4; p.ang = -Math.PI / 2;
-    const q = this.people.filter(x => x.state === 'toOrder' || x.state === 'order').length; p.orderPt = [this.order[0], this.order[1] + q * 24];
-    if (this.reduced) { this.sit(p); this.people.push(p); return true }
-    p.path = this.path(p.x, p.y, ...p.orderPt); p.state = 'toOrder'; this.people.push(p); this.o.onEvent && this.o.onEvent('Шинэ зочин орж ирлээ · кофе захиалж байна', 'in'); return true
-  }
-  sit(p) {
-    const s = p.seat; s.res = false; s.state = 'occ'; s.person = p; p.state = 'seated'; p.x = s.x; p.y = s.y; p.ang = s.ang; s.flash = 1; this.fx.push({ x: s.x, y: s.y, t: 0, c: '#FF9D00' });
-    if (p.user) Snd.ui('sit'); this.o.onEvent && this.o.onEvent(`${s.label}-д зочин суулаа`, 'in'); this.emit(); if (this.sel === s) this.o.onSeat && this.o.onSeat(s)
-  }
-  depart(user) {
-    const sat = this.people.filter(p => p.state === 'seated'); if (!sat.length) return false; const p = sat[Math.floor(this.r() * sat.length)]; const s = p.seat; s.state = 'free'; s.person = null; s.flash = 1; this.fx.push({ x: s.x, y: s.y, t: 0, c: '#C08A4A' });
-    if (user) Snd.ui('leave'); this.o.onEvent && this.o.onEvent(`${s.label} суллаа`, 'out'); this.emit(); if (this.sel === s) this.o.onSeat && this.o.onSeat(s);
-    if (this.reduced) { this.people = this.people.filter(x => x !== p); return true }
-    p.state = 'leaving'; p.path = this.path(p.x, p.y, this.door[0], this.door[1] + 4); p.seat = null; return true
-  }
-  setTarget(pct, fast) { this.target = Math.round(pct * this.countable() / 100); this.busyUntil = fast ? performance.now() + 20000 : 0; this.nextEv = fast ? 150 : 800 }
-  setZoom(f) { this.zoom = clamp(this.zoom * f, 1, 2.6); this.resize(true) }
-  resize(force) {
-    const w = Math.floor(this.wrap.getBoundingClientRect().width); if (!w) return; const cssW = Math.min(2400, Math.round(w * this.zoom)); if (!force && cssW === this.cssW) return; this.cssW = cssW; const cssH = Math.round(cssW * this.H / this.W); const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.cv.style.width = cssW + 'px'; this.cv.style.height = cssH + 'px'; this.cv.width = cssW * dpr; this.cv.height = cssH * dpr; this.k = cssW / this.W * dpr;
-    this.wrap.style.height = Math.min(cssH, Math.round(w * this.H / this.W * (isMobile() ? 1.15 : 1))) + 'px'
-  }
-  pt(e) { const r = this.cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * this.W, (e.clientY - r.top) / r.height * this.H] }
-  hit([x, y]) { let best = null, bd = 20; this.seats.forEach(s => { const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = s } }); return best }
-  click(e) { const s = this.hit(this.pt(e)); this.sel = s; if (s) { Snd.ui('pop'); s.flash = 1 } this.o.onSeat && this.o.onSeat(s) }
-  destroy() { this.alive = false; cancelAnimationFrame(this.raf); this.ro.disconnect() }
-  frame(now) { if (!this.alive) return; const dt = Math.min(.05, (now - this.last) / 1000); this.last = now; if (!document.hidden) { this.update(dt, now); this.draw() } this.raf = requestAnimationFrame(t => this.frame(t)) }
-  update(dt, now) {
-    this.t += dt; const red = this.reduced;
-    this.nextEv -= dt * 1000; if (this.nextEv <= 0) {
-      const occ = this.seats.filter(s => s.state === 'occ' || s.res).length;
-      if (occ < this.target) this.arrive(false); else if (occ > this.target) this.depart(false); else if (this.r() < .4 && !this.busyUntil) { this.depart(false); this.nextEv = 1800; }
-      const fast = this.busyUntil && now < this.busyUntil && occ !== this.target; this.nextEv = fast ? (red ? 60 : 420) : 3200 + this.r() * 2800; if (this.busyUntil && occ === this.target) this.busyUntil = 0
-    }
-    for (const p of this.people) {
-      p.t += dt;
-      if (p.state === 'toOrder' || p.state === 'toSeat' || p.state === 'leaving') {
-        if (red) { if (p.state === 'leaving') p.alpha = 0; else if (p.state === 'toOrder') { p.state = 'order'; p.wait = .2 } else this.sit(p); continue }
-        const tg = p.path[0]; if (!tg) { continue } const dx = tg[0] - p.x, dy = tg[1] - p.y, d = Math.hypot(dx, dy), st = p.spd * dt;
-        if (d > .5) { const ta = Math.atan2(dy, dx); let da = ta - p.ang; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; p.ang += da * Math.min(1, dt * 10) }
-        if (d <= st) { p.x = tg[0]; p.y = tg[1]; p.path.shift(); if (!p.path.length) { if (p.state === 'toOrder') { p.state = 'order'; p.wait = 1.3 + this.r() * .8; p.ang = 0 } else if (p.state === 'toSeat') this.sit(p); else p.state = 'gone' } } else { p.x += dx / d * st; p.y += dy / d * st }
-      }
-      else if (p.state === 'order') { p.wait -= dt; if (p.wait <= 0) { p.state = 'toSeat'; p.path = red ? [] : this.path(p.x, p.y, p.seat.x, p.seat.y); if (red) this.sit(p) } }
-      if (p.state === 'gone') { p.alpha -= dt * 3 }
-    }
-    this.people = this.people.filter(p => p.alpha > 0);
-    for (const s of this.staff) { if (red) break; if (s.wait > 0) { s.wait -= dt; continue } const tg = s.pts[s.i], dx = tg[0] - s.x, dy = tg[1] - s.y, d = Math.hypot(dx, dy); if (d < 1) { s.i = (s.i + 1) % s.pts.length; s.wait = 1 + this.r() * 2; continue } s.ang = Math.atan2(dy, dx); s.x += dx / d * Math.min(d, 38 * dt); s.y += dy / d * Math.min(d, 38 * dt); s.walk = true }
-    if (!red) { if (this.r() < dt * 9) this.parts.push({ x: 672 + this.r() * 14, y: 322, vy: -14 - this.r() * 10, vx: (this.r() - .5) * 6, l: 1, r: 3 + this.r() * 3 }); if (this.r() < dt * 2.5) this.parts.push({ x: 712 + this.r() * 8, y: 50, vy: -10, vx: (this.r() - .5) * 4, l: .8, r: 2.5 }) }
-    this.parts.forEach(q => { q.x += q.vx * dt; q.y += q.vy * dt; q.l -= dt * .7; q.r += dt * 3 }); this.parts = this.parts.filter(q => q.l > 0);
-    this.nextBub -= dt * 1000; if (this.nextBub <= 0 && this.sound >= 3 && !red) { const sat = this.people.filter(p => p.state === 'seated'); if (sat.length) { const p = sat[Math.floor(this.r() * sat.length)]; this.bubbles.push({ p, t: 0, big: this.sound >= 4 }) } this.nextBub = [0, 0, 0, 1600, 800, 450][this.sound] + this.r() * 500 }
-    this.bubbles.forEach(b => b.t += dt); this.bubbles = this.bubbles.filter(b => b.t < 2.2 && b.p.state === 'seated');
-    this.fx.forEach(f => f.t += dt); this.fx = this.fx.filter(f => f.t < .8); this.seats.forEach(s => s.flash = Math.max(0, s.flash - dt * 1.5))
-  }
-  rr(x, X, y, w, h, r) { x.beginPath(); x.roundRect ? x.roundRect(X, y, w, h, r) : x.rect(X, y, w, h) }
-  drawStatic() {
-    const k = 2.5, c = document.createElement('canvas'); c.width = this.W * k; c.height = this.H * k; const x = c.getContext('2d'); x.scale(k, k); const rr = (X, y, w, h, r) => this.rr(x, X, y, w, h, r); const r = rng(5);
-    x.fillStyle = '#E4D7BF'; x.fillRect(0, 0, 800, 520);
-    // customer wood floor
-    x.fillStyle = '#F3E2C4'; x.fillRect(24, 24, 576, 476); x.strokeStyle = '#E7D2AF'; x.lineWidth = 1; for (let y = 24, row = 0; y < 500; y += 22, row++) { x.beginPath(); x.moveTo(24, y); x.lineTo(600, y); x.stroke(); for (let xx = 24 + (row % 2) * 55 + r() * 30; xx < 600; xx += 90 + r() * 40) { x.beginPath(); x.moveTo(xx, y); x.lineTo(xx, y + 22); x.stroke() } }
-    // window light
-    x.save(); x.globalAlpha = .25; const lg = x.createLinearGradient(0, 24, 0, 200); lg.addColorStop(0, '#FFCF71'); lg.addColorStop(1, 'rgba(255,207,113,0)'); x.fillStyle = lg;[[175, 265], [265, 355], [355, 445], [445, 520]].forEach(([a, b]) => { x.beginPath(); x.moveTo(a, 24); x.lineTo(b, 24); x.lineTo(b + 40, 190); x.lineTo(a + 40, 190); x.fill() }); x.restore();
-    // rug
-    x.fillStyle = 'rgba(201,134,42,.22)'; rr(165, 150, 262, 112, 22); x.fill(); x.strokeStyle = 'rgba(123,84,47,.35)'; x.setLineDash([6, 5]); x.lineWidth = 1.5; rr(175, 160, 242, 92, 16); x.stroke(); x.setLineDash([]);
-    // staff floor: barista
-    x.fillStyle = '#EFE7DA'; x.fillRect(600, 24, 176, 226);
-    // kitchen checker
-    for (let yy = 250; yy < 500; yy += 16)for (let xx = 600; xx < 776; xx += 16) { x.fillStyle = ((xx + yy) / 16) % 2 ? '#F4F1EA' : '#E6E0D3'; x.fillRect(xx, yy, 16, 16) }
-    // walls
-    x.fillStyle = '#7B542F'; x.fillRect(20, 20, 760, 8); x.fillRect(20, 20, 8, 484); x.fillRect(772, 20, 8, 484); x.fillRect(20, 496, 40, 8); x.fillRect(120, 496, 660, 8);
-    x.fillRect(598, 250, 90, 6); x.fillRect(740, 250, 36, 6); x.fillRect(596, 190, 6, 66);
-    x.fillStyle = '#BFE1F2';[[175, 265], [265, 355], [355, 445], [445, 520]].forEach(([a, b]) => { x.fillRect(a + 4, 20, b - a - 8, 8) }); x.fillStyle = '#9ACBE5';[[175, 265], [265, 355], [355, 445], [445, 520]].forEach(([a, b]) => x.fillRect(a + 4, 23, b - a - 8, 2));
-    // door
-    x.strokeStyle = '#7B542F'; x.lineWidth = 2; x.setLineDash([4, 4]); x.beginPath(); x.arc(60, 500, 60, -Math.PI / 2.4, 0); x.stroke(); x.setLineDash([]); x.beginPath(); x.moveTo(60, 500); x.lineTo(60 + 60 * Math.cos(-Math.PI / 2.4), 500 + 60 * Math.sin(-Math.PI / 2.4)); x.stroke();
-    x.fillStyle = '#C9955C'; rr(66, 486, 48, 12, 4); x.fill();
-    // window bar counter
-    x.fillStyle = '#C9955C'; rr(165, 30, 350, 24, 6); x.fill(); x.strokeStyle = '#9C6B3A'; x.lineWidth = 2; x.stroke(); x.strokeStyle = 'rgba(255,255,255,.25)'; x.lineWidth = 1; for (let i = 0; i < 6; i++) { x.beginPath(); x.moveTo(170, 36 + i * 3); x.lineTo(510, 36 + i * 3); x.stroke() }
-    [[230, 42], [400, 42]].forEach(([px, py]) => { x.fillStyle = '#B6771D'; x.beginPath(); x.arc(px, py, 6, 0, 7); x.fill(); x.fillStyle = '#C08A4A'; for (let a = 0; a < 6; a++) { x.beginPath(); x.ellipse(px + Math.cos(a) * 5, py + Math.sin(a) * 5, 4, 2.5, a, 0, 7); x.fill() } });
-    // round tables
-    this.tables.forEach(([tx, ty], i) => { x.fillStyle = 'rgba(62,42,23,.12)'; x.beginPath(); x.arc(tx + 2, ty + 3, 25, 0, 7); x.fill(); const gr = x.createRadialGradient(tx - 6, ty - 6, 2, tx, ty, 25); gr.addColorStop(0, '#D9A86C'); gr.addColorStop(1, '#B07C45'); x.fillStyle = gr; x.beginPath(); x.arc(tx, ty, 24, 0, 7); x.fill(); x.strokeStyle = '#8A5A2B'; x.lineWidth = 2; x.stroke(); x.fillStyle = '#FFF9EC'; x.beginPath(); x.arc(tx, ty, 5, 0, 7); x.fill(); x.fillStyle = ['#B6771D', '#FF9D00', '#7B542F'][i]; x.beginPath(); x.arc(tx, ty, 2.8, 0, 7); x.fill() });
-    // long table
-    x.fillStyle = 'rgba(62,42,23,.12)'; rr(163, 334, 240, 36, 6); x.fill(); x.fillStyle = '#C08A52'; rr(160, 330, 240, 36, 6); x.fill(); x.strokeStyle = '#8A5A2B'; x.lineWidth = 2; x.stroke(); x.strokeStyle = 'rgba(255,255,255,.2)'; x.lineWidth = 1; for (let i = 1; i < 5; i++) { x.beginPath(); x.moveTo(164, 330 + i * 7); x.lineTo(396, 330 + i * 7); x.stroke() }
-    // sofa
-    x.fillStyle = '#9C6B36'; rr(430, 466, 168, 32, 10); x.fill(); x.fillStyle = '#B07E4A';[[440, 470], [488, 470], [536, 470]].forEach(([a, b]) => { rr(a + 4, b, 44, 22, 7); x.fill() }); x.fillStyle = '#7B542F'; rr(430, 488, 168, 10, 5); x.fill();
-    x.fillStyle = '#D9A86C'; x.beginPath(); x.ellipse(515, 425, 26, 15, 0, 0, 7); x.fill(); x.strokeStyle = '#8A5A2B'; x.lineWidth = 2; x.stroke(); x.fillStyle = '#fff'; x.beginPath(); x.arc(505, 423, 4, 0, 7); x.fill(); x.fillStyle = '#7B542F'; x.beginPath(); x.arc(505, 423, 2.2, 0, 7); x.fill(); x.fillStyle = '#C08A4A'; rr(518, 418, 14, 10, 2); x.fill();
-    // plants
-    const plant = (px, py, s) => { x.fillStyle = '#B6771D'; x.beginPath(); x.arc(px, py, s * .55, 0, 7); x.fill(); for (let a = 0; a < 8; a++) { x.fillStyle = a % 2 ? '#C08A4A' : '#D9B07A'; x.beginPath(); x.ellipse(px + Math.cos(a * .8) * s * .55, py + Math.sin(a * .8) * s * .55, s * .55, s * .28, a * .8, 0, 7); x.fill() } x.fillStyle = '#9C6B36'; x.beginPath(); x.arc(px, py, s * .3, 0, 7); x.fill() }; plant(45, 45, 22); plant(45, 300, 20); plant(150, 476, 20); plant(585, 478, 14);
-    // coffee counter L
-    x.fillStyle = 'rgba(62,42,23,.15)'; x.fillRect(603, 64, 170, 30); x.fillStyle = '#7B542F'; rr(600, 60, 176, 28, 4); x.fill(); rr(600, 60, 28, 130, 4); x.fill(); x.fillStyle = '#A8774A'; rr(603, 63, 170, 22, 3); x.fill(); rr(603, 63, 22, 124, 3); x.fill();
-    x.fillStyle = '#C9C2B4'; rr(690, 40, 52, 24, 4); x.fill(); x.strokeStyle = '#8C8577'; x.lineWidth = 1.5; x.stroke(); x.fillStyle = '#3E2A17';[[704, 58], [728, 58]].forEach(([a, b]) => { x.beginPath(); x.arc(a, b, 4, 0, 7); x.fill() }); x.fillStyle = '#C08A4A'; x.fillRect(696, 44, 6, 4);
-    x.fillStyle = '#5E3F22'; rr(750, 38, 16, 22, 4); x.fill();
-    x.fillStyle = 'rgba(191,225,242,.7)'; rr(605, 96, 18, 60, 3); x.fill();[['#D9B07A', 614, 104], ['#9C6B36', 614, 118], ['#8A5A2B', 614, 132], ['#D9B07A', 614, 146]].forEach(([cl, a, b]) => { x.fillStyle = cl; x.beginPath(); x.arc(a, b, 4.5, 0, 7); x.fill() });
-    x.fillStyle = '#3E2A17'; rr(605, 164, 18, 16, 3); x.fill(); x.fillStyle = '#FFCF71'; x.fillRect(608, 167, 12, 5);
-    for (let i = 0; i < 4; i++) { x.fillStyle = '#fff'; x.beginPath(); x.arc(640 + i * 12, 74, 4, 0, 7); x.fill(); x.strokeStyle = '#C9C2B4'; x.lineWidth = 1; x.stroke() }
-    // kitchen
-    x.fillStyle = '#3E3A36'; rr(650, 300, 92, 52, 5); x.fill(); x.strokeStyle = '#8C8577'; x.lineWidth = 2;[[670, 315], [700, 315], [670, 338], [722, 338], [722, 315], [700, 338]].slice(0, 4).forEach(([a, b]) => { x.beginPath(); x.arc(a, b, 8, 0, 7); x.stroke() });
-    x.fillStyle = '#9AA3A8'; x.beginPath(); x.arc(679, 325, 11, 0, 7); x.fill(); x.fillStyle = '#9C6B36'; x.beginPath(); x.arc(679, 325, 7.5, 0, 7); x.fill();
-    x.fillStyle = '#C9D0D4'; rr(700, 430, 70, 36, 4); x.fill(); x.strokeStyle = '#9AA3A8'; x.stroke(); x.fillStyle = '#C08A4A';[[712, 442], [722, 448], [716, 452]].forEach(([a, b]) => { x.beginPath(); x.arc(a, b, 3.5, 0, 7); x.fill() }); x.fillStyle = '#C08A4A'; x.beginPath(); x.arc(745, 446, 6, 0, 7); x.fill();
-    x.fillStyle = '#E8ECEE'; rr(740, 262, 32, 58, 4); x.fill(); x.strokeStyle = '#9AA3A8'; x.stroke(); x.fillStyle = '#9AA3A8'; x.fillRect(744, 288, 24, 2);
-    x.fillStyle = '#BFC7CB'; rr(610, 410, 40, 56, 5); x.fill(); x.fillStyle = '#E8ECEE'; rr(616, 418, 28, 22, 4); x.fill();
-    // labels
-    x.font = '700 11px Manrope, sans-serif'; x.fillStyle = 'rgba(107,80,56,.8)'; x.textAlign = 'center';[['Цонхны баар', 340, 108], ['Орц', 90, 486], ['Урт ширээ', 280, 406], ['Буйдан', 515, 458], ['Кофе захиалга', 690, 110], ['Гал тогоо', 690, 280]].forEach(([t, a, b]) => x.fillText(t, a, b));
-    // chairs (static silhouettes)
-    this.seats.forEach(s => {
-      if (s.kind === 'sofa') return; x.save(); x.translate(s.x, s.y); if (s.kind === 'stool') { x.fillStyle = 'rgba(62,42,23,.15)'; x.beginPath(); x.arc(1, 2, 10, 0, 7); x.fill(); x.fillStyle = '#8A5A2B'; x.beginPath(); x.arc(0, 0, 10, 0, 7); x.fill(); x.fillStyle = '#C9955C'; x.beginPath(); x.arc(0, 0, 7.5, 0, 7); x.fill() }
-      else { x.rotate(s.ang + Math.PI / 2); x.fillStyle = 'rgba(62,42,23,.15)'; rr(-9, -7, 19, 19, 4); x.fill(); x.fillStyle = '#E9D6BB'; rr(-10, -9, 20, 18, 4); x.fill(); x.strokeStyle = '#A8774A'; x.lineWidth = 1.5; x.stroke(); x.fillStyle = '#A8774A'; rr(-10, 6, 20, 5, 2.5); x.fill() } x.restore()
-    });
-    return c
-  }
-  person(x, p, px, py, ang, walking) {
-    const s = walking ? Math.sin(p.t * 11) * 3.6 : 0; x.save(); x.translate(px, py); x.rotate(ang + Math.PI / 2); x.globalAlpha = p.alpha ?? 1;
-    x.fillStyle = 'rgba(62,42,23,.18)'; x.beginPath(); x.ellipse(1, 3, 10, 7, 0, 0, 7); x.fill();
-    if (walking) { x.fillStyle = '#3E2A17'; x.beginPath(); x.ellipse(-4, -3 + s, 2.6, 4, 0, 0, 7); x.fill(); x.beginPath(); x.ellipse(4, -3 - s, 2.6, 4, 0, 0, 7); x.fill() }
-    x.fillStyle = p.skin; x.beginPath(); x.arc(-9.5, walking ? -s * .6 : -3, 2.6, 0, 7); x.fill(); x.beginPath(); x.arc(9.5, walking ? s * .6 : -3, 2.6, 0, 7); x.fill();
-    x.fillStyle = p.shirt; x.beginPath(); x.ellipse(0, 1, 9.5, 6.2, 0, 0, 7); x.fill(); x.strokeStyle = 'rgba(0,0,0,.18)'; x.lineWidth = 1; x.stroke();
-    x.fillStyle = p.skin; x.beginPath(); x.arc(0, -1, 5.6, 0, 7); x.fill(); x.fillStyle = p.hair; x.beginPath(); x.ellipse(0, 1, 5.9, 4.6, 0, 0, Math.PI); x.fill(); if (p.chef) { x.globalAlpha = 1; x.fillStyle = '#fff'; x.beginPath(); x.arc(0, 0, 6.6, 0, 7); x.fill(); x.strokeStyle = '#C9C2B4'; x.stroke(); x.beginPath(); x.arc(0, 0, 3.5, 0, 7); x.stroke() }
-    x.restore()
-  }
-  item(x, p) {
-    const s = p.seat; if (!s || s.kind === 'sofa') return; x.save(); x.translate(s.x, s.y); x.rotate(s.ang + Math.PI / 2); x.translate(0, s.kind === 'stool' ? -24 : -19);
-    if (p.item === 'laptop') { x.fillStyle = '#8C8577'; this.rr(x, -7, -5, 14, 9, 1.5); x.fill(); x.fillStyle = '#BFE1F2'; this.rr(x, -6, -4, 12, 5, 1); x.fill() } else if (p.item === 'book') { x.fillStyle = '#9C6B36'; this.rr(x, -6, -4, 12, 8, 1); x.fill(); x.fillStyle = '#FFF9EC'; x.fillRect(-.5, -4, 1, 8) } else { x.fillStyle = '#fff'; x.beginPath(); x.arc(0, 0, 3.8, 0, 7); x.fill(); x.fillStyle = '#7B542F'; x.beginPath(); x.arc(0, 0, 2.4, 0, 7); x.fill() } x.restore()
-  }
-  draw() {
-    const x = this.ctx; x.setTransform(this.k, 0, 0, this.k, 0, 0); x.clearRect(0, 0, this.W, this.H); x.drawImage(this.bg, 0, 0, this.W, this.H); const t = this.t;
-    // free seat breathing + unknown
-    this.seats.forEach(s => {
-      if (s.state === 'free') { x.fillStyle = 'rgba(243,226,196,.62)'; x.beginPath(); x.arc(s.x, s.y, s.kind === 'stool' ? 12 : 14, 0, 7); x.fill() }
-      if (s.state === 'occ') { x.fillStyle = 'rgba(255,157,0,.9)'; x.beginPath(); x.arc(s.x, s.y, s.kind === 'stool' ? 14 : 16, 0, 7); x.fill(); x.strokeStyle = '#7B542F'; x.lineWidth = 2; x.stroke() }
-      if (s.state === 'unknown') { x.strokeStyle = 'rgba(154,133,112,.9)'; x.lineWidth = 1.6; x.setLineDash([3, 3]); this.rr(x, s.x - 14, s.y - 12, 28, 22, 6); x.stroke(); x.setLineDash([]); x.fillStyle = '#9A8570'; x.font = '800 12px Manrope, sans-serif'; x.textAlign = 'center'; x.fillText('?', s.x, s.y + 4) }
-      if (s.flash > 0) { x.fillStyle = `rgba(255,207,113,${s.flash * .6})`; x.beginPath(); x.arc(s.x, s.y, 18, 0, 7); x.fill() }
-    });
-    // seated people & items
-    this.people.filter(p => p.state === 'seated').forEach(p => { this.item(x, p); this.person(x, p, p.x, p.y, p.ang, false) });
-    this.staff.forEach(s => { this.person(x, { ...s, alpha: 1, t: t }, s.x, s.y, s.ang || Math.PI / 2, !this.reduced && s.wait <= 0) });
-    this.people.filter(p => p.state !== 'seated').forEach(p => this.person(x, p, p.x, p.y, p.ang, p.state !== 'order'));
-    // order bubble
-    this.people.filter(p => p.state === 'order').forEach(p => { this.bub(x, p.x, p.y - 20, 1, 'cup') });
-    this.bubbles.forEach(b => { const k = b.t < .25 ? b.t / .25 : b.t > 1.8 ? (2.2 - b.t) / .4 : 1; this.bub(x, b.p.x + (b.big ? 6 : 0), b.p.y - 18, k, 'dots') });
-    // particles
-    this.parts.forEach(q => { x.fillStyle = `rgba(255,255,255,${q.l * .7})`; x.beginPath(); x.arc(q.x, q.y, q.r, 0, 7); x.fill() });
-    this.fx.forEach(f => { x.strokeStyle = f.c; x.globalAlpha = 1 - f.t / .8; x.lineWidth = 2.5; x.beginPath(); x.arc(f.x, f.y, 10 + f.t * 30, 0, 7); x.stroke(); x.globalAlpha = 1 });
-    if (this.sel) { const s = this.sel; x.save(); x.translate(s.x, s.y); x.rotate(this.reduced ? 0 : t * 1.2); x.strokeStyle = '#7B542F'; x.lineWidth = 2.2; x.setLineDash([5, 4]); x.beginPath(); x.arc(0, 0, 20, 0, 7); x.stroke(); x.restore(); x.setLineDash([]) }
-  }
-  bub(x, bx, by, k, kind) {
-    if (k <= 0) return; x.save(); x.translate(bx, by); x.scale(k, k); x.fillStyle = '#fff'; x.strokeStyle = '#7B542F'; x.lineWidth = 1.4; this.rr(x, -12, -16, 24, 15, 6); x.fill(); x.stroke(); x.beginPath(); x.moveTo(-3, -1.5); x.lineTo(0, 4); x.lineTo(3, -1.5); x.fill();
-    if (kind === 'cup') { x.fillStyle = '#7B542F'; this.rr(x, -5, -12, 9, 7, 2); x.fill(); x.strokeStyle = '#7B542F'; x.beginPath(); x.arc(5, -9, 2, -Math.PI / 2, Math.PI / 2); x.stroke() } else { x.fillStyle = '#7B542F';[-6, 0, 6].forEach(d => { x.beginPath(); x.arc(d, -8.5, 1.7, 0, 7); x.fill() }) } x.restore()
   }
 }
 
@@ -930,7 +504,7 @@ function renderStaff() {
 
 /* ================= router ================= */
 function route() {
-  const h = (location.hash || '#home').slice(1); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
+  const h = (location.hash || '#home').slice(1); pageTasks.clear(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
   const key = h.startsWith('cafe-') ? 'cafe' : h; $$('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === key || (key === 'cafe' && a.dataset.nav === 'explore') || (key === 'staff' && a.dataset.nav === 'partner')));
   document.body.classList.toggle('on-explore', key === 'explore');
   if (key !== 'explore') $$('.pv').forEach(p => p.remove());

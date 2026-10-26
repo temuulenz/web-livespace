@@ -1,0 +1,432 @@
+{
+  "A": {
+    "scenarioHash": "be8a635915625948304bfd61e115fb534a3212a5bd9371de18e45ae3eb4f9c68",
+    "initialDrawHash": "3c738570493df0b7ae130598d999efc2ff908d2a8a7b4e2b0a4a3fa372f721aa",
+    "states": [
+      {
+        "label": "initial",
+        "free": 13,
+        "total": 20,
+        "unknown": 3,
+        "people": 7
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 14,
+        "total": 20,
+        "unknown": 3,
+        "people": 7
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 7,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 35,
+    "statsEmitted": 22
+  },
+  "I": {
+    "scenarioHash": "ad60173da3562d0e8a7d14747f481db5b9e172b3564b913b512c71680c230f57",
+    "initialDrawHash": "0d827204809943bdd294baed979f773cad0c0952b4313ef27a36db0c0b70097a",
+    "states": [
+      {
+        "label": "initial",
+        "free": 9,
+        "total": 20,
+        "unknown": 3,
+        "people": 11
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 11,
+        "total": 20,
+        "unknown": 3,
+        "people": 11
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 6,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 24,
+    "statsEmitted": 16
+  },
+  "F": {
+    "scenarioHash": "2071368f80b3a321f99f89bdd8c0309443dbd2e24634b17a537e8674ac8547bd",
+    "initialDrawHash": "d3ed7c1deb704450d0c52e5b20e2f796876c27301a688024286e2c4aea69743b",
+    "states": [
+      {
+        "label": "initial",
+        "free": 3,
+        "total": 20,
+        "unknown": 3,
+        "people": 17
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 6,
+        "total": 20,
+        "unknown": 3,
+        "people": 17
+      },
+      {
+        "label": "busy cafe",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 18,
+    "statsEmitted": 14
+  },
+  "T": {
+    "scenarioHash": "3c8daa215091b55af2f3a175b777637feddae7e682ecb116e9afce0ac754451d",
+    "initialDrawHash": "0dc226c4855c9394e9cf217fad6bca3d0c82a07a91a0cb0d12be49b5100c4ee0",
+    "states": [
+      {
+        "label": "initial",
+        "free": 11,
+        "total": 20,
+        "unknown": 3,
+        "people": 9
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 13,
+        "total": 20,
+        "unknown": 3,
+        "people": 9
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 9,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 31,
+    "statsEmitted": 20
+  },
+  "J": {
+    "scenarioHash": "265b4a1d6ba059a8554bac0981a119a1bec131cf3a11d30352b5dcb0a4425339",
+    "initialDrawHash": "6026a7f40acc62134d6c35bdc27e788c5a6dc2b4aeaa9ab76200caf28dd1f4b5",
+    "states": [
+      {
+        "label": "initial",
+        "free": 6,
+        "total": 20,
+        "unknown": 3,
+        "people": 14
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 7,
+        "total": 20,
+        "unknown": 3,
+        "people": 14
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 17
+      },
+      {
+        "label": "busy cafe",
+        "free": 6,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 17,
+    "statsEmitted": 13
+  },
+  "K": {
+    "scenarioHash": "6150a44896e723b3a408ab7f0579b33bf596cdddf7557c0e0f6358bfcd312ac4",
+    "initialDrawHash": "8689cd279b2a1adf0250ecb0788a6c71147c1c7df644ebe96834281488af0886",
+    "states": [
+      {
+        "label": "initial",
+        "free": 14,
+        "total": 20,
+        "unknown": 3,
+        "people": 6
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 15,
+        "total": 20,
+        "unknown": 3,
+        "people": 6
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 8,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 31,
+    "statsEmitted": 19
+  },
+  "B": {
+    "scenarioHash": "9ad0e2a9b12cfeb81aeb4294c1b0d844bb4199c9d9be047b2bf55ebe3147e770",
+    "initialDrawHash": "9b1ce4af79e37252ac20b13090d1ee9f2cd369c42856a579337b924f6debaf31",
+    "states": [
+      {
+        "label": "initial",
+        "free": 2,
+        "total": 20,
+        "unknown": 3,
+        "people": 18
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 2,
+        "total": 20,
+        "unknown": 3,
+        "people": 18
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 6,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 6,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 15,
+    "statsEmitted": 13
+  },
+  "L": {
+    "scenarioHash": "2c02da67a46439d9cfcb8cc174968eff4ee562cfd38e7a9dbe914662f3419e95",
+    "initialDrawHash": "598e0cd2a009723f7316685748508c7acce0b8ad65233274ca3c13b6e77c9b32",
+    "states": [
+      {
+        "label": "initial",
+        "free": 16,
+        "total": 20,
+        "unknown": 3,
+        "people": 4
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 17,
+        "total": 20,
+        "unknown": 3,
+        "people": 4
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 10,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 38,
+    "statsEmitted": 23
+  },
+  "P": {
+    "scenarioHash": "f9e1cdc5b99d2bd3f601370147ddaacaa63da961865266f0ccb6738a0ee3317a",
+    "initialDrawHash": "f46150aeaf2b458fe967a6f5263e5ff389c02b303f836e678f2e1831510e372d",
+    "states": [
+      {
+        "label": "initial",
+        "free": 8,
+        "total": 20,
+        "unknown": 3,
+        "people": 12
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 8,
+        "total": 20,
+        "unknown": 3,
+        "people": 12
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 4,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      }
+    ],
+    "events": 19,
+    "statsEmitted": 13
+  },
+  "H": {
+    "scenarioHash": "18afde46e75b40f19d0c763bf8ad828d9cfc1986604a578049c51744d88a56fe",
+    "initialDrawHash": "97c550fac3b7e7023996208ee7b41c15c6cc79c8a489770fdcaa186ff79afe25",
+    "states": [
+      {
+        "label": "initial",
+        "free": 17,
+        "total": 20,
+        "unknown": 3,
+        "people": 3
+      },
+      {
+        "label": "arrival, order, seating and departure",
+        "free": 18,
+        "total": 20,
+        "unknown": 3,
+        "people": 3
+      },
+      {
+        "label": "forecast occupancy",
+        "free": 9,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "busy cafe",
+        "free": 6,
+        "total": 20,
+        "unknown": 3,
+        "people": 16
+      },
+      {
+        "label": "reduced motion",
+        "free": 5,
+        "total": 20,
+        "unknown": 3,
+        "people": 15
+      }
+    ],
+    "events": 41,
+    "statsEmitted": 25
+  }
+}
