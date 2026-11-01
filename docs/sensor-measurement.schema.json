@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://livespace.mn/schemas/sensor-measurement/1.0.json",
+  "title": "LiveSpace sensor measurement",
+  "description": "One reading sent by a device installed in a partner café. POST it to /api/v1/ingest/measurements with the device's bearer token. Send several at once as { \"measurements_batch\": [ … ] } (up to 100).",
+  "type": "object",
+  "required": ["cafe_id", "device_id", "timestamp", "measurements"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1(\\.\\d+)?$", "default": "1.0", "description": "Major version 1. Minor versions only add optional fields." },
+    "cafe_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,64}$", "description": "The café the device is registered to (shown in the admin dashboard)." },
+    "device_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,64}$", "description": "Must match the device that owns the bearer token." },
+    "timestamp": { "type": "string", "format": "date-time", "description": "When the reading was taken (ISO 8601 with time zone). Not more than 5 minutes in the future or 7 days in the past." },
+    "measurements": {
+      "type": "object",
+      "description": "At least one known value. Unknown keys are ignored.",
+      "minProperties": 1,
+      "properties": {
+        "available_seats": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "occupied_seats": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "total_seats": { "type": "integer", "minimum": 0, "maximum": 10000, "description": "available + occupied must not exceed this." },
+        "noise_level_db": { "type": "number", "minimum": 0, "maximum": 140, "description": "A-weighted sound level, dBA. Alias accepted: noise_level." },
+        "noise_level": { "type": "number", "minimum": 0, "maximum": 140, "deprecated": true },
+        "wifi_quality": { "type": "number", "minimum": 0, "maximum": 100, "description": "Device-computed quality score 0–100." },
+        "wifi_download_mbps": { "type": "number", "minimum": 0 },
+        "wifi_upload_mbps": { "type": "number", "minimum": 0 },
+        "wifi_latency_ms": { "type": "number", "minimum": 0 },
+        "temperature_c": { "type": "number", "minimum": -40, "maximum": 80 },
+        "humidity_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "co2_ppm": { "type": "number", "minimum": 0, "maximum": 10000 },
+        "zones": {
+          "type": "array",
+          "maxItems": 50,
+          "description": "Optional per-area seat counts (e.g. one camera per zone).",
+          "items": {
+            "type": "object",
+            "required": ["zone_id"],
+            "properties": {
+              "zone_id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,64}$" },
+              "available_seats": { "type": "integer", "minimum": 0 },
+              "occupied_seats": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "device_status": {
+      "type": "object",
+      "properties": {
+        "state": { "enum": ["online", "degraded", "error", "maintenance"] },
+        "battery_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "firmware": { "type": "string", "maxLength": 40 },
+        "uptime_s": { "type": "number", "minimum": 0 },
+        "message": { "type": "string", "maxLength": 200 }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "1.0",
+      "cafe_id": "cafe_001",
+      "device_id": "sensor_001",
+      "timestamp": "2026-11-01T10:30:00Z",
+      "measurements": { "available_seats": 12, "occupied_seats": 18, "total_seats": 30, "noise_level_db": 42, "wifi_quality": 85, "wifi_download_mbps": 64 },
+      "device_status": { "state": "online", "battery_pct": 90, "firmware": "1.2.0" }
+    }
+  ]
+}

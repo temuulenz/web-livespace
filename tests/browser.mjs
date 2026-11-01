@@ -54,27 +54,29 @@ try {
   await check('home search, map results and cafe navigation', async () => {
     await navigate('#home');
     await input('#hq', 'Кафе A');
-    assert.equal(await evaluate(`document.querySelectorAll('.mk.hit').length`), 1);
     await evaluate(`document.querySelector('#hs').requestSubmit()`);
     await waitFor(`location.hash === '#explore' && !!document.querySelector('.pv')`);
     assert.equal(await evaluate(`document.querySelector('.pv').dataset.id`), 'A');
     await evaluate(`document.querySelector('.pv').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}))`);
     await waitFor(`location.hash === '#cafe-A' && !!document.querySelector('canvas')`);
   });
-  await check('map live search operation count and matching results', async () => {
+  await check('home map is a still preview and the goals sit under the search', async () => {
     await navigate('#home');
-    measurements.markerQueriesFor100Inputs = await evaluate(`(() => {
-      const original = Element.prototype.querySelectorAll;
-      let queries = 0;
-      Element.prototype.querySelectorAll = function(selector) { if(selector === '.mk') queries++; return original.call(this, selector); };
-      try { const input = document.querySelector('#hq'); for(let i=0;i<100;i++) { input.value='Кафе A'; input.dispatchEvent(new Event('input',{bubbles:true})); } return queries; }
-      finally { Element.prototype.querySelectorAll = original; }
-    })()`);
-    assert.equal(await evaluate(`document.querySelectorAll('.mk.hit').length`), 1);
-    console.log(`Marker queries for 100 inputs: ${measurements.markerQueriesFor100Inputs}`);
+    // No pins, live pills or pulses on the home preview: the real map lives on #explore.
+    assert.equal(await evaluate(`document.querySelectorAll('#miniMap .mk').length`), 0);
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector('#miniMap .you')).animationName`), 'none');
+    assert.equal(await evaluate(`document.body.innerText.includes('Кафе хайх эсвэл зорилгоо сонгоход')`), false);
+    assert.equal(await evaluate(`document.querySelector('#hs').nextElementSibling.classList.contains('hero-purp')`), true);
+    assert.equal(await evaluate(`document.querySelectorAll('.hero-purp [data-go-purpose]').length`), 4);
+    // The lamps keep their sway and glow.
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.hero .lamp')).animationName`), 'sway');
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.hero .lamp .cone')).animationName`), 'glow');
     await click('[data-go-purpose="Сурах"]');
     await waitFor(`location.hash === '#explore' && !!document.querySelector('#exMap')`);
     assert.equal(await evaluate(`document.querySelectorAll('.mk:not(.dim)').length`), 7);
+    // The real map shows every café with its animated pin, on green land.
+    assert.equal(await evaluate(`document.querySelectorAll('#exMap .mk').length`), 12);
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector('#exMap .map-land')).fill`), 'rgb(220, 230, 196)');
   });
   await check('map zoom, wheel, panning, marker selection and Escape', async () => {
     await navigate('#explore');
@@ -189,8 +191,11 @@ try {
   await check('partner form validation and demo submission', async () => {
     await navigate('#partner');
     await evaluate(`document.querySelector('#pf').requestSubmit()`);
-    assert.equal(await evaluate(`document.querySelectorAll('.fld.err').length`), 4);
-    for (const [selector, value] of [['#f1','Cafe'],['#f2','Test'],['#f3','88000000'],['#f4','test@example.com']]) await input(selector, value);
+    // The original four fields plus address, description and the 3–4 photos.
+    assert.equal(await evaluate(`document.querySelectorAll('.fld.err').length`), 7);
+    for (const [selector, value] of [['#f1','Cafe'],['#f2','Test'],['#f3','88000000'],['#f4','test@example.com'],['#f8','Seoul street 1'],['#f12','Quiet cafe']]) await input(selector, value);
+    await evaluate(`(() => { const input = document.querySelector('#fPhotos'), dt = new DataTransfer(); for (let i = 0; i < 3; i++) dt.items.add(new File([new Uint8Array([137,80,78,71,13,10,26,10])], 'p' + i + '.png', { type: 'image/png' })); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    assert.equal(await evaluate(`document.querySelectorAll('#phGrid .ph').length`), 3);
     await evaluate(`document.querySelector('#pf').requestSubmit()`);
     assert.equal(await evaluate(`!!document.querySelector('#pf .done')`), true);
   });
@@ -233,7 +238,8 @@ try {
     assert.equal(await evaluate(`document.querySelectorAll('.mk').length`), 12);
   });
   const errors = events.filter(e => e.method === 'Runtime.exceptionThrown').map(e => e.params.exceptionDetails.exception?.description || e.params.exceptionDetails.text);
-  const badResponses = events.filter(e => e.method === 'Network.responseReceived' && e.params.response.status >= 400).map(e => ({ url: e.params.response.url.replace(origin, ''), status: e.params.response.status }));
+  // A static host answers the backend probe with 404: that is how the site detects the offline demo mode.
+  const badResponses = events.filter(e => e.method === 'Network.responseReceived' && e.params.response.status >= 400 && !new URL(e.params.response.url).pathname.startsWith('/api/')).map(e => ({ url: e.params.response.url.replace(origin, ''), status: e.params.response.status }));
   const networkFailures = events.filter(e => e.method === 'Network.loadingFailed').map(e => ({ error: e.params.errorText, blockedReason: e.params.blockedReason, canceled: e.params.canceled }));
   await check('browser console has no uncaught errors', async () => assert.deepEqual(errors, []));
   await check('all local assets return successful HTTP responses', async () => assert.deepEqual(badResponses.filter(response => response.url.startsWith('/')), []));

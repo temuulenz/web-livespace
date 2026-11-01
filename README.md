@@ -1,45 +1,57 @@
-LiveSpace is a framework-free, static cafe discovery demo. It uses HTML, CSS, native JavaScript modules, canvas, Web Audio and localStorage. There are no package dependencies or build step.
+LiveSpace helps people in Ulaanbaatar find a café by seeing its free seats, noise and Wi-Fi before they go. The front end uses HTML, CSS, native JavaScript modules, canvas and Web Audio, plus our own small framework (`framework/`, see [docs/FRAMEWORK.md](docs/FRAMEWORK.md)). The optional backend is plain Node.js with the built-in SQLite. There are no package dependencies and no build step.
 
-Serve the repository root over HTTP:
+## Run
+
+**Full platform** (accounts, favourites, partner applications, owner and admin dashboards, live sensor data). Requires Node 22.13+.
+
+```powershell
+npm.cmd run create-admin -- you@example.com "a long password"
+npm.cmd start
+```
+
+Open `http://127.0.0.1:8080/`. The 12 demo cafés are seeded on first start and labelled as demo data. Configuration and deployment are covered in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the sensor JSON format and real-time updates in [docs/SENSOR_API.md](docs/SENSOR_API.md).
+
+**Static demo** (as before; no backend features):
 
 ```powershell
 python -m http.server 8000 --bind 127.0.0.1
 ```
 
-Open `http://127.0.0.1:8000/`. Native modules require HTTP serving rather than opening `index.html` directly. Existing hash URLs (`#home`, `#explore`, `#cafes`, `#cafe-A`, `#about`, `#partner`, `#staff`) are unchanged.
+The site detects that no server is present and behaves like the original prototype. Native modules require HTTP serving rather than opening `index.html` directly. The original hash URLs (`#home`, `#explore`, `#cafes`, `#cafe-A`, `#about`, `#partner`, `#staff`) are unchanged. New routes are `#account`, `#owner` and `#admin`.
 
-`app.js` owns initialization, routing, page templates and delegated UI events. Supporting modules live in `js/`:
+## Code map
 
 | Responsibility | Files |
 | --- | --- |
-| Demo records and lookup boundary | `cafes.js` |
-| Cafe display calculations | `cafe-metrics.js` |
-| Preferences, filters and favorites | `state.js`, `storage.js` |
-| DOM utilities and seeded randomness | `dom.js` |
-| Existing SVG artwork and atmosphere components | `icons.js`, `components/atmosphere.js` |
-| Map rendering and interaction | `map.js` |
-| CafeSim engine, implemented by `FloorPlan` | `simulation/floor-plan.js` |
-| Web Audio | `audio.js` |
-| Route-owned timers and number animations | `lifecycle.js`, `animations.js` |
-| Modals and toasts | `components/feedback.js` |
+| App start-up, routing, original page templates, delegated UI events | `app.js` |
+| Framework: components, rendering, store, router, API, live channel, session | `framework/` |
+| Café records and the data boundary (server records merge into the same objects) | `js/cafes.js`, `js/services/platform.js` |
+| Measurement → levels, opening hours, map projection, setup workflow (shared with the server) | `js/live/levels.js` |
+| Demo / live / test / outdated labels | `js/live/freshness.js` |
+| Café display calculations | `js/cafe-metrics.js` |
+| Preferences, filters and favourites | `js/state.js`, `js/storage.js` |
+| SVG artwork and atmosphere components | `js/icons.js`, `js/components/atmosphere.js` |
+| Map rendering and interaction | `js/map.js` |
+| Café simulation (`FloorPlan`) and per-café interior layouts | `js/simulation/floor-plan.js`, `js/simulation/layouts.js` |
+| Web Audio | `js/audio.js` |
+| Route-owned timers, number animations, modals, toasts | `js/lifecycle.js`, `js/animations.js`, `js/components/feedback.js` |
+| Login window, account, partner form, owner and admin dashboards | `js/features/*` |
+| Backend: HTTP, SQLite, auth, SSE, routes, services | `server/` |
+| Reference device client for the ingestion API | `tools/device-client.mjs` |
 
-`getCafes()` and `byId()` return the existing shared demo records. A future API belongs behind this boundary, with asynchronous loading added to initialization when needed. Simulation callbacks (`onStats`, `onEvent`, `onSeat`) remain the interface between the engine and page UI.
+The stylesheets must stay in this order: `styles.css`, `styles/pages.css`, `styles/responsive.css`, `styles/refinements.css`, then `styles/livespace.css`. The first four are the original design and are byte-identical (a test checks this). The last file holds every addition in this version.
 
-The stylesheets must remain in this order: `styles.css`, `styles/pages.css`, `styles/responsive.css`, `styles/refinements.css`. The last file contains historical overrides whose position affects the design. Load them through the ordered links in `index.html`; do not regroup selectors without checking the cascade.
-
-Run regression checks without installing packages:
+## Tests
 
 ```powershell
-npm.cmd test
-npm.cmd run test:browser
-npm.cmd run test:visual
-node tests/compare-visual.mjs
+npm.cmd test              # Node: engine fidelity, layouts, framework, server API, schema, storage, CSS
+npm.cmd run test:browser  # browser regression checks of the original site (static mode)
+npm.cmd run test:e2e      # real server + browser: guest, user, owner, admin, live sensor data
+npm.cmd run test:visual   # screenshots into .artifacts/
 ```
 
-The Node checks were verified with Node 26.8.1. Browser checks use a disposable headless Chromium profile and default to Microsoft Edge's Windows installation. Set `BROWSER_PATH` to use another Chromium executable. In a restricted execution environment that cannot start Chromium's renderer sandbox, the test harness also accepts `$env:BROWSER_NO_SANDBOX = '1'`; this is optional and is not used by the website.
+- **Browser.** Browser checks use a disposable headless Chromium profile and default to Microsoft Edge's Windows installation. Set `BROWSER_PATH` to use another Chromium executable, and `$env:BROWSER_NO_SANDBOX = '1'` in restricted environments.
+- **Simulation fixtures.** These were captured from the original monolith at commit `f7f64a7`. They are still checked against the original interior (`legacy` layout, with the kitchen), proving the engine's behaviour is unchanged. Don't regenerate them from the current implementation.
+- **Visual baseline.** `.artifacts/before` holds screenshots of the original for comparison. The homepage, map colour and café page differ on purpose.
 
-Browser captures freeze the clock, seed randomness, drive JavaScript animation frames and pause CSS animations at a common position. Google Fonts requests are blocked for reproducible offline captures, so the comparison covers the same fallback fonts on both revisions. Captures and results go to ignored `.artifacts/` directories. `CAPTURE_LABEL` defaults to `after`; `SITE_ROOT` can point to an original checkout for baseline captures. The comparison command expects a previously captured `.artifacts/before` baseline. Simulation fixtures were captured from the original monolith at commit `f7f64a7` using `node tests/capture-baseline.mjs <original-app.js>`; do not regenerate them from the refactored implementation.
-
-Vercel continues to receive a static site: retain the existing static deployment settings and serve the repository root, including `js/`, `styles/` and `logo.webp`. No route rewrites, backend, environment variables or package installation are required by the application. Local HTTP asset and module loading were verified; a live Vercel deployment was not performed.
-
-The audit, measurements and verification limits are recorded in [REFACTOR_REPORT.md](REFACTOR_REPORT.md).
+The 2026-10 refactor audit is in [REFACTOR_REPORT.md](REFACTOR_REPORT.md).

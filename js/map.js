@@ -14,7 +14,7 @@ function mapSVG() {
   const river = t => [685 + Math.sin(t * 5) * 26, t * 680];
   const zones = [[400, 170, 120, 90], [440, 560, 170, 110], [200, 560, 90, 90], [610, 520, 80, 70]];
   const inZone = (x, y, w, h) => zones.some(([zx, zy, zw, zh]) => x + w > zx - 8 && x < zx + zw + 8 && y + h > zy - 8 && y < zy + zh + 8);
-  s += `<rect width="1000" height="680" fill="#EFE4CF"/>`;
+  s += `<rect class="map-land" width="1000" height="680" fill="#EFE4CF"/>`;
   // park
   s += `<rect x="440" y="560" width="170" height="110" rx="18" fill="#E2D3B2"/><circle cx="525" cy="615" r="30" fill="none" stroke="#F6EBDA" stroke-width="7"/><path d="M440 615h55M555 615h55" stroke="#F6EBDA" stroke-width="7"/>`;
   // river
@@ -52,9 +52,11 @@ function markerHTML(c) {
   <span class="mk-pinw">${c.open ? '<span class="mk-ring"></span>' : ''}${pinSVG(c.open ? '#FF9D00' : '#C9C2B4')}</span>
   <span class="mk-pill">${seatRow(c.occ)}<span class="sep"></span><span class="sg">${ssGlyph(c.sound)}</span><span class="sep"></span>${wifiSVG(c.wifi, 15)}</span>
  </button>`}
-function buildMap(vp, { interactive = true, onSelect = null, focus = null } = {}) {
-  vp.insertAdjacentHTML('beforeend', `<div class="map-inner">${mapSVG()}<div class="mk-layer">${CAFES.map(markerHTML).join('')}</div></div>`);
-  const markers = $$('.mk', vp), markerById = new Map(markers.map(marker => [marker.dataset.mk, marker]));
+// `markers: false` draws only the illustration (the home page preview): no pins, live pills or pulses.
+// `live` marks the real map, which uses the green land colour from styles/livespace.css.
+function buildMap(vp, { interactive = true, onSelect = null, focus = null, markers: withMarkers = true, live = interactive } = {}) {
+  vp.insertAdjacentHTML('beforeend', `<div class="map-inner${live ? ' map-live' : ''}${withMarkers ? '' : ' map-preview'}">${mapSVG()}<div class="mk-layer">${withMarkers ? getCafes().map(markerHTML).join('') : ''}</div></div>`);
+  let markers = $$('.mk', vp); const markerById = new Map(markers.map(marker => [marker.dataset.mk, marker]));
   const events = new AbortController();
   const listen = (element, type, callback, options = {}) => element.addEventListener(type, callback, { ...options, signal: events.signal });
   const inner = $('.map-inner', vp); const st = { s: 1, x: 0, y: 0, base: 1 }; let pvEl = null;
@@ -77,7 +79,14 @@ function buildMap(vp, { interactive = true, onSelect = null, focus = null } = {}
   listen($('.mk-layer', vp), 'click', e => { const m = e.target.closest('.mk'); if (!m || moved) return; e.stopPropagation(); onSelect && onSelect(m.dataset.mk, 'map') });
   if (interactive) listen(vp, 'click', e => { if (moved || e.target.closest('.mk,.pv,.map-ctrl,.map-legend,.map-note')) return; onSelect && onSelect(null, 'map') });
   const ro = new ResizeObserver(fit); ro.observe(vp); fit();
-  return { fit, centerOn, setPv(el) { pvEl = el; placePv() }, select(id) { markers.forEach(m => m.classList.toggle('sel', m.dataset.mk === id)) }, hover(id, on) { const m = markerById.get(id); m && m.classList.toggle('hov', on) }, dim(set) { markers.forEach(m => m.classList.toggle('dim', !set.has(m.dataset.mk))) }, hits(set) { markers.forEach(m => m.classList.toggle('hit', !!set && set.has(m.dataset.mk))) }, destroy() { ro.disconnect(); events.abort(); pvEl = null; drag = null } }
+  return { fit, centerOn, setPv(el) { pvEl = el; placePv() }, select(id) { markers.forEach(m => m.classList.toggle('sel', m.dataset.mk === id)) }, hover(id, on) { const m = markerById.get(id); m && m.classList.toggle('hov', on) }, dim(set) { markers.forEach(m => m.classList.toggle('dim', !set.has(m.dataset.mk))) }, hits(set) { markers.forEach(m => m.classList.toggle('hit', !!set && set.has(m.dataset.mk))) },
+    // A live measurement changed one café: redraw only its marker, keeping its map state.
+    refresh(id) {
+      const old = markerById.get(id), cafe = byId(id); if (!old || !cafe) return;
+      const tmp = document.createElement('div'); tmp.innerHTML = markerHTML(cafe).trim(); const next = tmp.firstElementChild;
+      ['sel', 'hov', 'dim', 'hit'].forEach(cls => next.classList.toggle(cls, old.classList.contains(cls)));
+      old.replaceWith(next); markerById.set(id, next); markers = markers.map(m => m === old ? next : m);
+    }, destroy() { ro.disconnect(); events.abort(); pvEl = null; drag = null } }
 }
 
 export { buildMap };

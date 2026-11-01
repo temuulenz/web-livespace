@@ -31,9 +31,9 @@ export function simulationEnvironment() {
   };
 }
 
-export function runScenario(FloorPlan, cafe, environment) {
+export function runScenario(FloorPlan, cafe, environment, options = {}) {
   const stats = [], events = [];
-  const sim = new FloorPlan(environment.wrap, cafe, { sound: cafe.sound, onStats: value => stats.push(value), onEvent: (...event) => events.push(event) });
+  const sim = new FloorPlan(environment.wrap, cafe, { sound: cafe.sound, onStats: value => stats.push(value), onEvent: (...event) => events.push(event), ...options });
   environment.calls.length = 0;
   sim.draw();
   const initialDraw = JSON.stringify(environment.calls);
