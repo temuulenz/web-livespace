@@ -25,8 +25,22 @@ const cafeIndex = new Map(CAFES.map(cafe => [cafe.id, cafe]));
 const byId = id => cafeIndex.get(id);
 
 // Shared demo records keep existing in-memory updates visible to every view.
-// Replace this data boundary when an API is introduced.
+// When the backend is available, js/services/cafe-repository.js merges server
+// records into these same objects, so every view keeps its references.
 const getCafes = () => CAFES;
 const TOTAL_SEATS = 20;
 
-export { SS, WIFI, WIFI_S, TOTAL_SEATS, getCafes, byId };
+// Merge a server record into the shared list; existing cafés keep their identity.
+function upsertCafe(record) {
+  const existing = cafeIndex.get(record.id);
+  if (existing) return Object.assign(existing, record);
+  const cafe = { ...record };
+  CAFES.push(cafe); cafeIndex.set(cafe.id, cafe);
+  return cafe;
+}
+// Drop cafés the server no longer lists (e.g. paused by an admin).
+function retainCafes(ids) {
+  for (let i = CAFES.length - 1; i >= 0; i--) if (!ids.has(CAFES[i].id)) { cafeIndex.delete(CAFES[i].id); CAFES.splice(i, 1); }
+}
+
+export { SS, WIFI, WIFI_S, TOTAL_SEATS, getCafes, byId, upsertCafe, retainCafes };

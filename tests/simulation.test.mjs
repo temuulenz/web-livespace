@@ -17,7 +17,8 @@ for (const cafe of getCafes().filter(cafe => cafe.open)) {
   test(`${cafe.name}: original movement, ordering, seats, forecast and reduced motion`, () => {
     const environment = simulationEnvironment();
     Object.assign(globalThis, environment.globals);
-    const result = runScenario(FloorPlan, cafe, environment);
+    // The fixtures were captured from the original interior, kitchen included.
+    const result = runScenario(FloorPlan, cafe, environment, { layout: 'legacy' });
     assert.equal(hash(result.initialDraw), fixtures[cafe.id].initialDrawHash, 'Canvas drawing commands changed');
     assert.equal(hash(JSON.stringify(result)), fixtures[cafe.id].scenarioHash, 'Seeded simulation behavior changed');
     assert.equal(environment.frames.size, 0, 'Destroy must cancel its animation frame');

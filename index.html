@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="styles/pages.css?v=3">
   <link rel="stylesheet" href="styles/responsive.css?v=3">
   <link rel="stylesheet" href="styles/refinements.css?v=3">
+  <link rel="stylesheet" href="styles/livespace.css?v=5">
   <link rel="modulepreload" href="js/simulation/floor-plan.js">
   <link rel="modulepreload" href="js/map.js">
 </head>
@@ -29,19 +30,21 @@
       <div class="hd-r">
         <span class="loc" id="locPill"></span>
         <button class="ibtn" id="favBtn" aria-label="Хадгалсан кафенууд"></button>
+        <button class="ibtn" id="accBtn" aria-label="Нэвтрэх" hidden></button>
         <button class="ibtn" id="sndBtn" aria-label="Дуу ба хөдөлгөөний тохиргоо"></button>
       </div>
     </div>
   </header>
   <div class="pop" id="sndPop" hidden></div>
   <div class="pop" id="favPop" hidden></div>
+  <div class="pop" id="accPop" hidden></div>
   <main id="app"></main>
   <nav class="tabbar" id="tabbar" aria-label="Гар утасны цэс"></nav>
   <div class="cmp-tray" id="cmpTray" aria-live="polite"></div>
   <div id="modal"></div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="app.js?v=3"></script>
+  <script type="module" src="app.js?v=5"></script>
 </body>
 
 </html>

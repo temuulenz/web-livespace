@@ -12,7 +12,7 @@ async function files(directory) {
 
 test('HTML assets and the complete native module graph resolve on a static host', async () => {
   const html = await readFile('index.html', 'utf8');
-  assert.match(html, /<script type="module" src="app\.js\?v=3"><\/script>/);
+  assert.match(html, /<script type="module" src="app\.js\?v=\d+"><\/script>/);
   for (const [, url] of html.matchAll(/(?:href|src)="([^"#]+)"/g)) {
     if (/^https?:/.test(url)) continue;
     await access(join(root, url.split('?')[0]));

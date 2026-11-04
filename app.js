@@ -11,10 +11,21 @@ import { FloorPlan, ZONES } from './js/simulation/floor-plan.js';
 import { pageTasks } from './js/lifecycle.js';
 import { countUp, animNum } from './js/animations.js';
 import { openModal, closeModal, toast } from './js/components/feedback.js';
+import { createRouter, configureErrors, mount, escapeHTML } from './framework/index.js';
+import { platform, initPlatform } from './js/services/platform.js';
+import { dataMode, freshnessHTML, modeBadge, hasMeasurements, measuredSeats } from './js/live/freshness.js';
+import { openAuth, watchAuthCancel } from './js/features/authentication/auth-modal.js';
+import { renderAccountButton, bindAccountPopover, AccountPage } from './js/features/account/account.js';
+import { partnerFormHTML, bindPartnerForm, pendingClaimHTML, openOwnerSignup } from './js/features/partner/partner-form.js';
+import { OwnerPage } from './js/features/owner-dashboard/owner-page.js';
+import { AdminPage } from './js/features/admin-dashboard/admin-page.js';
 
 const CAFES = getCafes();
 let cmpIds = [];
-let selId = null, mapCtl = null, fp = null, homeMini = null;
+let selId = null, mapCtl = null, fp = null, homeMini = null, cdCafe = null, pageComp = null;
+// Cafés without live data yet are shown like closed ones, with an honest reason.
+const closedText = c => c.status_text || `${c.opens} нээгдэнэ`;
+const openTag = c => c.open ? 'Нээлттэй' : c.status_text ? 'Мэдээлэлгүй' : 'Хаалттай';
 
 /* ================= filters ================= */
 const PURPOSES = [['Сурах', I.book], ['Ажиллах', I.laptop], ['Найзуудтай', I.people], ['Тухтай', I.sofa]];
@@ -76,15 +87,42 @@ function activeHTML(n) {
   const a = []; F.purpose.forEach(p => a.push([`purpose:${p}`, p])); if (F.sound) a.push(['sound:', SS[F.sound].short]); if (F.wifi !== 'any') a.push(['wifi:', F.wifi === 'good' ? 'Wi-Fi сайн+' : 'Wi-Fi маш сайн']); if (F.seats !== 'any') a.push(['seats:', F.seats + '%+ сул']); if (F.openOnly) a.push(['openOnly:', 'Нээлттэй']);
   return `<span><b class="num">${n}</b> кафе</span>` + a.map(([k, l]) => `<span class="ac">${l}<button data-rm="${k}" aria-label="${l} шүүлтүүрийг арилгах">${I.x}</button></span>`).join('') + (a.length ? '<button class="rst" data-reset>Цэвэрлэх</button>' : '')
 }
-function whyLine(c) { if (!c.open) return `Хаалттай · ${c.opens} нээгдэнэ`; const p = []; if (F.sound === c.sound || c.sound <= 2) p.push(SS[c.sound].short.toLowerCase() + ' орчин'); if (F.wifi !== 'any' || c.wifi >= 4) p.push('Wi-Fi ' + WIFI[c.wifi].toLowerCase()); if (F.seats !== 'any' || freePct(c) >= 60) p.push(freePct(c) + '% сул'); if (F.purpose.size) p.unshift([...F.purpose].join(', ').toLowerCase() + 'д тохирно'); return p.length ? `<strong>Яагаад:</strong> ${p.slice(0, 3).join(' · ')}` : c.note }
+function whyLine(c) { if (!c.open) return c.status_text || `Хаалттай · ${c.opens} нээгдэнэ`; const p = []; if (F.sound === c.sound || c.sound <= 2) p.push(SS[c.sound].short.toLowerCase() + ' орчин'); if (F.wifi !== 'any' || c.wifi >= 4) p.push('Wi-Fi ' + WIFI[c.wifi].toLowerCase()); if (F.seats !== 'any' || freePct(c) >= 60) p.push(freePct(c) + '% сул'); if (F.purpose.size) p.unshift([...F.purpose].join(', ').toLowerCase() + 'д тохирно'); return p.length ? `<strong>Яагаад:</strong> ${p.slice(0, 3).join(' · ')}` : c.note }
 let refreshResults = () => { };
 
 /* ================= shared bits ================= */
 function favBtn(id) { return `<button class="heart" data-fav="${id}" aria-pressed="${favs.has(id)}" aria-label="Хадгалах">${I.heart}</button>` }
 function cmpBtn(id) { return `<button class="cmpb" data-cmp="${id}" aria-pressed="${cmpIds.includes(id)}" aria-label="Харьцуулахад нэмэх" title="Харьцуулах (жинлэх)">${I.cmp}</button>` }
+// With the LiveSpace server, saving needs an account: a guest gets the login window and
+// the café is saved right after signing in. Without a server, the original local favourites.
 function toggleFav(id, btn) {
-  const c = byId(id); if (favs.has(id)) { favs.delete(id); Snd.ui('click'); toast(`${c.name} хадгалснаас хасагдлаа`) } else { favs.add(id); Snd.ui('chime'); toast(`${c.name} хадгалагдлаа`, true) } store.set('favs', [...favs]);
-  $$(`[data-fav="${id}"]`).forEach(b => { b.setAttribute('aria-pressed', favs.has(id)); if (favs.has(id)) { b.classList.remove('burst'); void b.offsetWidth; b.classList.add('burst') } }); renderFavCount(true)
+  if (!platform.online) { applyFav(id, false); return }
+  platform.session.requireLogin(async () => { await (favSync || pullFavorites()); if (favs.has(id)) refreshFavUI(); else applyFav(id, true) }, 'favorite')
+}
+function applyFav(id, remote) {
+  const c = byId(id); if (favs.has(id)) { favs.delete(id); Snd.ui('click'); toast(`${c.name} хадгалснаас хасагдлаа`) } else { favs.add(id); Snd.ui('chime'); toast(`${c.name} хадгалагдлаа`, true) } if (!remote) store.set('favs', [...favs]);
+  $$(`[data-fav="${id}"]`).forEach(b => { b.setAttribute('aria-pressed', favs.has(id)); if (favs.has(id)) { b.classList.remove('burst'); void b.offsetWidth; b.classList.add('burst') } }); renderFavCount(true);
+  if (remote) {
+    const on = favs.has(id);
+    (on ? platform.api.put(`/me/favorites/${encodeURIComponent(id)}`) : platform.api.del(`/me/favorites/${encodeURIComponent(id)}`))
+      .catch(error => { on ? favs.delete(id) : favs.add(id); refreshFavUI(); Snd.ui('err'); toast(error.isNetwork ? 'Сервертэй холбогдож чадсангүй' : error.message) });
+  }
+}
+function refreshFavUI() { $$('[data-fav]').forEach(b => b.setAttribute('aria-pressed', favs.has(b.dataset.fav))); renderFavCount() }
+// Load the signed-in user's favourites; cafés saved on this device before are merged in once.
+let favSync = null;
+function pullFavorites() {
+  favSync = (async () => {
+    const user = platform.session.user; favs.clear();
+    if (user) {
+      const local = store.get('favs', []);
+      const { favorites } = local.length ? await platform.api.post('/me/favorites/merge', { cafe_ids: local }) : await platform.api.get('/me/favorites');
+      if (local.length) store.set('favs', []);
+      favorites.forEach(id => favs.add(id));
+    }
+    refreshFavUI();
+  })().catch(() => refreshFavUI());
+  return favSync;
 }
 function toggleCmp(id) { const c = byId(id); if (cmpIds.includes(id)) cmpIds = cmpIds.filter(x => x !== id); else { if (cmpIds.length >= 3) { Snd.ui('err'); toast('Нэг дор 3 хүртэл кафе харьцуулна'); return } cmpIds.push(id); Snd.ui('pop') } $$(`[data-cmp="${id}"]`).forEach(b => b.setAttribute('aria-pressed', cmpIds.includes(id))); renderTray() }
 document.addEventListener('click', e => {
@@ -126,17 +164,17 @@ function openCompare() {
 }
 
 /* ================= modal / toast ================= */
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); $('#sndPop').hidden = true; $('#favPop').hidden = true; if (selId && location.hash.startsWith('#explore')) selectCafe(null) } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); $('#sndPop').hidden = true; $('#favPop').hidden = true; $('#accPop').hidden = true; if (selId && location.hash.startsWith('#explore')) selectCafe(null) } });
 
 /* ================= header ================= */
 function renderHeaderBits() {
-  $('#locPill').innerHTML = I.pin + ' Сүхбаатар дүүрэг'; renderSndBtn(); renderFavCount();
+  $('#locPill').innerHTML = I.pin + ' Сүхбаатар дүүрэг'; renderSndBtn(); renderFavCount(); renderAccountButton();
   $('#tabbar').innerHTML = [['home', I.home, 'Нүүр'], ['explore', I.map, 'Газрын зураг'], ['cafes', I.grid, 'Кафенууд'], ['about', I.info, 'Тухай'], ['partner', I.hand, 'Хамтрах']].map(([h, ic, l]) => `<a href="#${h}" data-nav="${h}">${ic}<span>${l}</span></a>`).join('')
 }
 function renderSndBtn() { $('#sndBtn').innerHTML = Prefs.sound ? I.sndOn : I.sndOff; $('#sndBtn').setAttribute('aria-pressed', Prefs.sound) }
 function renderFavCount(b) { $('#favBtn').innerHTML = I.heart + (favs.size ? `<span class="cnt${b ? ' bump' : ''}">${favs.size}</span>` : '') }
 $('#sndBtn').onclick = e => {
-  e.stopPropagation(); const p = $('#sndPop'); $('#favPop').hidden = true; p.hidden = !p.hidden; if (!p.hidden) {
+  e.stopPropagation(); const p = $('#sndPop'); $('#favPop').hidden = true; $('#accPop').hidden = true; p.hidden = !p.hidden; if (!p.hidden) {
     p.innerHTML = `<h3>Дуу ба хөдөлгөөн</h3>
  <div class="tgl-row"><div><b>Интерфэйсийн дуу</b><small>Дарах, хадгалах үеийн зөөлөн дуу</small></div><button class="sw" role="switch" id="swSnd" aria-checked="${Prefs.sound}" aria-label="Интерфэйсийн дуу"></button></div>
  <div class="tgl-row"><div><b>Хөдөлгөөн багасгах</b><small>Анимацыг зогсоож, статик дүрслэл харуулна</small></div><button class="sw" role="switch" id="swRm" aria-checked="${Prefs.reduced}" aria-label="Хөдөлгөөн багасгах"></button></div>
@@ -145,7 +183,8 @@ $('#sndBtn').onclick = e => {
     $('#swRm').onclick = () => { Prefs.reduced = !Prefs.reduced; store.set('reduced', Prefs.reduced); $('#swRm').setAttribute('aria-checked', Prefs.reduced); document.documentElement.classList.toggle('rm', Prefs.reduced); if (fp) fp.reduced = Prefs.reduced; Snd.ui('click') }
   }
 };
-$('#favBtn').onclick = e => { e.stopPropagation(); const p = $('#favPop'); $('#sndPop').hidden = true; p.hidden = !p.hidden; if (!p.hidden) { p.innerHTML = `<h3>Хадгалсан кафе</h3>` + (favs.size ? [...favs].map(id => { const c = byId(id); return `<div class="fav-item">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="26"')}<a href="#cafe-${id}">${c.name}</a><span class="muted" style="font-size:13px">${c.open ? freePct(c) + '% сул' : 'Хаалттай'}</span></div>` }).join('') : `<p class="muted" style="margin:0">Одоогоор хадгалсан кафе алга. Картын ♡ товчийг дарж хадгална.</p>`) } };
+$('#favBtn').onclick = e => { e.stopPropagation(); const p = $('#favPop'); $('#sndPop').hidden = true; $('#accPop').hidden = true; p.hidden = !p.hidden; if (!p.hidden) { p.innerHTML = `<h3>Хадгалсан кафе</h3>` + (platform.online && !platform.session.user ? `<p class="muted" style="margin:0 0 12px">Дуртай кафегаа хадгалж, дараа нь эндээс харахын тулд нэвтэрнэ үү.</p><button class="btn btn-p" data-fav-login>Нэвтрэх</button>` : favs.size ? [...favs].map(id => { const c = byId(id); if (!c) return ''; return `<div class="fav-item">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="26"')}<a href="#cafe-${id}">${escapeHTML(c.name)}</a><span class="muted" style="font-size:13px">${c.open ? freePct(c) + '% сул' : openTag(c)}</span></div>` }).join('') : `<p class="muted" style="margin:0">Одоогоор хадгалсан кафе алга. Картын ♡ товчийг дарж хадгална.</p>`) } };
+$('#favPop').addEventListener('click', e => { if (e.target.closest('[data-fav-login]')) { $('#favPop').hidden = true; Snd.ui('whoosh'); openAuth({ reason: 'favorite' }) } });
 document.addEventListener('click', e => { if (!e.target.closest('#sndPop,#sndBtn')) $('#sndPop').hidden = true; if (!e.target.closest('#favPop,#favBtn')) $('#favPop').hidden = true; if (e.target.closest('#favPop a')) $('#favPop').hidden = true });
 
 /* ================= cafe card (V1 layout, upgraded) ================= */
@@ -155,10 +194,10 @@ function cafeCard(c) {
   <div class="tile" title="Дуу чимээ · ${SS[c.sound].t}"><div class="ti">${ssGlyph(c.sound)}</div><b>${SS[c.sound].short}</b></div>
   <div class="tile" title="Wi-Fi · ${WIFI_S[c.wifi]}"><div class="ti">${wifiSVG(c.wifi, 26)}</div><b>${WIFI[c.wifi]}</b></div>
   <div class="tile" title="Сул залгуур"><div class="ti">${I.plug}</div><b class="num">${c.plugs ? c.plugs[0] + '/' + c.plugs[1] : '—'}</b></div>`
-    : `<div class="unav"><b>${c.opens} нээгдэнэ</b></div>`;
+    : `<div class="unav"><b>${closedText(c)}</b></div>`;
   return `<article class="ccard${c.open ? '' : ' is-closed'}" data-href="#cafe-${c.id}">
   <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${c.walk} мин · ${c.hours}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${c.id}" aria-label="${c.name} дэлгэрэнгүй">${I.arr}</a></div></div>
-  <div class="tags"><span class="tagp2 st${c.open ? '' : ' closed'}">${I.lamp}${c.open ? 'Нээлттэй' : 'Хаалттай'}</span>${tagPills(c)}</div>
+  <div class="tags"><span class="tagp2 st${c.open ? '' : ' closed'}">${I.lamp}${openTag(c)}</span>${tagPills(c)}</div>
   <div class="tiles">${tiles}</div>
  </article>`}
 document.addEventListener('click', e => { const card = e.target.closest('[data-href]'); if (card && !e.target.closest('a,button')) location.hash = card.dataset.href });
@@ -169,7 +208,7 @@ function footer() {
   return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff"><b>Live</b><img class="logo-cup" src="logo.webp" alt=""><span>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
  <div><h4>ЦЭС</h4><a href="#explore">Газрын зураг</a><a href="#cafes">Кафенууд</a><a href="#about">Бидний тухай</a><a href="#partner">Хамтын ажиллагаа</a></div>
  <div><h4>КАФЕ ЭЗЭМШИГЧ</h4><a href="#staff">Ажилтны шууд хяналт</a><a href="#partner">Кафегаа нэмэх</a><span style="display:block;padding:4px 0">Улаанбаатар, Монгол</span></div></div>
- <div class="ft-b"><span>© 2026 LiveSpace</span><span>Прототип · бүх утга демо өгөгдөл</span></div></div></footer>`}
+ <div class="ft-b"><span>© 2026 LiveSpace</span><span>${CAFES.some(hasMeasurements) ? 'Демо болон бодит хэмжилтийг тус тусад нь тэмдэглэсэн' : 'Прототип · бүх утга демо өгөгдөл'}</span></div></div></footer>`}
 const SSBG = ['', '#FBF4E8', '#F8EEDD', '#F4E5CC', '#EFDABA', '#E9CEA6'];
 const lampSVG = (c, shape) => shape === 0 ? `<svg viewBox="0 0 110 60"><path d="M10 56C10 30 30 12 55 12s45 18 45 44z" fill="${c}"/><rect x="5" y="52" width="100" height="6" rx="3" fill="#7B542F"/><ellipse cx="55" cy="58" rx="9" ry="4" fill="#FFF4DC"/></svg>` : shape === 1 ? `<svg viewBox="0 0 110 60"><path d="M45 4h20l40 52H5z" fill="${c}"/><rect x="45" y="0" width="20" height="8" rx="2" fill="#7B542F"/><ellipse cx="55" cy="56" rx="9" ry="4" fill="#FFF4DC"/></svg>` : `<svg viewBox="0 0 110 60"><path d="M30 56c0-22 10-40 25-40s25 18 25 40z" fill="${c}"/><rect x="51" y="8" width="8" height="10" fill="#7B542F"/><rect x="24" y="52" width="62" height="6" rx="3" fill="#3E2A17"/><ellipse cx="55" cy="58" rx="8" ry="3.5" fill="#FFF4DC"/></svg>`;
 function lamp(x, cord, c, shape, stat, cls = '') { return `<div class="lamp ${cls}" style="left:${x}"><div class="cord" style="height:${cord}px"></div>${lampSVG(c, shape)}<div class="cone"></div>${stat ? `<div class="stat" style="--st:${cord + 120}px">${stat}</div>` : ''}</div>` }
@@ -186,13 +225,11 @@ function renderHome() {
   <div class="arch">
    <span class="hero-kick">${I.map}Газрын зурагтай кафе хайгч</span>
    <h1>Өнөөдөр <em>хаана</em><br>суух вэ?</h1>
-   <p>Кафе хайх эсвэл зорилгоо сонгоход газрын зураг танд тохирохыг тодруулна.</p>
    <form class="hsearch" id="hs" role="search"><input id="hq" placeholder="Кафе хайх, жишээ нь «Кафе A»" aria-label="Кафе хайх" autocomplete="off" enterkeyhint="search"><button class="hs-go" aria-label="Хайх" title="Хайх">${I.search}</button></form>
-   <div class="hero-map ex-map" id="miniMap" aria-label="Газрын зураг">
-    <div class="hm-legend" aria-hidden="true"><span>${seatRow(40)}</span><span class="sg">${ssGlyph(1)}</span><span>${wifiSVG(4, 16)}</span></div>
+   <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${[['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Wi-Fi, залгуур'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']].map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
+   <div class="hero-map ex-map" id="miniMap" aria-label="Газрын зургийн урьдчилсан харагдац">
     <a class="hm-open" href="#explore">Газрын зураг нээх ${I.arr}</a>
    </div>
-   <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${[['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Wi-Fi, залгуур'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']].map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
   </div>
   <div class="shelf"></div>
   <div class="deco" style="left:5%">${plantSVG(120)}</div><div class="deco" style="left:15%">${plantSVG(70, 1)}</div>
@@ -206,11 +243,10 @@ function renderHome() {
    <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Сонсох</button></div>`).join('')}</div></section>
   <div class="band"><div><h2>Кафе эзэмшигч үү?</h2><p>Кафегаа LiveSpace-д нэмж, илүү олон зочинд хүрээрэй.</p></div><a class="btn btn-y" href="#partner">Хамтран ажиллах →</a></div>
  </div>${footer()}</div>`;
-  homeMini = buildMap($('#miniMap'), { interactive: false, onSelect: id => { if (id) { Snd.ui('pop'); selId = id; location.hash = 'explore' } } });
-  $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.mk,.hsearch')) { Snd.ui('whoosh'); location.hash = 'explore' } });
+  // The home map is only a preview of the illustration: the real map with its pins opens on #explore.
+  homeMini = buildMap($('#miniMap'), { interactive: false, markers: false });
+  $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.hsearch')) { Snd.ui('whoosh'); location.hash = 'explore' } });
   $$('[data-go-purpose]').forEach(b => b.onclick = () => { F.purpose.clear(); F.purpose.add(b.dataset.goPurpose); Snd.ui('pop'); location.hash = 'explore' });
-  // live search: results light up on the hero map as you type
-  $('#hq').oninput = () => { const q = $('#hq').value.trim().toLowerCase(); const set = new Set(CAFES.filter(c => !q || c.name.toLowerCase().includes(q)).map(c => c.id)); homeMini.dim(set); homeMini.hits(q ? set : null) };
   $('#hs').onsubmit = e => { e.preventDefault(); F.q = $('#hq').value.trim(); const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
   countUp();
 }
@@ -218,7 +254,7 @@ function renderHome() {
 /* ---------- explore ---------- */
 function listCard(c, i) {
   const fp_ = freePct(c); return `<button class="lcard${c.id === selId ? ' sel' : ''}" data-card="${c.id}" style="animation-delay:${Math.min(i, 8) * 35}ms" aria-label="${c.name}">
- <div class="lc-h">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="27"')}<b>${c.name}</b><span class="open-st${c.open ? '' : ' closed'}" style="font-size:12px">${c.open ? 'Нээлттэй' : 'Хаалттай'}</span><span class="muted num">${c.dist}</span></div>
+ <div class="lc-h">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="27"')}<b>${c.name}</b><span class="open-st${c.open ? '' : ' closed'}" style="font-size:12px">${openTag(c)}</span><span class="muted num">${c.dist}</span></div>
  ${c.open ? `<div class="mrow3">${mSeat(c)}${mSound(c.sound)}${mWifi(c.wifi)}</div>` : ''}
  <div class="lc-why">${whyLine(c)}</div></button>`
 }
@@ -285,7 +321,7 @@ function previewHTML(c) {
   return `<div class="pv-h"><div><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${c.walk} мин · ${c.hours}</div></div><div class="pv-btns">${favBtn(c.id)}${cmpBtn(c.id)}<button class="pv-x" data-pvclose aria-label="Хаах">${I.x}</button></div></div>
  <div class="tags">${tagPills(c)}</div>
  ${c.open ? `<div class="pv-mood ${t}">${mood(c)}</div>
- <div class="pv-ms"><div title="Сул суудал · ${crowdCat(c.occ)[0]}">${seatRow(c.occ)}<b class="num">${freePct(c)}%</b><small>сул</small></div><div title="${SS[c.sound].t}"><span class="sg">${ssGlyph(c.sound)}</span><b>${SS[c.sound].short}</b><small>дуу</small></div><div title="${WIFI_S[c.wifi]}">${wifiSVG(c.wifi, 24)}<b>${WIFI[c.wifi]}</b><small>Wi-Fi</small></div></div>` : `<div class="pv-closed"><b style="display:block;color:var(--ink)">Хаалттай · ${c.opens} нээгдэнэ</b></div>`}
+ <div class="pv-ms"><div title="Сул суудал · ${crowdCat(c.occ)[0]}">${seatRow(c.occ)}<b class="num">${freePct(c)}%</b><small>сул</small></div><div title="${SS[c.sound].t}"><span class="sg">${ssGlyph(c.sound)}</span><b>${SS[c.sound].short}</b><small>дуу</small></div><div title="${WIFI_S[c.wifi]}">${wifiSVG(c.wifi, 24)}<b>${WIFI[c.wifi]}</b><small>Wi-Fi</small></div></div>` : `<div class="pv-closed"><b style="display:block;color:var(--ink)">${c.status_text || `Хаалттай · ${c.opens} нээгдэнэ`}</b></div>`}
  <div class="pv-go"><span>Кафе дотор харах</span>${I.arr}</div>`
 }
 function selectCafe(id, from, silent) {
@@ -324,7 +360,7 @@ function updateCafes() { const res = CAFES.filter(matches).sort((a, b) => (b.ope
 /* ---------- cafe detail ---------- */
 function renderCafe(id) {
   const c = byId(id); if (!c) { app.innerHTML = `<div class="wrap empty">${emptyArt()}<b>Кафе олдсонгүй</b><a class="btn btn-o" href="#explore">Газрын зураг руу буцах</a></div>`; return }
-  selId = id;
+  selId = id; cdCafe = c;
   app.innerHTML = `<div class="wrap page"><div class="skel" style="height:150px;margin-top:24px"></div><div class="skel" style="height:420px;margin-top:20px"></div></div>`;
   pageTasks.timeout(() => { if (location.hash === '#cafe-' + id) buildCafe(c) }, Prefs.reduced ? 0 : 380)
 }
@@ -337,7 +373,7 @@ function buildCafe(c) {
   <a class="ibtn back" href="#explore" aria-label="Газрын зураг руу буцах" title="Газрын зураг">${I.map}</a>
   <div class="cd-act">${favBtn(c.id)}${cmpBtn(c.id)}</div>
   <div class="cd-title"><h1>${c.name}</h1>${c.open ? `<p class="mood-line ${t}" id="moodLine">${mood(c)}</p>` : `<p class="mood-line">${c.note || ''}</p>`}
-   <div class="cd-pills"><span class="tagp2 st${c.open ? '' : ' closed'}">${I.lamp}${c.open ? 'Нээлттэй' : 'Хаалттай'}</span><span class="tagp2 num">${I.clock}${c.hours}</span><span class="tagp2 num">${I.walk}${c.walk} мин</span>${tagPills(c)}<span class="badge b-demo">ДЕМО</span></div></div>
+   <div class="cd-pills"><span class="tagp2 st${c.open ? '' : ' closed'}">${I.lamp}${openTag(c)}</span><span class="tagp2 num">${I.clock}${c.hours}</span><span class="tagp2 num">${I.walk}${c.walk} мин</span>${tagPills(c)}<span id="cdMode">${modeBadge(c)}</span></div></div>
  </div>
  ${c.open ? `<div class="cd-grid">
   <section class="card plan-card" aria-label="Кафены зураглал">
@@ -348,6 +384,7 @@ function buildCafe(c) {
    <div id="viewTable" hidden>${tableHTML(c)}</div>
   </section>
   <div class="side-stack">
+   <div class="cd-fresh" id="cdFresh" aria-live="polite">${freshnessHTML(c)}</div>
    <section class="card mcard seatcard"><h3>${I.seat} Сул суудал</h3><div class="sc-row"><div class="big-pct"><b class="num" id="freePct">${fp_}%</b><span id="crowdLab">${crowdCat(c.occ)[0]}</span></div><small class="muted num" id="freeSub"></small></div><div class="chairs" id="chairs" aria-hidden="true"></div></section>
    <section class="card mcard"><h3>${ssGlyph(2)} Дуу чимээ</h3><div id="ssBox"></div>
     <div class="ss-scale" role="group" aria-label="Дууны түвшнийг жишээгээр солих">${[1, 2, 3, 4, 5].map(l => `<button data-ssl="${l}" aria-label="${SS[l].t}" title="${SS[l].t}" class="${l === c.sound ? 'on' : ''}">${ssGlyph(l)}</button>`).join('')}</div></section>
@@ -358,7 +395,7 @@ function buildCafe(c) {
    <div class="pr-bars" id="prBars"></div>
    <input type="range" id="teSl" min="8" max="22" step="1" value="${nowHour()}" aria-label="Цаг сонгох">
   </section>
- </div>`: `<div class="card" style="margin-top:20px;text-align:center;padding:40px">${emptyArt()}<h2 style="margin:10px 0">Одоо хаалттай</h2><p class="muted">${c.opens} нээгдэнэ.</p><a class="btn btn-p" href="#explore">Нээлттэй кафе хайх</a></div>`}
+ </div>`: `<div class="card" style="margin-top:20px;text-align:center;padding:40px">${emptyArt()}<h2 style="margin:10px 0">${c.status_text ? 'Мэдээлэл хүлээгдэж байна' : 'Одоо хаалттай'}</h2><p class="muted">${closedText(c)}.</p><a class="btn btn-p" href="#explore">Нээлттэй кафе хайх</a></div>`}
  </div>${footer()}</div>`;
   if (!c.open) return;
   renderSS(c.sound); renderWF(c.wifi, c);
@@ -372,25 +409,40 @@ function buildCafe(c) {
   seg.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; Snd.ui('click'); $$('[data-view]', seg).forEach(x => x.setAttribute('aria-selected', x === b)); moveInd(); $('#viewPlan').hidden = b.dataset.view !== 'plan'; $('#viewTable').hidden = b.dataset.view !== 'table'; if (b.dataset.view === 'table') $('#viewTable').innerHTML = tableHTML(c, fp.stats()) });
   $$('[data-ssl]').forEach(b => b.onclick = () => { Snd.ui('tick'); $$('[data-ssl]').forEach(x => x.classList.toggle('on', x === b)); renderSS(+b.dataset.ssl); fp.sound = +b.dataset.ssl });
   initTE(c);
+  tickFreshness();
+}
+// Keep "N min ago" honest while the page is open.
+function tickFreshness() { pageTasks.timeout(() => { const el = $('#cdFresh'); if (el && cdCafe && hasMeasurements(cdCafe)) el.innerHTML = freshnessHTML(cdCafe); tickFreshness() }, 30000) }
+// A new measurement for the open café: update indicators in place, never rebuild the simulation.
+function applyLiveToDetail(c) {
+  if (!$('#cdFresh')) return;
+  $('#cdFresh').innerHTML = freshnessHTML(c); $('#cdMode').innerHTML = modeBadge(c);
+  const ml = $('#moodLine'); if (ml && c.open) ml.textContent = mood(c);
+  if (!c.open || !hasMeasurements(c)) return;
+  const m = measuredSeats(c); if (m) updSeats(m);
+  if (c.sound) { renderSS(c.sound); $$('[data-ssl]').forEach(x => x.classList.toggle('on', +x.dataset.ssl === c.sound)); if (fp) fp.sound = c.sound }
+  if (c.wifi) renderWF(c.wifi, c);
+  if (fp) fp.setTarget(c.occ, false);
 }
 function renderSS(l) { $('#ssBox').innerHTML = `<div class="ssbig"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 84)}</div><div><b>${SS[l].t}</b><small>${SS[l].s}</small></div><button class="play icon" data-play="${l}" aria-label="Сонсох" title="Сонсох">${I.play}</button></div>` }
 function renderWF(l, c) { $('#wfBox').innerHTML = `<div class="wfbig">${wifiSVG(l, 52)}<div><b>${WIFI[l]}${c.mbps ? ` <span class="num mb">${c.mbps} Mbps</span>` : ''}</b><small>${WIFI_S[l]}</small></div></div>` }
 function updSeats(s) {
+  const measured = cdCafe && measuredSeats(cdCafe); if (measured) s = measured;
   const pct = Math.round(s.free / s.total * 100); const el = $('#freePct'); if (!el) return;
   animNum(el, pct, '%'); $('#crowdLab').textContent = crowdCat(100 - pct)[0];
-  $('#freeSub').textContent = `${s.total}-оос ${s.free} сул${s.unknown ? ` · ${s.unknown} мэдээлэлгүй` : ''}`;
+  $('#freeSub').textContent = `${s.total}-оос ${s.free} сул${s.unknown ? ` · ${s.unknown} мэдээлэлгүй` : ''}${measured ? ' · мэдрэгч' : ''}`;
   $('#chairs').innerHTML = s.list.map(st => `<i class="${st === 'occ' ? 'o' : ''}"></i>`).join('');
 }
 function logEvent(msg, kind) { const l = $('#elog'); if (!l) return; const d = document.createElement('div'); d.className = kind; d.textContent = msg; l.prepend(d); while (l.children.length > 4) l.lastChild.remove() }
 function seatInfo(s) {
   const box = $('#seatInfo'); if (!box) return; if (!s) { box.innerHTML = ''; return }
   const st = { free: 'Сул', occ: 'Хүнтэй', unknown: 'Мэдээлэлгүй' }[s.state];
-  box.innerHTML = `<div class="seatinfo ${s.state}"><div class="si-ic">${s.zone === 'sofa' ? I.sofa : I.seat}</div><div><b>${s.label} · ${st}</b><small>${ZONES[s.zone].d} ${ZONES[s.zone].q}</small></div><button class="pv-x" data-sixclose aria-label="Хаах">${I.x}</button></div>`;
+  box.innerHTML = `<div class="seatinfo ${s.state}"><div class="si-ic">${s.kind === 'sofa' ? I.sofa : I.seat}</div><div><b>${s.label} · ${st}</b><small>${ZONES[s.zone].d} ${ZONES[s.zone].q}</small></div><button class="pv-x" data-sixclose aria-label="Хаах">${I.x}</button></div>`;
   $('[data-sixclose]', box).onclick = () => { box.innerHTML = '' }
 }
 function tableHTML(c, s) {
   const pct = s ? Math.round(s.free / s.total * 100) : freePct(c); return `<table class="tbl"><tr><th>Үзүүлэлт</th><th>Одоо</th><th></th></tr>
- <tr><td>Сул суудал</td><td class="num"><b>${pct}%</b> · ${crowdCat(100 - pct)[0]} (${TOTAL_SEATS}-оос ${Math.round(pct * TOTAL_SEATS / 100)})</td><td>${seatRow(100 - pct)}</td></tr>
+ <tr><td>Сул суудал</td><td class="num"><b>${pct}%</b> · ${crowdCat(100 - pct)[0]} (${s ? s.total : TOTAL_SEATS}-оос ${s ? s.free : Math.round(pct * TOTAL_SEATS / 100)})</td><td>${seatRow(100 - pct)}</td></tr>
  <tr><td>Дуу чимээ</td><td>${SS[c.sound].t}</td><td><span class="sg">${ssGlyph(c.sound).replace('<svg', '<svg width="20" height="20"')}</span></td></tr>
  <tr><td>Wi-Fi</td><td>${WIFI[c.wifi]}${c.mbps ? ` · ${c.mbps} Mbps` : ''}</td><td>${wifiSVG(c.wifi, 26)}</td></tr>
  <tr><td>Залгуур</td><td class="num">${c.plugs ? `${c.plugs[0]}/${c.plugs[1]} сул` : '—'}</td><td>${I.plug.replace('<svg', '<svg width="18" height="18"')}</td></tr>
@@ -404,7 +456,7 @@ function initTE(c) {
   const upd = (user) => {
     const h = +sl.value, v = prof[h - 8]; const snd = clamp(c.sound + Math.round((v - c.occ) / 25), 1, 5);
     $$('.pb', $('#prBars')).forEach(b => b.classList.toggle('sel', +b.dataset.h === h));
-    const bd = h === nh ? '<span class="badge b-demo">ОДОО</span>' : h < nh ? '<span class="badge b-typ">ДУНДАЖ</span>' : '<span class="badge b-fc">ТААМАГ</span>';
+    const bd = dataMode(c) !== 'demo' ? (h === nh ? modeBadge(c) : '<span class="badge b-demo">ЖИШЭЭ</span>') : h === nh ? '<span class="badge b-demo">ОДОО</span>' : h < nh ? '<span class="badge b-typ">ДУНДАЖ</span>' : '<span class="badge b-fc">ТААМАГ</span>';
     $('#prOut').innerHTML = `<b class="num">${hh(h)}</b>${bd}<span class="m">${seatRow(v)}<b class="num">~${100 - v}%</b></span><span class="m" title="${SS[snd].t}"><span class="sg">${ssGlyph(snd)}</span><b>${SS[snd].short}</b></span>${h !== nh ? `<button class="btn btn-g" id="teNow">Одоо</button>` : ''}`;
     const tn = $('#teNow'); if (tn) tn.onclick = () => { sl.value = nh; upd(true) };
     if (user && h !== lastH) { Snd.ui('tick'); lastH = h; fp && fp.setTarget(100 - v, h !== nh) }
@@ -449,23 +501,16 @@ function renderAbout() {
 }
 
 /* ---------- partner ---------- */
+let partnerCleanup = null;
 function renderPartner() {
   app.innerHTML = `<div class="page"><div class="wrap">
  <section class="ab-hero" style="grid-template-columns:1fr"><div><span class="tagp">Хамтын ажиллагаа</span><h1>Кафегаа LiveSpace-д нэгтгээрэй</h1><p>Бид Улаанбаатарын кафе, коворкинг, номын сангуудтай хамтран ажиллаж, зочдод тохирох орчноо олоход нь тусалдаг. Таны кафе газрын зураг дээр гарч, бодит цагийн мэдээллээрээ илүү олон хүнд хүрнэ.</p><a class="btn btn-p" href="#pform">Хүсэлт илгээх →</a></div></section>
  <section class="sec"><div class="sec-h"><h2>Хамтран ажилласнаар</h2></div><div class="g4">${[[I.people, 'Илүү олон хэрэглэгч', 'Сурах, ажиллах газар хайж буй хэрэглэгчдэд таны кафе газрын зураг дээр харагдана.'], [I.clock, 'Бодит цагийн мэдээлэл', 'Сул суудал, дуу чимээ, Wi-Fi-гаа хэрэглэгчиддээ шууд харуулна.'], [I.chart, 'Ачааллын тойм', 'Өдрийн аль цагт ачаалал ихтэй, тайван байдгийг харж, үйлчилгээгээ төлөвлөнө.'], [I.star, 'Брэндээ таниулах', 'Кафены онцлог, тав тухтай орчноо олон хүнд таниулна.']].map(([ic, b, s]) => `<div class="icard"><span class="ic">${ic}</span><b>${b}</b><span>${s}</span></div>`).join('')}</div>
   <p style="text-align:center;margin-top:18px"><a class="btn btn-o" href="#staff">Ажилтны шууд хяналтыг үзэх →</a></p></section>
  <section class="sec" id="pform"><div class="sec-h"><h2>Хамтран ажиллах хүсэлт</h2></div>
- <form class="form" id="pf" novalidate>
-  ${[['f1', 'Кафены нэр', 'Жишээ: Кафе A', 'text', 1], ['f2', 'Холбоо барих хүн', 'Овог, нэр', 'text', 1], ['f3', 'Утасны дугаар', '8800 0000', 'tel', 1], ['f4', 'И-мэйл', 'name@example.com', 'email', 1]].map(([id, l, p, t, req]) => `<div class="fld"><label for="${id}">${l}</label><input id="${id}" type="${t}" placeholder="${p}" ${req ? 'required' : ''}><span class="em"></span></div>`).join('')}
-  <div class="fld"><label for="f5">Дүүрэг</label><select id="f5"><option>Сүхбаатар</option><option>Чингэлтэй</option><option>Баянгол</option><option>Хан-Уул</option><option>Баянзүрх</option><option>Сонгинохайрхан</option></select></div>
-  <div class="fld"><label for="f6">Байгууллагын төрөл</label><select id="f6"><option>Кафе</option><option>Коворкинг</option><option>Номын сан</option></select></div>
-  <div class="fld full"><label for="f7">Нэмэлт мэдээлэл</label><textarea id="f7" rows="4" placeholder="Кафенийхаа тухай товч бичнэ үү"></textarea></div>
-  <div class="fld full" style="flex-direction:row;align-items:center;gap:14px;flex-wrap:wrap"><button class="btn btn-p">Хүсэлт илгээх</button><span class="muted" style="font-size:13px">Эсвэл: [И-мэйл хаяг] · [Утасны дугаар]</span></div>
- </form></section></div>${footer()}</div>`;
-  $('#pf').onsubmit = e => {
-    e.preventDefault(); let ok = true; $$('#pf [required]').forEach(i => { const f = i.closest('.fld'); const bad = !i.value.trim() || (i.type === 'email' && !/^\S+@\S+\.\S+$/.test(i.value)) || (i.type === 'tel' && i.value.replace(/\D/g, '').length < 8); f.classList.toggle('err', bad); $('.em', f).textContent = bad ? (i.value.trim() ? (i.type === 'email' ? 'И-мэйл хаяг буруу байна' : '8 оронтой дугаар оруулна уу') : 'Энэ талбарыг бөглөнө үү') : ''; if (bad) ok = false });
-    if (!ok) { Snd.ui('err'); return } Snd.ui('chime'); $('#pf').innerHTML = `<div class="done"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="38" fill="#F6EBDA"/><path class="ck" d="M26 43l11 11 22-24" fill="none" stroke="#7B542F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg><h2 style="margin:12px 0 6px">Хүсэлт хүлээж авлаа</h2><p class="muted">Бид 2 ажлын өдөрт тантай холбогдоно. (Прототип — хүсэлт хаашаа ч илгээгдээгүй.)</p></div>`
-  }
+ ${pendingClaimHTML()}
+ ${partnerFormHTML()}</section></div>${footer()}</div>`;
+  partnerCleanup = bindPartnerForm($('#pf'));
 }
 
 /* ---------- staff ---------- */
@@ -503,16 +548,62 @@ function renderStaff() {
 }
 
 /* ================= router ================= */
-function route() {
-  const h = (location.hash || '#home').slice(1); pageTasks.clear(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
-  const key = h.startsWith('cafe-') ? 'cafe' : h; $$('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === key || (key === 'cafe' && a.dataset.nav === 'explore') || (key === 'staff' && a.dataset.nav === 'partner')));
-  document.body.classList.toggle('on-explore', key === 'explore');
-  if (key !== 'explore') $$('.pv').forEach(p => p.remove());
-  if (key === 'explore') renderExplore(); else if (key === 'cafes') renderCafes(); else if (key === 'cafe') renderCafe(h.slice(5)); else if (key === 'about') renderAbout(); else if (key === 'partner') renderPartner(); else if (key === 'staff') renderStaff(); else renderHome();
-  if (key !== 'explore') window.scrollTo(0, 0); renderTray()
+// Pages built on the LiveSpace framework (dashboards) are mounted as components;
+// the original pages keep their render functions. Every navigation first releases
+// the previous page's timers, frames, simulation, map, audio and listeners.
+const page = (Component, props) => () => { app.innerHTML = ''; pageComp = mount(Component, app, props) };
+function teardown() {
+  pageTasks.clear(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
+  if (pageComp) { pageComp.destroy(); pageComp = null } if (partnerCleanup) { partnerCleanup(); partnerCleanup = null } cdCafe = null;
 }
+const router = createRouter({
+  fallback: 'home',
+  beforeEach(to) {
+    teardown();
+    // An unknown hash renders home but, as before, highlights nothing.
+    const key = to.fallback ? to.path : to.name; $$('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === key || (key === 'cafe' && a.dataset.nav === 'explore') || (key === 'staff' && a.dataset.nav === 'partner')));
+    document.body.classList.toggle('on-explore', key === 'explore');
+    if (key !== 'explore') $$('.pv').forEach(p => p.remove());
+  },
+  afterEach(to) { if (to.name !== 'explore') window.scrollTo(0, 0); renderTray() },
+  routes: [
+    { path: '', name: 'home', enter: renderHome },
+    { path: 'home', name: 'home', enter: renderHome },
+    { path: 'explore', name: 'explore', enter: renderExplore },
+    { path: 'cafes', name: 'cafes', enter: renderCafes },
+    { path: 'cafe-:id', name: 'cafe', enter: to => renderCafe(to.params.id) },
+    { path: 'about', name: 'about', enter: renderAbout },
+    { path: 'partner', name: 'partner', enter: renderPartner },
+    { path: 'staff', name: 'staff', enter: renderStaff },
+    { path: 'account', name: 'account', enter: page(AccountPage, { favorites: () => [...favs].map(byId).filter(Boolean), cafeCard }) },
+    { path: 'owner', name: 'owner', enter: page(OwnerPage) },
+    { path: 'admin', name: 'admin', enter: page(AdminPage) }
+  ]
+});
+const route = () => router.resolve();
 document.addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute('href') === '#pform') { e.preventDefault(); $('#pform').scrollIntoView({ behavior: Prefs.reduced ? 'auto' : 'smooth' }); return } if (a && !e.defaultPrevented) { Snd.ui('click') } });
-window.addEventListener('hashchange', route);
+document.addEventListener('click', e => { if (e.target.closest('[data-owner-signup]')) { Snd.ui('whoosh'); openOwnerSignup() } });
 let lastMobile = isMobile(); window.addEventListener('resize', () => { const m = isMobile(); if (m !== lastMobile) { lastMobile = m; if ((location.hash || '').startsWith('#explore')) route() } });
 document.documentElement.classList.toggle('rm', Prefs.reduced);
-renderHeaderBits(); route();
+configureErrors({ message: 'Энэ хэсгийг харуулахад алдаа гарлаа. Хуудсаа дахин ачаална уу.', render: message => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">${escapeHTML(message)}</p></div></div>` });
+
+/* ================= platform: accounts, favourites, live data ================= */
+// A live update touches only the views that show that café.
+function refreshCafeViews(id) {
+  const c = byId(id); if (!c) return;
+  if (mapCtl) mapCtl.refresh(id);
+  const card = $(`[data-card="${id}"]`); if (card) { const t = document.createElement('div'); t.innerHTML = listCard(c, 0); const next = t.firstElementChild; next.style.animation = 'none'; next.classList.toggle('hov', card.classList.contains('hov')); card.replaceWith(next) }
+  const article = $(`#cgrid [data-href="#cafe-${id}"]`); if (article) article.outerHTML = cafeCard(c);
+  if (cdCafe && cdCafe.id === id) applyLiveToDetail(c);
+}
+renderHeaderBits();
+await initPlatform();
+if (platform.online) {
+  bindAccountPopover(); watchAuthCancel(); renderAccountButton();
+  platform.bus.on('login:required', reason => openAuth({ reason }));
+  platform.bus.on('cafe:updated', refreshCafeViews);
+  platform.session.store.subscribe(s => s.user, () => { renderAccountButton(); pullFavorites() });
+  pullFavorites();
+}
+router.start();
+
