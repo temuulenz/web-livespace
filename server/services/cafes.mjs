@@ -55,7 +55,6 @@ export function createCafeService(db, config) {
       sound: has ? live.noise_level || 0 : 0,
       wifi: has ? live.wifi_level || 0 : 0,
       mbps: has && live.wifi_mbps != null ? Math.round(live.wifi_mbps) : null,
-      plugs: null,
       live
     };
   }

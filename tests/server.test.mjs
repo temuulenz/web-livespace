@@ -112,7 +112,7 @@ test('café owner: application → owner account → dashboard; admin workflow �
   assert.equal((await admin.post(`/api/v1/admin/cafes/${cafeId}/status`, { status: 'party' })).status, 400);
 
   const suggestion = (await admin.post(`/api/v1/admin/cafes/${cafeId}/visualization/suggest`)).data.suggestion;
-  assert.equal(suggestion.layout.preset, 'library', 'description mentions books and quiet');
+  assert.equal(suggestion.layout.preset, 'minimal', 'description mentions books and quiet');
   assert.equal(suggestion.provider, 'rules');
   const vis = await admin.put(`/api/v1/admin/cafes/${cafeId}/visualization`, { status: 'ready', layout: { ...suggestion.layout, overrides: { plants: [[100, 100, 12], [9999, 1, 1]] } } });
   assert.deepEqual(vis.data.visualization.layout.overrides.plants, [[100, 100, 12]], 'out-of-floor items are dropped');

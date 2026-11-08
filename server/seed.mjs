@@ -13,7 +13,7 @@ export function seedDemoCafes(db) {
   const t = now();
   getCafes().forEach((c, i) => {
     const { lat, lng } = mapToLatLng(c.x, c.y);
-    const demo = { dist: c.dist, walk: c.walk, open: c.open, ...(c.opens ? { opens: c.opens } : {}), occ: c.occ, sound: c.sound, wifi: c.wifi, mbps: c.mbps, plugs: c.plugs, note: c.note };
+    const demo = { dist: c.dist, walk: c.walk, open: c.open, ...(c.opens ? { opens: c.opens } : {}), occ: c.occ, sound: c.sound, wifi: c.wifi, mbps: c.mbps, note: c.note };
     const visualization = { status: 'ready', layout: { preset: DEMO_LAYOUT[c.id] || 'classic', overrides: {} }, generator: 'manual', updated_at: t };
     insert.run(c.id, c.name, lat, lng, c.x, c.y, c.hours, c.note, JSON.stringify(c.tags), JSON.stringify(demo), JSON.stringify(visualization), i, t, t);
   });

@@ -199,6 +199,27 @@ try {
     await evaluate(`document.querySelector('#pf').requestSubmit()`);
     assert.equal(await evaluate(`!!document.querySelector('#pf .done')`), true);
   });
+  await check('sockets are not shown anywhere; open/closed is a lit or grey lamp', async () => {
+    for (const hash of ['#cafes', '#cafe-A', '#about', '#home']) {
+      await navigate(hash);
+      if (hash === '#cafe-A') await waitFor(`!!document.querySelector('.cd-pills')`);
+      assert.doesNotMatch(await evaluate(`document.body.innerText`), /алгуур/, `${hash} mentions sockets`);
+    }
+    await navigate('#cafes');
+    assert.equal(await evaluate(`Math.max(...[...document.querySelectorAll('.ccard .tiles')].map(t => t.children.length))`), 3);
+    assert.equal(await evaluate(`document.querySelectorAll('.ccard .olamp.on').length`), 10);
+    assert.equal(await evaluate(`document.querySelectorAll('.ccard.is-closed .olamp.off').length`), 2);
+    assert.equal(await evaluate(`document.querySelector('.ccard .olamp').getAttribute('aria-label')`), 'Нээлттэй');
+  });
+
+  await check('staff page: advice, plan and current state fit the first screen; temporary status below', async () => {
+    await navigate('#staff');
+    const r = await evaluate(`(() => { const box = s => document.querySelector(s).getBoundingClientRect(); return { h: innerHeight, plan: box('#planWrap').bottom, advice: box('.st-advice').top, adviceBottom: box('.st-advice').bottom, now: box('.st-now').bottom, temp: box('#tsList').top, plan_top: box('#planWrap').top }; })()`);
+    assert.ok(r.plan <= r.h && r.now <= r.h && r.adviceBottom <= r.h, JSON.stringify(r));
+    assert.ok(r.advice < r.plan_top + 10, 'advice starts at the top');
+    assert.ok(r.temp > r.plan, 'temporary status follows below');
+  });
+
   await check('staff controls, FAQ and unknown route fallback', async () => {
     await navigate('#staff'); await click('[data-ts]');
     assert.equal(await evaluate(`document.querySelectorAll('.tstat').length`), 2);

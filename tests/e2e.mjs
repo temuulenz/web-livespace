@@ -125,10 +125,18 @@ try {
       await waitFor(`document.querySelector('.adm-cafe .own-steps .st-on')?.innerText.includes(${JSON.stringify({ under_review: 'Хянаж', contacting: 'холбогдож', visualization: 'Зураглал' }[status])})`);
     }
     await click('[data-suggest]');
-    await waitFor(`!!document.querySelector('.adm-suggest') && !!document.querySelector('[data-adm-plan] canvas')`);
-    assert.equal(await evaluate(`document.querySelector('[name="preset"]').value`), 'library');
+    await waitFor(`!!document.querySelector('.adm-suggest') && !!document.querySelector('[data-adm-editor] canvas')`);
+    assert.equal(await evaluate(`document.querySelector('[data-le-template].on').dataset.leTemplate`), 'minimal', 'books and quiet → minimal');
+    // Layout editor: switch the look, add a single chair and move it with the keyboard.
+    await click('[data-le-template="artistic"]');
+    await click('[data-le-add="chair"]');
+    await evaluate(`document.querySelector('.le-plan').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`);
+    assert.match(await evaluate(`document.querySelector('[data-le-name]').innerText`), /Сандал/);
     await evaluate(`(() => { const f = document.querySelector('[data-form="saveVisualization"]'); f.vstatus.value = 'ready'; f.requestSubmit(); })()`);
     await waitFor(`!document.querySelector('.adm-suggest')`);
+    const saved = await evaluate(`fetch('/api/v1/admin/cafes/${cafeId}').then(r => r.json()).then(d => d.cafe.visualization.layout)`);
+    assert.equal(saved.preset, 'artistic');
+    assert.deepEqual(saved.overrides.chairs, [{ x: 335, y: 290, dir: 'N' }]);
     await evaluate(`(() => { const f = document.querySelector('[data-form="saveInfo"]'); f.map_x.value = 690; f.map_y.value = 360; f.requestSubmit(); })()`);
     await delay(300);
     await evaluate(`(() => { const f = document.querySelector('.adm-wide [data-form="saveDevice"]'); f.id.value = 'sensor_001'; f.label.value = 'Танхимын камер'; f.requestSubmit(); })()`);
