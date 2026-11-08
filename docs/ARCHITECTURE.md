@@ -61,9 +61,23 @@ The logged-in site is the same as the guest site. The only additions are an acco
 
 ## Café-specific visualization
 
-The animated interior (`js/simulation/floor-plan.js`) is driven by **layout data** (`js/simulation/layouts.js`): window bar, round and long tables, sofas (with or without a seat sensor), plants, shelves, rug. The building shell (entrance, windows, barista counter) is shared. There are five layouts (classic, library, social, lounge, workspace), and the demo cafés use different ones.
+The animated interior (`js/simulation/floor-plan.js`) is driven by **layout data** (`js/simulation/layouts.js`). There are two **templates**:
 
-A café's visualization is `{ status, layout: { preset, overrides }, notes, generator }`. In the admin café view you can pick a preset, edit overrides as JSON, preview it live, and save.
+- **Минимал** (minimal): light tiled floor, dark frame, light wood, sage plants, thin lines.
+- **Артистик** (artistic): terrazzo floor, green walls, terracotta and mustard furniture, velvet sofas, pendant lamps, string lights and a patterned rug.
+
+A template sets the look and a starting arrangement. The demo cafés use both.
+
+In the admin café view, the **layout editor** (`js/features/admin-dashboard/layout-editor.js`) shows the café exactly as visitors will see it:
+
+- Pick a template.
+- Drag any object: round tables (with their chairs), long tables, sofas, single chairs, the window bar, shelves, plants, the rug and the order counter (the barista and the order queue move with it).
+- Add or delete objects, rotate chairs, tables and shelves, and mark whether a sofa has a seat sensor.
+- Use the keyboard: arrow keys move the selected object (Shift for bigger steps), R rotates it and Delete removes it.
+
+The editor warns when furniture blocks the way to a seat. The walls, windows and entrance are fixed.
+
+A café's visualization is `{ status, layout: { preset, overrides }, notes, generator }`. `preset` is `minimal` or `artistic`, and `overrides` holds the whole arrangement. Visualizations saved with the earlier five presets are mapped to the nearest template.
 
 **AI-ready extension point.** `server/services/visualization.mjs` defines a provider interface:
 
@@ -122,3 +136,12 @@ See [SENSOR_API.md](SENSOR_API.md) for the JSON format, ingestion, SSE with poll
   - one animation loop per simulation (now paused when off-screen);
   - route-scoped timers, `AbortController` cleanup, the marker index, and no per-frame allocations.
 - **Engine fidelity:** the original seeded behaviour of all 10 open cafés is still verified byte-for-byte against the original layout (`legacy`, with the kitchen).
+
+## Deliberate changes on request
+
+- **Interior templates:** the café interior has two templates (minimal and artistic) with new colours and decoration. The original interior colours remain only in the `legacy` layout, which the fixture tests use.
+- **Sockets:** socket (plug) counts are no longer shown or used anywhere, because they are not measured.
+- **Open or closed:** shown as a lamp, lit yellow when open and grey when closed. The text is still available to screen readers and as a tooltip.
+- **Illustrated map:** the National Park and Choijin Lama Temple drawings and labels are removed.
+- **Home page:** the "open map" link is an icon.
+- **Staff live page:** advice comes first, the plan fits the first screen, and temporary statuses are below.

@@ -15,8 +15,6 @@ function mapSVG() {
   const zones = [[400, 170, 120, 90], [440, 560, 170, 110], [200, 560, 90, 90], [610, 520, 80, 70]];
   const inZone = (x, y, w, h) => zones.some(([zx, zy, zw, zh]) => x + w > zx - 8 && x < zx + zw + 8 && y + h > zy - 8 && y < zy + zh + 8);
   s += `<rect class="map-land" width="1000" height="680" fill="#EFE4CF"/>`;
-  // park
-  s += `<rect x="440" y="560" width="170" height="110" rx="18" fill="#E2D3B2"/><circle cx="525" cy="615" r="30" fill="none" stroke="#F6EBDA" stroke-width="7"/><path d="M440 615h55M555 615h55" stroke="#F6EBDA" stroke-width="7"/>`;
   // river
   let rp = 'M' + river(0).join(' '); for (let t = .02; t <= 1.001; t += .02)rp += ' L' + river(t).map(v => v.toFixed(1)).join(' ');
   s += `<path d="${rp}" stroke="#D3DCD8" stroke-width="20" fill="none" stroke-linecap="round"/><path d="${rp}" stroke="#E6ECE8" stroke-width="6" fill="none" stroke-dasharray="14 22"/>`;
@@ -26,7 +24,6 @@ function mapSVG() {
   // plaza & landmarks
   s += `<rect x="400" y="170" width="120" height="90" rx="6" fill="#F6EBDA" stroke="#D9C3A0" stroke-width="2"/><rect x="420" y="186" width="80" height="36" rx="4" fill="#FBF7F0" stroke="#D9C3A0"/><circle cx="460" cy="242" r="7" fill="#9C6B36"/>`;
   s += `<circle cx="245" cy="605" r="36" fill="#C08A4A"/><g stroke="#F6EBDA" stroke-width="2.5">${[0, 1, 2, 3, 4, 5].map(i => `<path d="M245 605L${245 + Math.cos(i * Math.PI / 3) * 34} ${605 + Math.sin(i * Math.PI / 3) * 34}"/>`).join('')}</g><circle cx="245" cy="605" r="9" fill="#F6EBDA"/>`;
-  s += `<rect x="615" y="525" width="70" height="60" rx="5" fill="#D9B07A" stroke="#B6771D" stroke-width="2"/><rect x="633" y="540" width="34" height="26" fill="#7B542F"/><circle cx="650" cy="547" r="5" fill="#FFCF71"/>`;
   // buildings
   const cols = ['#F6EBDA', '#EBD5B3', '#E2C497', '#D9B07A', '#F3E1C0', '#CFA36B', '#FBEEDC', '#E6CFA8']; const B = [];
   for (let i = 0; i < 900 && B.length < 150; i++) {
@@ -40,7 +37,7 @@ function mapSVG() {
   for (let i = 0, n = 0; i < 500 && n < 90; i++) { const x = r() * 1000, y = r() * 680; if (ROADS.some(([a, b, rw]) => dseg(x, y, a, b) < rw / 2 + 8)) continue; if (Math.abs(river(y / 680)[0] - x) < 18) continue; if (B.some(o => x > o[0] - 6 && x < o[0] + o[2] + 6 && y > o[1] - 6 && y < o[1] + o[3] + 6)) continue; if (CAFES.some(c => Math.abs(c.x - x) < 26 && c.y - y < 54 && y - c.y < 30)) continue; const rr = 5 + r() * 4; s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rr.toFixed(1)}" fill="#CDB487"/><circle cx="${(x - 1.5).toFixed(1)}" cy="${(y - 1.5).toFixed(1)}" r="${(rr * .5).toFixed(1)}" fill="#DCC7A0"/>`; n++ }
   // labels
   const lab = (x, y, t, rot = 0) => `<g transform="translate(${x} ${y}) rotate(${rot})"><rect x="${-t.length * 3.3 - 8}" y="-10" width="${t.length * 6.6 + 16}" height="20" rx="10" fill="#fff" opacity=".92"/><text text-anchor="middle" y="4" font-family="Manrope,sans-serif" font-size="11" font-weight="700" fill="#5E3F22">${t}</text></g>`;
-  s += lab(460, 160, 'Сүхбаатарын талбай') + lab(180, 148, 'Жамъян гүний гудамж', -1) + lab(160, 358, 'Энхтайваны өргөн чөлөө', -3.7) + lab(553, 40, 'Чингисийн өргөн чөлөө', 90) + lab(245, 655, 'Улсын цирк') + lab(525, 575, 'Үндэсний парк') + lab(650, 505, 'Чойжин ламын сүм') + lab(930, 90, 'Их тойруу', 90);
+  s += lab(460, 160, 'Сүхбаатарын талбай') + lab(180, 148, 'Жамъян гүний гудамж', -1) + lab(160, 358, 'Энхтайваны өргөн чөлөө', -3.7) + lab(553, 40, 'Чингисийн өргөн чөлөө', 90) + lab(245, 655, 'Улсын цирк') + lab(930, 90, 'Их тойруу', 90);
   // you are here
   s += `<g transform="translate(575 292)"><circle class="you" r="18" fill="#1A73E8" opacity=".18"/><circle r="9" fill="#1A73E8" stroke="#fff" stroke-width="3"/></g><text x="594" y="296" font-family="Manrope" font-size="12" font-weight="800" fill="#1A73E8">Та энд</text>`;
   MAP_SVG = `<svg class="base" viewBox="0 0 1000 680" aria-hidden="true"><style>.you{animation:you 2.2s ease-out infinite;transform-origin:center;transform-box:fill-box}@keyframes you{0%{transform:scale(.5);opacity:.5}100%{transform:scale(1.8);opacity:0}}</style>${s}</svg>`; return MAP_SVG

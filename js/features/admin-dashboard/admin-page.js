@@ -3,8 +3,7 @@
 import { Component, html, raw, readForm, dateTime } from '../../../framework/index.js';
 import { I } from '../../icons.js';
 import { Snd } from '../../audio.js';
-import { FloorPlan } from '../../simulation/floor-plan.js';
-import { LAYOUTS, LAYOUT_IDS } from '../../simulation/layouts.js';
+import { LayoutEditor } from './layout-editor.js';
 import { SETUP_STATUSES, statusLabel, VIS_STATUSES } from '../../live/levels.js';
 import { platform } from '../../services/platform.js';
 import { toast } from '../../components/feedback.js';
@@ -28,11 +27,10 @@ export class AdminPage extends Component {
       'click [data-gate-login]': (e, b) => openAuth({ reason: b.dataset.gateLogin }),
       'click [data-tab]': (e, b) => this.go(b.dataset.tab),
       'click [data-open-cafe]': (e, b) => { e.preventDefault(); this.openCafe(b.dataset.openCafe); },
-      'click [data-back]': () => { this.previewOverride = null; this.setState({ cafe: null, token: null, suggestion: null }); this.load(); },
+      'click [data-back]': () => { this.setState({ cafe: null, token: null, suggestion: null }); this.load(); },
       'click [data-refresh]': () => this.load(),
       'submit [data-form]': (e, form) => { e.preventDefault(); this[form.dataset.form](form); },
       'click [data-suggest]': () => this.suggest(),
-      'click [data-preview]': () => this.previewLayout(),
       'click [data-rotate]': (e, b) => this.rotate(b.dataset.rotate),
       'click [data-revoke]': (e, b) => this.revoke(b.dataset.revoke),
       'change [data-filter]': (e, el) => { this.setState({ filter: { ...this.state.filter, [el.name]: el.value } }); this.load(); },
@@ -45,13 +43,12 @@ export class AdminPage extends Component {
     this.interval(() => { if (this.state.auto && !document.hidden && this.state.tab === 'measurements' && !this.state.cafe) this.load(); }, 15000);
     this.load();
   }
-  onDestroy() { this.fp?.destroy(); }
-  onUpdate() { this.syncPlan(); }
+  onDestroy() { this.editor?.destroy(); }
+  onUpdate() { this.syncEditor(); }
 
   go(tab) {
     Snd.ui('click');
     history.replaceState(null, '', `#admin?tab=${tab}`);
-    this.fp?.destroy(); this.fp = null; this.planKey = null;
     this.setState({ tab, cafe: null, token: null, suggestion: null });
     this.load();
   }
@@ -79,7 +76,7 @@ export class AdminPage extends Component {
   async openCafe(id, quiet) {
     try {
       const [{ cafe }, { devices }, { measurements }] = await Promise.all([platform.api.get(`/admin/cafes/${id}`), platform.api.get('/admin/devices'), platform.api.get(`/admin/measurements?cafe_id=${encodeURIComponent(id)}&limit=20`)]);
-      if (!quiet) { Snd.ui('pop'); this.previewOverride = null; }
+      if (!quiet) Snd.ui('pop');
       this.setState({ cafe: { ...cafe, devices: devices.filter(d => d.cafe_id === id), measurements } });
     } catch (error) { toast(error.message); }
   }
@@ -104,34 +101,25 @@ export class AdminPage extends Component {
   }
   layoutFromForm(form) {
     const v = readForm(form);
-    let overrides = {};
-    if (v.overrides.trim()) { try { overrides = JSON.parse(v.overrides); } catch { toast('Overrides JSON буруу байна'); return null; } }
-    return { status: v.vstatus, notes: v.notes, layout: { preset: v.preset, overrides } };
+    return { status: v.vstatus, notes: v.notes, layout: this.editor.getLayout() };
   }
   async saveVisualization(form) {
-    const body = this.layoutFromForm(form); if (!body) return;
+    const body = this.layoutFromForm(form);
     if (this.state.suggestion) body.generator = `suggested:${this.state.suggestion.provider}`;
-    if (await this.run(platform.api.put(`/admin/cafes/${this.state.cafe.id}/visualization`, body), 'Зураглал хадгалагдлаа')) { this.previewOverride = null; this.setState({ suggestion: null }); this.openCafe(this.state.cafe.id, true); }
+    if (await this.run(platform.api.put(`/admin/cafes/${this.state.cafe.id}/visualization`, body), 'Зураглал хадгалагдлаа')) { this.setState({ suggestion: null }); this.openCafe(this.state.cafe.id, true); }
   }
   async suggest() {
     const result = await this.run(platform.api.post(`/admin/cafes/${this.state.cafe.id}/visualization/suggest`));
-    if (result) { this.setState({ suggestion: result.suggestion }); this.previewLayout(result.suggestion.layout); }
+    if (result) { this.setState({ suggestion: result.suggestion }); this.editor?.setLayout(result.suggestion.layout); }
   }
-  previewLayout(layout) {
-    const form = this.$('[data-form="saveVisualization"]');
-    const next = layout || this.layoutFromForm(form)?.layout;
-    if (!next) return;
-    this.previewOverride = next; this.planKey = null; this.syncPlan();
-  }
-  syncPlan() {
-    const wrap = this.$('[data-adm-plan]'), cafe = this.state.cafe;
-    const layout = this.previewOverride || cafe?.visualization?.layout;
-    const key = wrap && cafe && layout ? `${cafe.id}:${JSON.stringify(layout)}` : null;
-    if (key === this.planKey) return;
-    this.fp?.destroy(); this.fp = null; this.planKey = key;
+  // One layout editor per opened café; it survives re-renders (data-preserve).
+  syncEditor() {
+    const root = this.$('[data-adm-editor]'), cafe = this.state.cafe;
+    const key = root && cafe ? cafe.id : null;
+    if (key === this.editorKey && (!key || root.firstChild)) return;
+    this.editor?.destroy(); this.editor = null; this.editorKey = key;
     if (!key) return;
-    wrap.innerHTML = '';
-    this.fp = new FloorPlan(wrap, { id: cafe.id, name: cafe.name, occ: 45 }, { layout, sound: 2 });
+    this.editor = new LayoutEditor(root, { layout: cafe.visualization.layout, cafe: { id: cafe.id, name: cafe.name } });
   }
   async saveDevice(form) {
     const v = readForm(form);
@@ -253,7 +241,6 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
 
   cafeView() {
     const c = this.state.cafe, s = this.state.suggestion;
-    const layout = c.visualization.layout || { preset: 'classic', overrides: {} };
     const input = (name, label, value, type = 'text') => html`<div class="fld"><label>${label}</label><input name="${name}" type="${type}" value="${value ?? ''}" ${raw(type === 'number' ? 'step="any"' : '')}></div>`;
     return html`<div class="adm-cafe">
       <div class="adm-head"><button class="btn btn-g" data-back>← Буцах</button><h2>${c.name}</h2>${statusBadge(c.status)}${modeBadge(c.data_mode)}
@@ -286,13 +273,11 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
           <div class="adm-vis">
             <form class="form adm-form" data-form="saveVisualization" novalidate>
               <div class="fld"><label>Төлөв</label><select name="vstatus">${VIS_STATUSES.map(([k, l]) => html`<option value="${k}" ${raw(k === c.visualization.status ? 'selected' : '')}>${l}</option>`)}</select></div>
-              <div class="fld"><label>Загвар (preset)</label><select name="preset">${LAYOUT_IDS.map(id => html`<option value="${id}" ${raw(id === (s?.layout.preset || layout.preset) ? 'selected' : '')}>${LAYOUTS[id].name} (${id})</option>`)}</select></div>
-              <div class="fld full"><label>Overrides (JSON: round, long, sofas, plants, shelves, rug)</label><textarea name="overrides" rows="5" class="adm-mono">${JSON.stringify(s?.layout.overrides || layout.overrides || {}, null, 1)}</textarea></div>
               <div class="fld full"><label>Тэмдэглэл</label><textarea name="notes" rows="2">${c.visualization.notes || ''}</textarea></div>
               ${s ? html`<p class="adm-suggest">${raw(I.star)} <b>Санал (${s.provider}, итгэл ${Math.round(s.confidence * 100)}%):</b> ${s.rationale}</p>` : ''}
-              <div class="fld full adm-actions"><button type="button" class="btn btn-g" data-suggest>Зургаас санал авах</button><button type="button" class="btn btn-o" data-preview>Урьдчилан харах</button><button class="btn btn-p">Хадгалах</button></div>
+              <div class="fld full adm-actions"><button type="button" class="btn btn-g" data-suggest>Зургаас санал авах</button><button class="btn btn-p">Хадгалах</button></div>
             </form>
-            <div><div class="plan-wrap" data-adm-plan data-preserve data-key="adm-plan-${c.id}"></div><small class="muted">Урьдчилсан харагдац (хүмүүс жишээ).</small></div>
+            <div data-adm-editor data-preserve data-key="adm-editor-${c.id}"></div>
           </div>
         </section>
 

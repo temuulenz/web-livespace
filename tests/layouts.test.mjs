@@ -46,7 +46,7 @@ for (const id of LAYOUT_IDS) {
     const { sim } = build(id);
     for (const [i, a] of sim.seats.entries()) {
       assert.ok(a.x > 28 && a.x < 772 && a.y > 28 && a.y < 496, `${a.label} outside the walls`);
-      assert.ok(!(a.x > 598 && a.y < 256), `${a.label} inside the barista area`);
+      assert.ok(!(a.x > 598 + sim.cdx && a.x < 776 + sim.cdx && a.y > 24 + sim.cdy && a.y < 256 + sim.cdy), `${a.label} inside the barista area`);
       for (const b of sim.seats.slice(i + 1)) assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= 30, `${a.label} overlaps ${b.label}`);
     }
     sim.destroy();
@@ -71,27 +71,40 @@ test('the legacy layout still has its kitchen for the original fixtures', () => 
   sim.destroy();
 });
 
-test('the default customer layout is the original interior without the kitchen', () => {
+test('the minimal template starts from the original interior without the kitchen', () => {
   const { sim } = build(undefined, getCafes()[0]);
   const legacy = build('legacy', getCafes()[0]).sim;
-  assert.equal(sim.L.id, 'classic');
+  assert.equal(sim.L.id, 'minimal');
   // Every original seat is kept in the same place.
   assert.deepEqual(sim.seats.map(({ x, y, label, state }) => [x, y, label, state]), legacy.seats.map(({ x, y, label, state }) => [x, y, label, state]));
   sim.destroy(); legacy.destroy();
 });
 
-test('demo cafés do not all share the same interior', () => {
+test('demo cafés use both templates', () => {
   const used = new Set(getCafes().map(cafe => resolveLayout(undefined, cafe).id));
-  assert.ok(used.size >= 4, `only ${[...used].join(', ')} in use`);
+  assert.deepEqual([...used].sort(), [...LAYOUT_IDS].sort());
   for (const cafe of getCafes()) assert.ok(LAYOUTS[DEMO_LAYOUT[cafe.id]], `${cafe.id} has no layout`);
 });
 
-test('visualization configs: preset plus overrides, and unknown presets fall back safely', () => {
-  const custom = resolveLayout({ preset: 'library', overrides: { plants: [[100, 100, 10]] } });
-  assert.equal(custom.id, 'library');
+test('visualization configs: preset plus arrangement, old presets and unknown presets fall back safely', () => {
+  const custom = resolveLayout({ preset: 'artistic', overrides: { plants: [[100, 100, 10]], chairs: [{ x: 300, y: 300, dir: 'E' }], counter: { x: 560, y: 60 } } });
+  assert.equal(custom.id, 'artistic');
   assert.deepEqual(custom.plants, [[100, 100, 10]]);
-  assert.equal(resolveLayout({ preset: 'does-not-exist' }).id, 'classic');
-  assert.equal(resolveLayout(undefined, { id: 'zzz', visualization: { layout: { preset: 'social' } } }).id, 'social');
+  assert.deepEqual(custom.counter, { x: 560, y: 60 });
+  assert.equal(resolveLayout({ preset: 'does-not-exist' }).id, 'minimal');
+  assert.equal(resolveLayout(undefined, { id: 'zzz', visualization: { layout: { preset: 'social' } } }).id, 'artistic');
+  assert.equal(resolveLayout({ preset: 'library' }).id, 'minimal');
+});
+
+test('an edited arrangement: moved counter and single chairs move the barista, the queue and the seats', () => {
+  const layout = resolveLayout({ preset: 'minimal', overrides: { counter: { x: 560, y: 60 }, chairs: [{ x: 420, y: 300, dir: 'W' }] } });
+  const { sim } = build(layout);
+  assert.deepEqual(sim.order, [540, 148]);
+  assert.equal(sim.staff[0].x, 650);
+  const chair = sim.seats.find(seat => seat.zone === 'chair');
+  assert.ok(chair && chair.x === 420 && chair.y === 300, 'single chair becomes a seat');
+  assert.ok(sim.path(sim.door[0], sim.door[1] + 4, ...sim.order).length >= 2, 'door still reaches the moved counter');
+  sim.destroy();
 });
 
 test('every layout runs the full seeded scenario and settles on a new occupancy target', () => {

@@ -27,7 +27,99 @@
     }
 
     .hero-map .hm-open {
-      bottom: 18px
+      bottom: 18px;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      justify-content: center;
+      box-shadow: var(--sh)
+    }
+
+    .hero-map .hm-open svg {
+      width: 20px;
+      height: 20px
+    }
+
+    /* open / closed: a lamp that glows yellow when open, plain grey when closed */
+    .olamp {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      flex: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      vertical-align: middle
+    }
+
+    .olamp svg {
+      position: relative;
+      width: 14px;
+      height: 17px
+    }
+
+    .olamp.on {
+      color: #FFB21A
+    }
+
+    .olamp.on::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 62%, rgba(255, 207, 113, .85) 0, rgba(255, 207, 113, .35) 42%, rgba(255, 207, 113, 0) 70%);
+      animation: olampGlow 2.6s ease-in-out infinite
+    }
+
+    .olamp.on svg {
+      filter: drop-shadow(0 0 3px rgba(255, 178, 26, .85))
+    }
+
+    .olamp.on svg path:last-child {
+      opacity: .8
+    }
+
+    .olamp.off {
+      color: #B8B1A5
+    }
+
+    .olamp.off svg path:last-child {
+      display: none
+    }
+
+    @keyframes olampGlow {
+
+      0%,
+      100% {
+        opacity: .65;
+        transform: scale(.92)
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.06)
+      }
+    }
+
+    .cd-pills .olamp {
+      background: rgba(255, 249, 236, .92);
+      box-shadow: 0 0 0 1px var(--line2)
+    }
+
+    /* café cards: three measured indicators (seats, noise, Wi-Fi) fill the row */
+    .ccard .tiles {
+      grid-template-columns: repeat(3, 1fr)
+    }
+
+    /* about: three measured indicators (sockets are not measured) */
+    .g4.g3 {
+      grid-template-columns: repeat(3, 1fr)
+    }
+
+    @media (max-width:820px) {
+      .g4.g3 {
+        grid-template-columns: 1fr
+      }
     }
 
     @media (min-width:1000px) {
@@ -856,4 +948,226 @@
       .adm-vis {
         grid-template-columns: minmax(0, 1fr)
       }
+    }
+
+    /* ---------- staff / owner live page: plan, advice and current state on one screen ----------
+       The advice is the first thing on the right; the plan takes the height the screen allows;
+       temporary statuses and the music suggestion follow below the fold. */
+
+    .st-top {
+      --st-plan-w: max(440px, calc((100dvh - var(--hd) - 196px) * 1.538));
+      display: grid;
+      grid-template-columns: minmax(0, calc(var(--st-plan-w) + 34px)) minmax(300px, 400px);
+      justify-content: center;
+      align-items: start;
+      gap: 16px;
+      margin-top: 14px
+    }
+
+    .st-top .card {
+      padding: 14px 16px
+    }
+
+    .st-top .card-h {
+      margin-bottom: 10px
+    }
+
+    .st-top .card-h h2 {
+      font-size: 18px
+    }
+
+    .st-plan .plan-outer {
+      max-width: var(--st-plan-w);
+      margin-inline: auto
+    }
+
+    .st-side {
+      display: flex;
+      flex-direction: column;
+      gap: 12px
+    }
+
+    .st-advice {
+      border: 2px solid var(--amberL)
+    }
+
+    .st-advice .ins {
+      padding: 12px 14px;
+      margin-top: 8px;
+      background: #FFF7E6
+    }
+
+    .st-advice .ins:first-of-type {
+      margin-top: 0
+    }
+
+    .st-advice .ins b {
+      font-size: 16px;
+      line-height: 1.3;
+      color: var(--ink)
+    }
+
+    .st-advice .ins small {
+      display: block;
+      margin-top: 3px;
+      font-size: 13px;
+      line-height: 1.4
+    }
+
+    .st-now .occ-ring {
+      gap: 16px;
+      flex-wrap: nowrap
+    }
+
+    .st-now .occ-ring svg {
+      width: 104px;
+      height: 104px;
+      flex: none
+    }
+
+    .st-now .occ-ring>div {
+      gap: 12px !important;
+      grid-template-columns: repeat(3, auto) !important
+    }
+
+    .st-now .occ-ring b.num {
+      font-size: 22px !important
+    }
+
+    .st-now .occ-ring small,
+    .st-now .occ-ring b {
+      white-space: nowrap
+    }
+
+    .st-now .occ-ring>div>div:nth-child(2) b {
+      font-size: 14px !important
+    }
+
+    .st-more {
+      margin-top: 24px
+    }
+
+    @media (max-width:820px) {
+      .st-top {
+        grid-template-columns: minmax(0, 1fr)
+      }
+
+      .st-side {
+        display: contents
+      }
+
+      .st-advice {
+        order: -1
+      }
+
+      .st-plan .plan-outer {
+        max-width: none
+      }
+    }
+
+    /* ---------- admin layout editor: two templates, every object movable ---------- */
+
+    .le {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0
+    }
+
+    .le-templates {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px
+    }
+
+    .le-tpl {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto;
+      column-gap: 10px;
+      align-items: center;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1.5px solid var(--line2);
+      background: var(--paper);
+      transition: border-color .2s, box-shadow .2s
+    }
+
+    .le-tpl.on {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(255, 157, 0, .18)
+    }
+
+    .le-tpl small {
+      grid-column: 2;
+      color: var(--ink3);
+      font-size: 12px
+    }
+
+    .le-sw {
+      grid-row: 1 / span 2;
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px var(--line2)
+    }
+
+    .le-sw i {
+      width: 12px;
+      height: 34px
+    }
+
+    .le-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center
+    }
+
+    .le-tools .chip {
+      padding: 6px 11px;
+      font-size: 13px
+    }
+
+    .le-tools .chip:disabled {
+      opacity: .4;
+      cursor: default
+    }
+
+    .le-lab {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--ink2);
+      min-width: 92px
+    }
+
+    .le-sel .le-del:not(:disabled) {
+      color: var(--terraT)
+    }
+
+    .le-reset {
+      margin-left: auto;
+      padding: 6px 12px;
+      font-size: 13px
+    }
+
+    .le-plan {
+      outline: none;
+      border-radius: 14px
+    }
+
+    .le-plan:focus-visible {
+      box-shadow: 0 0 0 3px rgba(255, 157, 0, .35)
+    }
+
+    .le-hint {
+      margin: 0;
+      font-size: 12px;
+      color: var(--ink3)
+    }
+
+    .le-hint.warn {
+      color: var(--terraT);
+      font-weight: 700
     }

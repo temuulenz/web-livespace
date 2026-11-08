@@ -4,10 +4,29 @@ import { Snd } from '../audio.js';
 import { resolveLayout } from './layouts.js';
 
 /* ================= FLOOR PLAN (canvas, top-down) ================= */
-const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй, залгууртай.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' }, round: { d: 'Дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, lounge: { d: 'Буйдан — зөөлөн, тухтай суудал.', q: 'Тухтай бүс.' } };
+const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' }, chair: { d: 'Ганц сандал.', q: 'Дунд зэргийн чимээтэй.' }, round: { d: 'Дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, lounge: { d: 'Буйдан — зөөлөн, тухтай суудал.', q: 'Тухтай бүс.' } };
 const DIRS = { N: -Math.PI / 2, S: Math.PI / 2, E: 0, W: Math.PI };
 // Single-letter demo ids keep their original seeds; longer ids get a stable hash.
 const seedOf = id => id.length === 1 ? id.charCodeAt(0) * 31 : [...id].reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261);
+// Template looks (js/simulation/layouts.js). The legacy layout keeps the original drawing.
+const THEMES = {
+  minimal: {
+    outside: '#E6E3DD', floor: '#F7F5F0', floorStyle: 'tiles', floorLine: '#ECE8E0', light: '#FFF4DC', lightAlpha: .35,
+    rug: ['rgba(120,116,108,.10)', 'rgba(120,116,108,.28)'], staffFloor: '#EDEAE4', wall: '#3A3734', mat: '#BDB5A8',
+    bar: ['#E8DCC8', '#B9A98F'], shelf: '#4A4642', spines: ['#D8D2C8', '#A8A39A', '#EDE8DF', '#8C877F'],
+    table: ['#F4ECDD', '#E2D3BB', '#B5A386'], long: ['#E9DCC6', '#B5A386'], sofa: ['#9DA3A4', '#B9BEBF', '#7F8587'], coffee: '#EFE6D6',
+    plant: ['#86A17A', '#A9C19D'], pot: '#E4DED4', counter: ['#3A3734', '#6F6A63'], accents: ['#86A17A', '#B5A386', '#3A3734'],
+    chair: ['#FFFFFF', '#B3ABA0'], stool: ['#3A3734', '#E2DCD2'], label: 'rgba(58,55,52,.72)', thin: true
+  },
+  artistic: {
+    outside: '#2F5A4E', floor: '#F5E2CC', floorStyle: 'terrazzo', speckles: ['#E0B48C', '#C8553D', '#7FA88A', '#E9C46A', '#D9C2A6'], light: '#FFD27A', lightAlpha: .3,
+    rug: ['#C8553D', '#E9A23B', '#2F5A4E'], rugPattern: true, staffFloor: '#EAD6BE', wall: '#2F5A4E', mat: '#C8553D',
+    bar: ['#C8553D', '#8E3A28'], barPlants: true, shelf: '#7A4B2A', spines: ['#E9C46A', '#C8553D', '#2F7F7A', '#F4A261', '#7FA88A', '#264653'],
+    table: ['#F2C14E', '#D9962B', '#8E5B14'], long: ['#2F7F7A', '#1F5652'], sofa: ['#2F6B5E', '#3F8C78', '#214D44'], coffee: '#E9A23B',
+    plant: ['#2F7A4A', '#4FA36A', '#79C08A', '#255E3A'], bigLeaves: true, pot: '#C8553D', counter: ['#2F5A4E', '#C8553D'], accents: ['#E9C46A', '#C8553D', '#2F7F7A'],
+    chair: ['#FBEBD3', '#C8553D'], stool: ['#2F5A4E', '#E9C46A'], label: 'rgba(33,77,68,.85)', pendants: true, pendant: '#2F5A4E', stringLights: true
+  }
+};
 class FloorPlan {
   constructor(wrap, cafe, o) {
     this.wrap = wrap; this.cafe = cafe; this.o = o; this.W = 800; this.H = 520; this.sound = o.sound || 2; this.reduced = Prefs.reduced; this.zoom = isMobile() ? 1.5 : 1;
@@ -15,11 +34,13 @@ class FloorPlan {
     this.cv = document.createElement('canvas'); this.cv.setAttribute('role', 'img'); this.cv.setAttribute('aria-label', `${cafe.name}-ийн дээрээс харсан зураглал: сандал, ширээ, лангуу${this.L.kitchen ? ', гал тогоо' : ''}`); wrap.appendChild(this.cv); this.ctx = this.cv.getContext('2d');
     this.r = rng(seedOf(cafe.id)); this.layout(); this.buildGrid(); this.bg = this.drawStatic();
     this.people = []; this.parts = []; this.bubbles = []; this.fx = []; this.sel = null; this.t = 0; this.nextEv = 2600; this.nextBub = 1200; this.busyUntil = 0;
-    this.staff = [{ x: 690, y: 105, pts: [[650, 105], [720, 105], [745, 150], [690, 150]], i: 0, wait: 0, shirt: '#7B542F', hair: '#3E2A17', skin: '#F2C9A0', barista: true }];
+    this.staff = [this.barista()];
     if (this.L.kitchen) this.staff.push({ x: 690, y: 330, pts: [[690, 335], [748, 335], [745, 450], [660, 450]], i: 0, wait: 0, shirt: '#FFFFFF', hair: '#1F1A17', skin: '#D9A57B', chef: true });
-    const occ = Math.round(cafe.occ * this.countable() / 100); this.target = occ; const free = this.seats.filter(s => s.state === 'free'); for (let i = 0; i < occ && free.length; i++) { const s = free.splice(Math.floor(this.r() * free.length), 1)[0]; const p = this.newPerson(); p.state = 'seated'; p.seat = s; p.x = s.x; p.y = s.y; p.ang = s.ang; s.state = 'occ'; s.person = p; this.people.push(p) }
+    // The layout editor (o.editor) draws the interior without guests or an animation loop.
+    const occ = o.editor ? 0 : Math.round(cafe.occ * this.countable() / 100); this.target = occ; const free = this.seats.filter(s => s.state === 'free'); for (let i = 0; i < occ && free.length; i++) { const s = free.splice(Math.floor(this.r() * free.length), 1)[0]; const p = this.newPerson(); p.state = 'seated'; p.seat = s; p.x = s.x; p.y = s.y; p.ang = s.ang; s.state = 'occ'; s.person = p; this.people.push(p) }
     this.resize(); this.ro = new ResizeObserver(() => { if (!this.alive) return; cancelAnimationFrame(this.rz); this.rz = requestAnimationFrame(() => this.resize()) }); this.ro.observe(wrap);
     this.events = new AbortController();
+    if (o.editor) { this.alive = true; this.visible = false; this.draw(); return }
     this.cv.addEventListener('click', e => this.click(e), { signal: this.events.signal }); this.cv.addEventListener('mousemove', e => { const p = this.pt(e); this.cv.style.cursor = this.hit(p) ? 'pointer' : 'default' }, { signal: this.events.signal });
     this.emit(); this.last = performance.now(); this.alive = true; this.visible = true; this.onFrame = t => this.frame(t); this.raf = requestAnimationFrame(this.onFrame);
     // Off-screen canvases stop their loop and resume when scrolled back into view.
@@ -31,6 +52,10 @@ class FloorPlan {
       this.io.observe(this.cv)
     }
   }
+  // The barista walks behind the counter, wherever the counter is placed.
+  barista() { const dx = this.cdx, dy = this.cdy; return { x: 690 + dx, y: 105 + dy, pts: [[650 + dx, 105 + dy], [720 + dx, 105 + dy], [745 + dx, 150 + dy], [690 + dx, 150 + dy]], i: 0, wait: 0, shirt: '#7B542F', hair: '#3E2A17', skin: '#F2C9A0', barista: true } }
+  // Editor: show a changed layout immediately (seats, obstacles and background are rebuilt).
+  setLayout(L) { this.L = L; this.sel = null; this.layout(); this.buildGrid(); this.staff = [this.barista()]; this.bg = this.drawStatic(this.k); this.draw() }
   countable() { let count = 0; for (const seat of this.seats) if (seat.state !== 'unknown') count++; return count }
   stats() {
     let free = 0;
@@ -49,14 +74,16 @@ class FloorPlan {
     L.round.forEach(t => [...t.dirs].forEach((d, i) => { const a = DIRS[d]; add(t.x + Math.cos(a) * 38, t.y + Math.sin(a) * 38, a + Math.PI, t.zone || 'round', `${t.name} · ${i + 1}-р суудал`) }));
     L.long.forEach(t => { const k = t.seats.length; t.seats.forEach((x, i) => add(x, t.y - 18, Math.PI / 2, t.zone || 'long', `${t.name} ${i + 1}`)); t.seats.forEach((x, i) => add(x, t.y + 54, -Math.PI / 2, t.zone || 'long', `${t.name} ${i + 1 + k}`)) });
     L.sofas.forEach(f => f.seats.forEach((x, i) => add(x, f.y + 12, -Math.PI / 2, f.zone || 'sofa', `${f.name || 'Буйдан'} ${i + 1}`, f.sensor ? 'free' : 'unknown', 'sofa')));
+    (L.chairs || []).forEach((ch, i) => add(ch.x, ch.y, DIRS[ch.dir] ?? DIRS.N, 'chair', `Сандал ${i + 1}`));
     this.tables = L.round.map(t => [t.x, t.y]);
-    this.door = [90, 514]; this.order = [580, 112];
+    const counter = L.counter || { x: 600, y: 24 }; this.cdx = counter.x - 600; this.cdy = counter.y - 24;
+    this.door = [90, 514]; this.order = [580 + this.cdx, 112 + this.cdy];
   }
   buildGrid() {
     const C = 10, cols = 80, rows = 52, g = new Uint8Array(cols * rows); const R = [], Cc = []; const rect = (x, y, w, h, p = 9) => R.push([x - p, y - p, x + w + p, y + h + p]); const circ = (x, y, r) => Cc.push([x, y, r]);
     const L = this.L;
     // Without a kitchen the staff area is only the barista corner; the rest is customer floor.
-    rect(20, 20, 760, 8); rect(20, 20, 8, 484); rect(772, 20, 8, 484); rect(20, 496, 40, 8); rect(120, 496, 660, 8); rect(598, 20, 182, L.kitchen ? 484 : 236, 4); rect(0, 504, 50, 16, 0); rect(130, 504, 670, 16, 0); rect(0, 0, 800, 12, 0);
+    rect(20, 20, 760, 8); rect(20, 20, 8, 484); rect(772, 20, 8, 484); rect(20, 496, 40, 8); rect(120, 496, 660, 8); rect(598 + this.cdx, 20 + this.cdy, 182, L.kitchen ? 484 : 236, 4); rect(0, 504, 50, 16, 0); rect(130, 504, 670, 16, 0); rect(0, 0, 800, 12, 0);
     if (L.windowBar) rect(L.windowBar.x, 30, L.windowBar.w, 24); L.long.forEach(t => rect(t.x, t.y, t.w, 36)); L.sofas.forEach(f => { rect(f.x, f.y - 4, f.w, 36); if (f.table) circ(f.table[0], f.table[1], 32) }); L.shelves.forEach(b => rect(b.x, b.y, b.w, b.h));
     this.tables.forEach(([x, y]) => circ(x, y, 34)); this.seats.forEach(s => circ(s.x, s.y, s.kind === 'stool' ? 18 : 19));
     L.plants.forEach(([x, y, r]) => circ(x, y, r + 3));
@@ -105,7 +132,8 @@ class FloorPlan {
     // Re-render the cached background at the canvas's own resolution so every frame is a 1:1 copy
     // rather than a resample of a larger image (large canvases were slow to blit in software).
     if (this.bg.width !== this.cv.width) this.bg = this.drawStatic(this.k);
-    this.wrap.style.height = Math.min(cssH, Math.round(w * this.H / this.W * (isMobile() ? 1.15 : 1))) + 'px'
+    this.wrap.style.height = Math.min(cssH, Math.round(w * this.H / this.W * (isMobile() ? 1.15 : 1))) + 'px';
+    if (this.o.editor && this.alive) this.draw()
   }
   pt(e) { const r = this.cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * this.W, (e.clientY - r.top) / r.height * this.H] }
   hit([x, y]) { let best = null, bd = 20; this.seats.forEach(s => { const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = s } }); return best }
@@ -132,14 +160,16 @@ class FloorPlan {
     }
     this.people = this.people.filter(p => p.alpha > 0);
     for (const s of this.staff) { if (red) break; if (s.wait > 0) { s.wait -= dt; continue } const tg = s.pts[s.i], dx = tg[0] - s.x, dy = tg[1] - s.y, d = Math.hypot(dx, dy); if (d < 1) { s.i = (s.i + 1) % s.pts.length; s.wait = 1 + this.r() * 2; continue } s.ang = Math.atan2(dy, dx); s.x += dx / d * Math.min(d, 38 * dt); s.y += dy / d * Math.min(d, 38 * dt); s.walk = true }
-    if (!red) { if (this.L.kitchen && this.r() < dt * 9) this.parts.push({ x: 672 + this.r() * 14, y: 322, vy: -14 - this.r() * 10, vx: (this.r() - .5) * 6, l: 1, r: 3 + this.r() * 3 }); if (this.r() < dt * 2.5) this.parts.push({ x: 712 + this.r() * 8, y: 50, vy: -10, vx: (this.r() - .5) * 4, l: .8, r: 2.5 }) }
+    if (!red) { if (this.L.kitchen && this.r() < dt * 9) this.parts.push({ x: 672 + this.r() * 14, y: 322, vy: -14 - this.r() * 10, vx: (this.r() - .5) * 6, l: 1, r: 3 + this.r() * 3 }); if (this.r() < dt * 2.5) this.parts.push({ x: 712 + this.cdx + this.r() * 8, y: 50 + this.cdy, vy: -10, vx: (this.r() - .5) * 4, l: .8, r: 2.5 }) }
     this.parts.forEach(q => { q.x += q.vx * dt; q.y += q.vy * dt; q.l -= dt * .7; q.r += dt * 3 }); this.parts = this.parts.filter(q => q.l > 0);
     this.nextBub -= dt * 1000; if (this.nextBub <= 0 && this.sound >= 3 && !red) { const sat = this.people.filter(p => p.state === 'seated'); if (sat.length) { const p = sat[Math.floor(this.r() * sat.length)]; this.bubbles.push({ p, t: 0, big: this.sound >= 4 }) } this.nextBub = [0, 0, 0, 1600, 800, 450][this.sound] + this.r() * 500 }
     this.bubbles.forEach(b => b.t += dt); this.bubbles = this.bubbles.filter(b => b.t < 2.2 && b.p.state === 'seated');
     this.fx.forEach(f => f.t += dt); this.fx = this.fx.filter(f => f.t < .8); this.seats.forEach(s => s.flash = Math.max(0, s.flash - dt * 1.5))
   }
   rr(x, X, y, w, h, r) { x.beginPath(); x.roundRect ? x.roundRect(X, y, w, h, r) : x.rect(X, y, w, h) }
-  drawStatic(k = 2.5) {
+  // The original drawing (legacy layout, with the kitchen) is kept exactly; templates use drawThemed.
+  drawStatic(k = 2.5) { return this.L.kitchen ? this.drawOriginal(k) : this.drawThemed(k) }
+  drawOriginal(k) {
     const c = document.createElement('canvas'); c.width = Math.round(this.W * k); c.height = Math.round(this.H * k); const x = c.getContext('2d'); x.scale(k, k); const rr = (X, y, w, h, r) => this.rr(x, X, y, w, h, r); const r = rng(5); const L = this.L;
     x.fillStyle = '#E4D7BF'; x.fillRect(0, 0, 800, 520);
     // customer wood floor
@@ -207,6 +237,90 @@ class FloorPlan {
     });
     return c
   }
+  // Template drawing: same building and furniture shapes as the original, in the template's
+  // colours, plus the template's own floor and decoration. Rendered once per size (cached).
+  drawThemed(k = 2.5) {
+    const c = document.createElement('canvas'); c.width = Math.round(this.W * k); c.height = Math.round(this.H * k); const x = c.getContext('2d'); x.scale(k, k); const rr = (X, y, w, h, r) => this.rr(x, X, y, w, h, r); const r = rng(5); const L = this.L;
+    const T = THEMES[L.theme] || THEMES.minimal, dx = this.cdx, dy = this.cdy;
+    const disc = (px, py, rad, fill) => { x.fillStyle = fill; x.beginPath(); x.arc(px, py, rad, 0, 7); x.fill() };
+    x.fillStyle = T.outside; x.fillRect(0, 0, 800, 520);
+    // floor
+    x.fillStyle = T.floor; x.fillRect(24, 24, 752, 476);
+    if (T.floorStyle === 'tiles') { x.strokeStyle = T.floorLine; x.lineWidth = 1; for (let xx = 24; xx < 776; xx += 48) { x.beginPath(); x.moveTo(xx, 24); x.lineTo(xx, 500); x.stroke() } for (let yy = 24; yy < 500; yy += 48) { x.beginPath(); x.moveTo(24, yy); x.lineTo(776, yy); x.stroke() } }
+    else { x.save(); x.globalAlpha = .75; for (let i = 0; i < 520; i++) disc(24 + r() * 752, 24 + r() * 476, .6 + r() * 1.4, T.speckles[i % T.speckles.length]); x.restore() }
+    // window light
+    x.save(); x.globalAlpha = T.lightAlpha; const lg = x.createLinearGradient(0, 24, 0, 200); lg.addColorStop(0, T.light); lg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = lg; L.windows.forEach(([a, b]) => { x.beginPath(); x.moveTo(a, 24); x.lineTo(b, 24); x.lineTo(b + 40, 190); x.lineTo(a + 40, 190); x.fill() }); x.restore();
+    // rug
+    if (L.rug) {
+      const [rx, ry, rw, rh] = L.rug;
+      if (T.rugPattern) { x.fillStyle = T.rug[0]; rr(rx, ry, rw, rh, 14); x.fill(); x.save(); rr(rx + 8, ry + 8, rw - 16, rh - 16, 10); x.clip(); x.fillStyle = T.rug[1]; x.globalAlpha = .6; for (let i = -rh; i < rw; i += 28) { x.beginPath(); x.moveTo(rx + i, ry + rh); x.lineTo(rx + i + 7, ry + rh); x.lineTo(rx + i + 7 + rh, ry); x.lineTo(rx + i + rh, ry); x.fill() } x.restore(); x.strokeStyle = T.rug[2]; x.lineWidth = 3; rr(rx + 5, ry + 5, rw - 10, rh - 10, 11); x.stroke() }
+      else { x.fillStyle = T.rug[0]; rr(rx, ry, rw, rh, 10); x.fill(); x.strokeStyle = T.rug[1]; x.lineWidth = 1; rr(rx + 6, ry + 6, rw - 12, rh - 12, 6); x.stroke() }
+    }
+    // barista area floor
+    x.fillStyle = T.staffFloor; x.fillRect(600 + dx, 24 + dy, 176, 226);
+    // pendant lamp light pools over round tables
+    if (T.pendants) this.tables.forEach(([tx, ty]) => { const g = x.createRadialGradient(tx, ty, 10, tx, ty, 70); g.addColorStop(0, 'rgba(255,214,140,.45)'); g.addColorStop(1, 'rgba(255,214,140,0)'); x.fillStyle = g; x.beginPath(); x.arc(tx, ty, 70, 0, 7); x.fill() });
+    // walls (the barista area's partition walls move with the counter)
+    x.fillStyle = T.wall; x.fillRect(20, 20, 760, 8); x.fillRect(20, 20, 8, 484); x.fillRect(772, 20, 8, 484); x.fillRect(20, 496, 40, 8); x.fillRect(120, 496, 660, 8);
+    x.fillRect(598 + dx, 250 + dy, 90, 6); x.fillRect(740 + dx, 250 + dy, 36, 6); x.fillRect(596 + dx, 190 + dy, 6, 66);
+    if (dy > 0) x.fillRect(596 + dx, 20 + dy, 184, 6);
+    if (dx < 0) x.fillRect(774 + dx, 20 + dy, 6, 236);
+    x.fillStyle = '#BFE1F2'; L.windows.forEach(([a, b]) => { x.fillRect(a + 4, 20, b - a - 8, 8) }); x.fillStyle = '#9ACBE5'; L.windows.forEach(([a, b]) => x.fillRect(a + 4, 23, b - a - 8, 2));
+    // string lights along the left wall
+    if (T.stringLights) {
+      x.strokeStyle = 'rgba(62,42,23,.5)'; x.lineWidth = 1; x.beginPath(); for (let yy = 60; yy <= 460; yy += 4) { const xx = 36 + Math.sin(yy / 25) * 4; yy === 60 ? x.moveTo(xx, yy) : x.lineTo(xx, yy) } x.stroke();
+      for (let yy = 64; yy < 460; yy += 25) { const xx = 36 + Math.sin(yy / 25) * 4, g = x.createRadialGradient(xx, yy, 0, xx, yy, 9); g.addColorStop(0, 'rgba(255,214,120,.9)'); g.addColorStop(1, 'rgba(255,214,120,0)'); x.fillStyle = g; x.beginPath(); x.arc(xx, yy, 9, 0, 7); x.fill(); disc(xx, yy, 2.2, '#FFE6A8') }
+    }
+    // door
+    x.strokeStyle = T.wall; x.lineWidth = 2; x.setLineDash([4, 4]); x.beginPath(); x.arc(60, 500, 60, -Math.PI / 2.4, 0); x.stroke(); x.setLineDash([]); x.beginPath(); x.moveTo(60, 500); x.lineTo(60 + 60 * Math.cos(-Math.PI / 2.4), 500 + 60 * Math.sin(-Math.PI / 2.4)); x.stroke();
+    x.fillStyle = T.mat; rr(66, 486, 48, 12, 4); x.fill();
+    // window bar
+    if (L.windowBar) {
+      const { x: bx, w: bw } = L.windowBar; x.fillStyle = T.bar[0]; rr(bx, 30, bw, 24, 6); x.fill(); x.strokeStyle = T.bar[1]; x.lineWidth = 2; x.stroke();
+      if (T.barPlants) [[bx + 65, 42], [bx + bw - 115, 42]].forEach(([px, py]) => { disc(px, py, 6, T.plant[0]); for (let a = 0; a < 6; a++) { x.fillStyle = T.plant[1]; x.beginPath(); x.ellipse(px + Math.cos(a) * 5, py + Math.sin(a) * 5, 4, 2.5, a, 0, 7); x.fill() } });
+    }
+    // shelves
+    L.shelves.forEach(({ x: sx, y: sy, w, h }) => { x.fillStyle = 'rgba(0,0,0,.08)'; rr(sx + 2, sy + 3, w, h, 4); x.fill(); x.fillStyle = T.shelf; rr(sx, sy, w, h, 4); x.fill(); const vert = h > w, len = vert ? h : w; for (let o = 6, i = 0; o < len - 6; o += 7, i++) { x.fillStyle = T.spines[i % T.spines.length]; vert ? x.fillRect(sx + 4, sy + o, w - 8, 5) : x.fillRect(sx + o, sy + 4, 5, h - 8) } });
+    // round tables
+    this.tables.forEach(([tx, ty], i) => {
+      disc(tx + 2, ty + 3, 25, 'rgba(0,0,0,.1)'); const gr = x.createRadialGradient(tx - 6, ty - 6, 2, tx, ty, 25); gr.addColorStop(0, T.table[0]); gr.addColorStop(1, T.table[1]); x.fillStyle = gr; x.beginPath(); x.arc(tx, ty, 24, 0, 7); x.fill(); x.strokeStyle = T.table[2]; x.lineWidth = T.thin ? 1.2 : 2; x.stroke();
+      if (T.pendants) { disc(tx, ty, 9, T.pendant); disc(tx, ty, 4, '#FFE6A8') } else { disc(tx, ty, 4, '#FFFFFF'); disc(tx, ty, 2.2, T.accents[i % T.accents.length]) }
+    });
+    // long tables
+    L.long.forEach(({ x: lx, y: ly, w }) => { x.fillStyle = 'rgba(0,0,0,.1)'; rr(lx + 3, ly + 4, w, 36, 6); x.fill(); x.fillStyle = T.long[0]; rr(lx, ly, w, 36, T.thin ? 3 : 6); x.fill(); x.strokeStyle = T.long[1]; x.lineWidth = T.thin ? 1.2 : 2; x.stroke(); if (!T.thin) { x.strokeStyle = 'rgba(255,255,255,.18)'; x.lineWidth = 1; for (let i = 1; i < 5; i++) { x.beginPath(); x.moveTo(lx + 4, ly + i * 7); x.lineTo(lx + w - 4, ly + i * 7); x.stroke() } } });
+    // sofas and their coffee tables
+    L.sofas.forEach(({ x: fx, y: fy, w, seats, table }) => {
+      x.fillStyle = T.sofa[0]; rr(fx, fy, w, 32, 10); x.fill(); x.fillStyle = T.sofa[1]; const cw = (w - 24) / seats.length; seats.forEach((_, i) => { rr(fx + 14 + i * cw, fy + 4, cw - 4, 22, 7); x.fill() }); x.fillStyle = T.sofa[2]; rr(fx, fy + 22, w, 10, 5); x.fill();
+      if (table) { const [tx, ty] = table; x.fillStyle = T.coffee; x.beginPath(); x.ellipse(tx, ty, 26, 15, 0, 0, 7); x.fill(); x.strokeStyle = T.table[2]; x.lineWidth = T.thin ? 1.2 : 2; x.stroke(); disc(tx - 10, ty - 2, 4, '#fff'); disc(tx - 10, ty - 2, 2.2, '#7B542F') }
+    });
+    // plants
+    L.plants.forEach(([px, py, s]) => {
+      if (T.bigLeaves) { disc(px, py, s * .5, T.plant[3]); for (let a = 0; a < 7; a++) { x.fillStyle = T.plant[a % 3]; x.beginPath(); x.ellipse(px + Math.cos(a * .9) * s * .62, py + Math.sin(a * .9) * s * .62, s * .62, s * .3, a * .9, 0, 7); x.fill() } disc(px, py, s * .25, T.plant[3]) }
+      else { disc(px, py, s * .7, T.pot); for (let a = 0; a < 5; a++) { x.fillStyle = T.plant[a % 2]; x.beginPath(); x.ellipse(px + Math.cos(a * 1.257) * s * .4, py + Math.sin(a * 1.257) * s * .4, s * .42, s * .22, a * 1.257, 0, 7); x.fill() } disc(px, py, s * .16, T.plant[0]) }
+    });
+    // order counter (L shape) and coffee machine
+    x.save(); x.translate(dx, dy);
+    x.fillStyle = 'rgba(0,0,0,.12)'; x.fillRect(603, 64, 170, 30); x.fillStyle = T.counter[0]; rr(600, 60, 176, 28, 4); x.fill(); rr(600, 60, 28, 130, 4); x.fill(); x.fillStyle = T.counter[1]; rr(603, 63, 170, 22, 3); x.fill(); rr(603, 63, 22, 124, 3); x.fill();
+    x.fillStyle = '#C9C2B4'; rr(690, 40, 52, 24, 4); x.fill(); x.strokeStyle = '#8C8577'; x.lineWidth = 1.5; x.stroke(); disc(704, 58, 4, '#3E2A17'); disc(728, 58, 4, '#3E2A17');
+    x.fillStyle = T.counter[0]; rr(750, 38, 16, 22, 4); x.fill();
+    x.fillStyle = 'rgba(191,225,242,.7)'; rr(605, 96, 18, 60, 3); x.fill(); [0, 1, 2, 3].forEach(i => disc(614, 104 + i * 14, 4.5, T.accents[i % T.accents.length]));
+    for (let i = 0; i < 4; i++) { disc(640 + i * 12, 74, 4, '#fff'); x.strokeStyle = '#C9C2B4'; x.lineWidth = 1; x.stroke() }
+    x.restore();
+    // labels
+    const labels = [['Орц', 90, 486], ['Кофе захиалга', 690 + dx, 110 + dy]];
+    if (L.windowBar) labels.push(['Цонхны баар', ...L.windowBar.label]);
+    L.long.forEach(t => t.label && labels.push([t.name, ...t.label]));
+    L.sofas.forEach(f => f.label && labels.push([f.name || 'Буйдан', ...f.label]));
+    x.font = '700 11px Manrope, sans-serif'; x.fillStyle = T.label; x.textAlign = 'center'; labels.forEach(([t, a, b]) => x.fillText(t, a, b));
+    // chairs (static silhouettes)
+    this.seats.forEach(s => {
+      if (s.kind === 'sofa') return; x.save(); x.translate(s.x, s.y);
+      if (s.kind === 'stool') { disc(1, 2, 10, 'rgba(0,0,0,.12)'); disc(0, 0, 10, T.stool[0]); disc(0, 0, 7.5, T.stool[1]) }
+      else { x.rotate(s.ang + Math.PI / 2); x.fillStyle = 'rgba(0,0,0,.1)'; rr(-9, -7, 19, 19, 4); x.fill(); x.fillStyle = T.chair[0]; rr(-10, -9, 20, 18, T.thin ? 3 : 4); x.fill(); x.strokeStyle = T.chair[1]; x.lineWidth = T.thin ? 1.2 : 1.5; x.stroke(); x.fillStyle = T.chair[1]; rr(-10, 6, 20, 5, 2.5); x.fill() }
+      x.restore()
+    });
+    return c
+  }
   person(x, p, px, py, ang, walking, time = p.t) {
     const s = walking ? Math.sin(time * 11) * 3.6 : 0; x.save(); x.translate(px, py); x.rotate(ang + Math.PI / 2); x.globalAlpha = p.alpha ?? 1;
     x.fillStyle = 'rgba(62,42,23,.18)'; x.beginPath(); x.ellipse(1, 3, 10, 7, 0, 0, 7); x.fill();
@@ -241,6 +355,7 @@ class FloorPlan {
     this.parts.forEach(q => { x.fillStyle = `rgba(255,255,255,${q.l * .7})`; x.beginPath(); x.arc(q.x, q.y, q.r, 0, 7); x.fill() });
     this.fx.forEach(f => { x.strokeStyle = f.c; x.globalAlpha = 1 - f.t / .8; x.lineWidth = 2.5; x.beginPath(); x.arc(f.x, f.y, 10 + f.t * 30, 0, 7); x.stroke(); x.globalAlpha = 1 });
     if (this.sel) { const s = this.sel; x.save(); x.translate(s.x, s.y); x.rotate(this.reduced ? 0 : t * 1.2); x.strokeStyle = '#7B542F'; x.lineWidth = 2.2; x.setLineDash([5, 4]); x.beginPath(); x.arc(0, 0, 20, 0, 7); x.stroke(); x.restore(); x.setLineDash([]) }
+    this.o.overlay && this.o.overlay(x)
   }
   bub(x, bx, by, k, kind) {
     if (k <= 0) return; x.save(); x.translate(bx, by); x.scale(k, k); x.fillStyle = '#fff'; x.strokeStyle = '#7B542F'; x.lineWidth = 1.4; this.rr(x, -12, -16, 24, 15, 6); x.fill(); x.stroke(); x.beginPath(); x.moveTo(-3, -1.5); x.lineTo(0, 4); x.lineTo(3, -1.5); x.fill();
@@ -248,4 +363,4 @@ class FloorPlan {
   }
 }
 
-export { FloorPlan, ZONES };
+export { FloorPlan, ZONES, THEMES };
