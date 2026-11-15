@@ -35,7 +35,7 @@ export async function loadCatalogue() {
 let channel = null;
 function startLive() {
   channel = createLiveChannel({
-    streamUrl: '/api/v1/stream',
+    streamUrl: platform.config.stream_enabled === false ? null : '/api/v1/stream',
     events: ['measurement', 'cafe', 'catalog', 'sensor.telemetry', 'sensor.status'],
     poll: async () => (await api.get('/live')).updates.map(u => ['measurement', u]),
     interval: platform.config.poll_interval_sec * 1000,

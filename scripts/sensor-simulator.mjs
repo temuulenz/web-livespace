@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { startHeartbeat } from './lib/ws-heartbeat.mjs';
 import { randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline/promises';
@@ -8,8 +9,8 @@ import { SENSOR_ID } from '../server/lib/telemetry-schema.mjs';
 
 export function simulatorOptions(args = process.argv.slice(2), env = process.env) {
   const defaults = { url: 'ws://127.0.0.1:8080/ws/sensors', device: '', location: '', token: env.LS_SENSOR_TOKEN || '',
-    interval: '5000', people: '8', noise: '-37.1', battery: '85', mode: 'auto', count: '0',
-    'disconnect-every': '0', 'duplicate-every': '0', 'invalid-every': '0', 'reconnect-ms': '1000' };
+    interval: '15000', people: '8', noise: '-37.1', battery: '85', mode: 'auto', count: '0',
+    'heartbeat-ms': '30000', 'disconnect-every': '0', 'duplicate-every': '0', 'invalid-every': '0', 'reconnect-ms': '1000' };
   const { values } = parseArgs({ args, options: { ...Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, { type: 'string', default: value }])), help: { type: 'boolean', default: false } } });
   if (values.help) return values;
   const url = new URL(values.url);
@@ -18,7 +19,7 @@ export function simulatorOptions(args = process.argv.slice(2), env = process.env
   if (!/^lsd_[A-Za-z0-9_-]{1,128}$/.test(values.token)) throw new Error('Set LS_SENSOR_TOKEN or --token to the registered device token');
   if (!['auto', 'manual'].includes(values.mode)) throw new Error('--mode must be auto or manual');
   for (const [key, min, max, integer] of [
-    ['interval', 1, 86400000, true], ['people', 0, 10000, true], ['noise', -160, 0], ['battery', 0, 100], ['count', 0, 1000000, true],
+    ['heartbeat-ms', 1, 60000, true], ['interval', 1, 86400000, true], ['people', 0, 10000, true], ['noise', -160, 0], ['battery', 0, 100], ['count', 0, 1000000, true],
     ['disconnect-every', 0, 1000000, true], ['duplicate-every', 0, 1000000, true], ['invalid-every', 0, 1000000, true], ['reconnect-ms', 1, 60000, true]
   ]) {
     const number = Number(values[key]);
@@ -29,12 +30,13 @@ export function simulatorOptions(args = process.argv.slice(2), env = process.env
 }
 
 export async function runSimulator(options, { signal, log = data => console.log(JSON.stringify(data)), input = process.stdin, output = process.stdout } = {}) {
-  let socket, sent = 0;
+  let socket, connecting = null, stopping = false, heartbeatRecovery = null, sent = 0;
   const started = Date.now();
   function connect() {
     signal?.throwIfAborted();
     if (socket?.readyState === WebSocket.OPEN) return Promise.resolve(socket);
-    return new Promise((resolve, reject) => {
+    if (connecting) return connecting;
+    const attempt = new Promise((resolve, reject) => {
       const ws = socket = new WebSocket(options.url, { headers: { Authorization: `Bearer ${options.token}` }, handshakeTimeout: 5000, maxPayload: 16384, perMessageDeflate: false });
       const timer = setTimeout(() => { ws.terminate(); reject(new Error('network_ready_timeout')); }, 5000);
       const abort = () => ws.terminate();
@@ -53,10 +55,27 @@ export async function runSimulator(options, { signal, log = data => console.log(
         if (ready.type !== 'sensor.ready' || ready.schemaVersion !== 1 || ready.deviceId !== options.device || ready.locationId !== options.location || ready.dataSource !== 'simulated') {
           fail(new Error('Simulator requires its assigned test/simulator device; refusing to send to a real registration')); return;
         }
+        startHeartbeat(ws, { intervalMs: options['heartbeat-ms'] || 30000, onTimeout: () => {
+          log({ event: 'heartbeat_timeout' });
+          if (!stopping && !heartbeatRecovery) heartbeatRecovery = recoverHeartbeat().finally(() => { heartbeatRecovery = null; });
+        } });
         log({ event: 'connected', deviceId: ready.deviceId, locationId: ready.locationId, dataSource: ready.dataSource });
         resolve(ws);
       });
     });
+    connecting = attempt;
+    return attempt.finally(() => { if (connecting === attempt) connecting = null; });
+  }
+  async function recoverHeartbeat() {
+    while (!stopping && !signal?.aborted) {
+      try {
+        await delay(options['reconnect-ms'], undefined, { signal });
+        if (stopping) return;
+        await connect(); return;
+      } catch (error) {
+        if (!error.message.startsWith('network_')) { log({ event: 'heartbeat_reconnect_failed' }); return; }
+      }
+    }
   }
   async function exchange(payload, disconnect = false) {
     const ws = await connect();
@@ -132,6 +151,8 @@ export async function runSimulator(options, { signal, log = data => console.log(
     }
     return { sent };
   } finally {
+    stopping = true;
+    await heartbeatRecovery;
     if (socket && socket.readyState !== WebSocket.CLOSED) await new Promise(resolve => {
       const timer = setTimeout(() => { socket.terminate(); resolve(); }, 1000); timer.unref();
       socket.once('close', () => { clearTimeout(timer); resolve(); });
@@ -145,7 +166,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   process.once('SIGINT', () => controller.abort()); process.once('SIGTERM', () => controller.abort());
   try {
     const options = simulatorOptions();
-    if (options.help) console.log('Usage: npm run sensor:simulate -- --device LS-SIM-001 --location CAFE-ID [--url ws://127.0.0.1:8080/ws/sensors] [--token lsd_...] [--interval 5000] [--people 8] [--noise=-37.1] [--battery 85] [--mode auto|manual] [--count 3] [--disconnect-every 2] [--duplicate-every 2] [--invalid-every 3] [--reconnect-ms 1000]\nPrefer LS_SENSOR_TOKEN to keep credentials out of process arguments.');
+    if (options.help) console.log('Usage: npm run sensor:simulate -- --device LS-SIM-001 --location CAFE-ID [--url ws://127.0.0.1:8080/ws/sensors] [--token lsd_...] [--interval 15000] [--heartbeat-ms 30000] [--people 8] [--noise=-37.1] [--battery 85] [--mode auto|manual] [--count 3] [--disconnect-every 2] [--duplicate-every 2] [--invalid-every 3] [--reconnect-ms 1000]\nPrefer LS_SENSOR_TOKEN to keep credentials out of process arguments.');
     else await runSimulator(options, { signal: controller.signal });
   } catch (error) { if (!controller.signal.aborted) { console.error(error.message); process.exitCode = 1; } }
 }

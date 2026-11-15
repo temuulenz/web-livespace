@@ -10,13 +10,22 @@
     "create-admin": "node --disable-warning=ExperimentalWarning server/create-admin.mjs",
     "device": "node tools/device-client.mjs",
     "sensor:simulate": "node scripts/sensor-simulator.mjs",
-    "test:sensors": "node --disable-warning=ExperimentalWarning --test tests/sensors.test.mjs tests/sensor-views.test.mjs tests/sensor-history.test.mjs",
+    "test:sensors": "node --disable-warning=ExperimentalWarning --test tests/sensors.test.mjs tests/sensor-views.test.mjs tests/sensor-history.test.mjs tests/ws-heartbeat.test.mjs",
     "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.mjs",
     "test:browser": "node tests/browser.mjs",
     "test:visual": "node tests/browser.mjs --visual",
-    "test:e2e": "node --disable-warning=ExperimentalWarning tests/e2e.mjs"
+    "test:e2e": "node --disable-warning=ExperimentalWarning tests/e2e.mjs",
+    "cf:assets": "node scripts/cloudflare-assets.mjs",
+    "cf:dev": "wrangler dev --local",
+    "cf:migrate": "wrangler d1 migrations apply livespace --local",
+    "cf:check": "wrangler deploy --dry-run",
+    "test:cloudflare": "node --disable-warning=ExperimentalWarning tests/cloudflare.mjs",
+    "cf:write-budget": "node scripts/cloudflare-write-budget.mjs"
   },
   "dependencies": {
     "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.162.0"
   }
 }

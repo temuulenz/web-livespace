@@ -21,7 +21,7 @@ npm run sensor:simulate -- --device LS-SIM-001 --location ACTUAL-CAFE-ID --peopl
 npm run sensor:simulate -- --device LS-SIM-001 --location ACTUAL-CAFE-ID --mode manual
 ```
 
-Default interval: 5 seconds. Simulator data is explicitly tagged simulated, and the tool refuses real registrations. See the backend guide for duplicates/invalid messages/network failures and private-LAN phone access.
+Default simulator interval: 15 seconds; use `--interval 5000` for short demonstrations. Client protocol heartbeat: 30 seconds. Simulator data is explicitly tagged simulated, and the tool refuses real registrations. See the backend guide for duplicates/invalid messages/network failures and private-LAN phone access.
 
 **Static demo** (as before; no backend features):
 
@@ -68,3 +68,7 @@ npm.cmd run test:visual   # screenshots into .artifacts/
 - **Visual baseline.** `.artifacts/before` holds screenshots of the original for comparison. The homepage, map colour and café page differ on purpose.
 
 The 2026-10 refactor audit is in [REFACTOR_REPORT.md](REFACTOR_REPORT.md).
+
+## Cloudflare production backend
+
+The backend is deployed at **https://livespace.temuulenbayarjargal.workers.dev** on Workers Free, with D1 and SQLite Durable Objects. The separate implementation preserves the local Node fallback. See [deployment commands and rollout gates](docs/CLOUDFLARE_DEPLOYMENT.md), [local verification](docs/CLOUDFLARE_TESTING.md), and [Phase E checkpoint](docs/PHASE_E_PROGRESS.md). The existing production Worker is named `livespace`. Production verification passed, including authenticated WSS and browser polling. The approved client-originated heartbeat, measured Free-plan budgets, secure device-token path and recovery command are documented there. GitHub main-branch automatic builds remain enabled; no Git operations were performed.

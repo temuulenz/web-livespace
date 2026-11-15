@@ -424,6 +424,9 @@ function buildCafe(c) {
 function tickFreshness() { pageTasks.timeout(() => { const el = $('#cdFresh'); if (el && cdCafe && hasMeasurements(cdCafe)) el.innerHTML = freshnessHTML(cdCafe); tickFreshness() }, 30000) }
 // A new measurement for the open café: update indicators in place, never rebuild the simulation.
 function applyLiveToDetail(c) {
+  // Initial polling may finish before the scheduled detail render. That render
+  // reads the updated cafe; building here would create a second Canvas shortly after.
+  if ($('#app .skel')) return;
   sensorHistoryView?.setProps({ source: c.live?.sensor?.dataSource || 'real' });
   const sensor = $('#publicSensor'); if (sensor) { sensor.innerHTML = sensorPanelHTML(c); sensor.className = c.live?.sensor ? 'card' : ''; }
   if (!$('#planWrap') && c.open && hasMeasurements(c)) { buildCafe(c); return; }

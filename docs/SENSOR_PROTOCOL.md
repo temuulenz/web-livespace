@@ -1,6 +1,6 @@
 # Android edge telemetry protocol v1
 
-**Android integration contract: v1 is finalized for the university demonstration.** Phases C/D add browser views and history APIs; they do not change the device envelope, bearer-header handshake or acknowledgement rules below.
+**Android JSON/authentication/ACK contract: v1 remains finalized.** The owner approved client-originated protocol heartbeat pings for Cloudflare on 2026-11-16; this transport compatibility update does not change schemaVersion 1 or any telemetry/ready/ACK/replay fields. Phases C/D add browser views and history APIs; they do not change the device envelope, bearer-header handshake or acknowledgement rules below.
 
 ## Direct Wi-Fi quick start (no USB or ADB)
 
@@ -8,7 +8,7 @@
 2. Put the computer and phone on the same private Wi-Fi, allow TCP 8080 from that LAN in the computer's firewall, and use the computer's LAN IPv4 address (for example `192.168.1.240`; this was the host address checked on 2026-11-16). Guest-network client isolation must be disabled or use a Wi-Fi network that permits clients to communicate.
 3. Open `http://192.168.1.240:8080/api/v1/health` in the phone browser. An `ok: true` response verifies Wi-Fi reachability before configuring the Android app. Replace the example IP with the computer's actual IP; localhost on the phone is the phone itself.
 4. In the website admin Devices tab, register `LS-NOTE4-001`, assign the intended cafe, choose kind `sensor`, and leave test mode off for physical observations. Copy the one-time token. Register the virtual sensor separately as kind `simulator`; never share its token with the real phone.
-5. Configure Android/OkHttp with `ws://192.168.1.240:8080/ws/sensors`, upgrade header `Authorization: Bearer <one-time-token>`, and the exact registered device ID and assigned cafe ID. `locationId` is the database cafe ID, not the cafe's display name. Wait for `sensor.ready` and verify both IDs, then send the JSON schema below every 5 seconds.
+5. Configure Android/OkHttp with `ws://192.168.1.240:8080/ws/sensors`, upgrade header `Authorization: Bearer <one-time-token>`, and the exact registered device ID and assigned cafe ID. `locationId` is the database cafe ID, not the cafe's display name. Wait for `sensor.ready` and verify both IDs, then send the JSON schema below every 15 seconds for initial single-device production testing (5 seconds is supported for short demonstrations).
 6. Use UTC timestamps, a new persistent UUID per logical reading, and a durable Android SQLite outbox. Delete an entry only after a matching accepted/duplicate acknowledgement. Automatically answer ping (OkHttp does this); reconnect with exponential delay/jitter (suggested 1–30 seconds), retaining the same envelope/ID for unacknowledged retries.
 
 These `ws://` settings are for the private local demonstration. Production requires `wss://` and normal certificate verification. No USB, ADB, tunnel, TLS bypass or public port forwarding is required.
@@ -123,7 +123,32 @@ Correlation IDs appear only when valid. Errors never echo arbitrary input or cre
 
 Failed upgrades return JSON HTTP 401/403/404/409/429/503. Defaults: 16 KiB/message, compression disabled, 120 messages/minute/device including invalid/duplicate messages, 60 upgrades/minute/IP, 500 connected devices. Binary messages are rejected. Oversized/framing violations close at transport level (1009 for oversized messages), so a JSON error is not guaranteed. Five invalid application messages close with 1008; authorization/rate violations close immediately.
 
-The server pings every 30 seconds. OkHttp automatically answers control pings; missing pong on the next sweep terminates the socket. Pongs do not refresh telemetry. A reading older than 30 seconds is stale; after 600 seconds without an accepted reading, even a connected device is offline. Disconnect is offline immediately. Sweeps run at heartbeat resolution. Shutdown sends 1001 and waits up to one second before terminating sockets; retry unacknowledged entries after reconnect.
+**Heartbeat transport compatibility update (approved 2026-11-16):**
+
+- **Cloudflare:** the Android/client originates an RFC 6455 **control ping every 30 seconds**. Cloudflare automatically replies with the matching control pong without invoking `webSocketMessage` or interrupting hibernation. Do not send JSON `ping` messages: they are outside this telemetry schema. Configure OkHttp `pingInterval(30, TimeUnit.SECONDS)`. If its previous ping has no pong by the next interval, OkHttp fails the WebSocket; `onFailure` must schedule a new connection with exponential backoff/jitter and replay the unchanged SQLite outbox. OkHttp does not automatically recreate a failed WebSocket for the application.
+- **Node fallback:** existing server-originated 30-second pings and missing-pong termination remain unchanged. Node also automatically answers client-originated control pings, so the same Android client works against both transports. Existing clients that only answer Node server pings keep working on Node; Cloudflare clients must originate their own pings.
+- **Freshness is separate:** neither ping nor pong changes measurement timestamps, replay receipts or `last_seen_at`. Cloudflare authorization sweeps run every 30 seconds. Staleness derives from observation timestamps (default 30 seconds); offline derives from 600 seconds without accepted telemetry, even on an otherwise live transport. A clean disconnect is offline immediately. Longer fleet telemetry cadences require the documented explicit stale-threshold configuration; a pong never makes an old reading fresh.
+- Node shutdown sends 1001 and waits up to one second before terminating sockets. Cloudflare controls runtime deployment/shutdown; clients must reconnect and replay when the transport closes or fails.
+
+Android-compatible configuration (normal TLS verification remains enabled):
+
+```java
+import java.util.concurrent.TimeUnit;
+
+OkHttpClient client = new OkHttpClient.Builder()
+    .pingInterval(30, TimeUnit.SECONDS)
+    .build();
+Request request = new Request.Builder()
+    .url("wss://livespace.temuulenbayarjargal.workers.dev/ws/sensors")
+    .header("Authorization", "Bearer " + storedDeviceToken)
+    .build();
+// In WebSocketListener.onFailure/onClosed: schedule reconnect with jitter,
+// wait for sensor.ready, then replay the same durable outbox envelopes/IDs.
+```
+
+The initial single physical sensor uses **15-second telemetry**, independently of the 30-second heartbeat. Use **5 seconds only for short demos**. See [measured Free-plan fleet budgets](CLOUDFLARE_DEPLOYMENT.md#free-plan-budget-and-limitations) before running three or five devices continuously.
+
+References: [Cloudflare automatic ping/pong and hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/#automatic-pingpong-handling), [OkHttp pingInterval behavior](https://square.github.io/okhttp/3.x/okhttp/okhttp3/OkHttpClient.Builder.html#pingInterval-long-java.util.concurrent.TimeUnit-).
 
 ## Existing browser SSE
 
@@ -140,3 +165,7 @@ SSE is best-effort without persistent replay. The `/api/v1/live` polling fallbac
 Admins can temporarily disable/enable credentials with `PATCH /api/v1/admin/devices/:id` and a boolean `enabled`; disabled credentials fail authentication until enabled again. `DELETE` remains permanent revocation. The gateway rechecks the registration, and the existing owner/admin dashboards display private diagnostics through their authenticated HTTP APIs.
 
 Public `GET /api/v1/cafes/:id/sensor-history` is available for active live-mode cafes. Owner/admin equivalents are `/api/v1/owner/cafes/:id/sensor-history` and `/api/v1/admin/cafes/:id/sensor-history`; owner access is cafe-scoped. Query `source=real|simulated|manual` (default real), `interval=5|15|60`, ISO `since`/`until` (up to 31 days), optional `device_id`, and `limit=1..500`. These return historical readings and source-separated aggregates, not predictions. Public history excludes diagnostics and device IDs. Full response semantics and the rehearsal sequence are in [SENSOR_BACKEND.md](SENSOR_BACKEND.md) and [SENSOR_DEMO.md](SENSOR_DEMO.md).
+
+## Cloudflare production target
+
+The deployed and verified production endpoint is `wss://livespace.temuulenbayarjargal.workers.dev/ws/sensors`. Use device `LS-NOTE4-001`, location `I`, kind `sensor`, test mode off, and its separate one-time bearer token. The heartbeat adaptation above is approved; deployment/account verification status is tracked in [Phase E progress](PHASE_E_PROGRESS.md). See [deployment and secure token retrieval](CLOUDFLARE_DEPLOYMENT.md) before connecting the physical device. No schema version change, USB, ADB, tunnel or certificate bypass is required.

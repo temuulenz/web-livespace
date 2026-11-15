@@ -309,3 +309,15 @@ test('manual simulation accepts commands and refuses real sensor registrations',
   assert.equal(server.app.deps.db.prepare('SELECT observed_people FROM measurements WHERE device_id = ?').get(device.id).observed_people, 12);
   const real = await register(); await assert.rejects(runSimulator({ ...options, device: real.id, token: real.token }, { log: () => {} }), /refusing to send/); assert.equal(count(real), 0);
 });
+
+test('Node accepts client-originated control pings without changing telemetry freshness', async () => {
+ const device=await register();const client=await connect(device);
+ try {
+  await client.send(telemetry(device));
+  const before=server.app.deps.db.prepare('SELECT last_seen_at FROM devices WHERE id=?').get(device.id).last_seen_at;
+  const pong=once(client.ws,'pong');client.ws.ping('android-heartbeat');
+  assert.equal((await pong)[0].toString(),'android-heartbeat');
+  const after=server.app.deps.db.prepare('SELECT last_seen_at FROM devices WHERE id=?').get(device.id).last_seen_at;
+  assert.equal(after,before);
+ }finally{await client.close();}
+});

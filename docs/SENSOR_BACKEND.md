@@ -40,7 +40,7 @@ npm run sensor:simulate -- --device LS-SIM-001 --location ACTUAL-CAFE-ID \
 npm run sensor:simulate -- --device LS-SIM-001 --location ACTUAL-CAFE-ID --mode manual
 ```
 
-The default interval is 5000 ms; `--noise` is dBFS. `--reconnect-ms` defaults to 1000; `--help` lists all options. The CLI uses the same bearer-header upgrade/protocol as Android, refuses real registrations and retains a pending envelope in memory across reconnects. It does not implement Android's persistent SQLite outbox. SIGINT/SIGTERM close the socket. Tokens supplied through `LS_SENSOR_TOKEN` avoid process-argument exposure and are never logged.
+The simulator default interval is 15000 ms (use `--interval 5000` for a short demonstration); control heartbeat pings default to 30000 ms; `--noise` is dBFS. `--reconnect-ms` defaults to 1000; `--help` lists all options. The CLI uses the same bearer-header upgrade/protocol as Android, refuses real registrations and retains a pending envelope in memory across reconnects. It does not implement Android's persistent SQLite outbox. SIGINT/SIGTERM close the socket. Tokens supplied through `LS_SENSOR_TOKEN` avoid process-argument exposure and are never logged.
 
 For public SSE checks, use a development cafe with status `active` and `data_mode: live`. Demo-mode cafe metrics remain demo data. Use a development database rather than changing production records for simulator testing.
 
@@ -85,7 +85,7 @@ Optional retention runs hourly, using receipt age, and deletes only expired new 
 | Authentication | Upgrade header `Authorization: Bearer <registered-token>` |
 | IDs | Registered device ID and assigned cafe ID, verified against `sensor.ready` |
 | Schema/type | Numeric `schemaVersion: 1`, `type: sensor.telemetry` |
-| Reporting interval | Suggested 5 seconds |
+| Reporting interval | Initial single-device Cloudflare test: 15 seconds; short local/demo use: 5 seconds |
 | Wire format | UTF-8 JSON text, ≤16384 bytes by default |
 | Ping/pong | OkHttp automatic pong; server ping every 30 seconds |
 | Offline queue | Android SQLite; stable envelope/ID until accepted or duplicate ack |

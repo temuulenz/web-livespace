@@ -99,6 +99,8 @@ try {
       input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     await waitFor(`document.querySelectorAll('#phGrid .ph').length === 3`);
     await shot('partner-form');
+    await click('#pf [data-next]');
+    await click('#pf [data-next]');
     await evaluate(`document.querySelector('#pf').requestSubmit()`);
     await waitFor(`!!document.querySelector('#modal .auth-form') && !!document.querySelector('#pf .done')`, 200);
     assert.equal(await evaluate(`document.querySelector('#au-email').value`), 'owner@nomt.mn');
