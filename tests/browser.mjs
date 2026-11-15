@@ -23,7 +23,9 @@ async function waitFor(expression) {
 }
 let navigation = 0;
 async function navigate(hash) {
+  const start = events.length;
   await send('Page.navigate', { url: origin + '/?case=' + ++navigation + hash });
+  for (let n = 0; n < 200 && !events.slice(start).some(e => e.method === 'Page.loadEventFired'); n++) await delay(50);
   await waitFor(`document.querySelector('#app')?.children.length > 0`);
   await evaluate(`document.fonts.ready`);
   if (hash === '#cafe-A' || hash === '#staff') await waitFor(`!!document.querySelector('canvas')`);
@@ -191,11 +193,13 @@ try {
   await check('partner form validation and demo submission', async () => {
     await navigate('#partner');
     await evaluate(`document.querySelector('#pf').requestSubmit()`);
-    // The original four fields plus address, description and the 3–4 photos.
-    assert.equal(await evaluate(`document.querySelectorAll('.fld.err').length`), 7);
+    // The merged three-step form validates the visible contact step first.
+    assert.equal(await evaluate(`document.querySelectorAll('.fld.err').length`), 3);
     for (const [selector, value] of [['#f1','Cafe'],['#f2','Test'],['#f3','88000000'],['#f4','test@example.com'],['#f8','Seoul street 1'],['#f12','Quiet cafe']]) await input(selector, value);
     await evaluate(`(() => { const input = document.querySelector('#fPhotos'), dt = new DataTransfer(); for (let i = 0; i < 3; i++) dt.items.add(new File([new Uint8Array([137,80,78,71,13,10,26,10])], 'p' + i + '.png', { type: 'image/png' })); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     assert.equal(await evaluate(`document.querySelectorAll('#phGrid .ph').length`), 3);
+    await click('#pf [data-next]');
+    await click('#pf [data-next]');
     await evaluate(`document.querySelector('#pf').requestSubmit()`);
     assert.equal(await evaluate(`!!document.querySelector('#pf .done')`), true);
   });

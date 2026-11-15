@@ -7,6 +7,8 @@ import { createRealtimeHub } from './lib/realtime.mjs';
 import { createCafeService } from './services/cafes.mjs';
 import { createUploads } from './services/uploads.mjs';
 import { createCustomizer } from './services/visualization.mjs';
+import { createSensorService } from './services/sensors.mjs';
+import { createSensorGateway } from './lib/sensor-gateway.mjs';
 import { seedDemoCafes, ensureAdmin } from './seed.mjs';
 import * as publicRoutes from './routes/public.mjs';
 import * as authRoutes from './routes/auth.mjs';
@@ -14,6 +16,7 @@ import * as partnerRoutes from './routes/partner.mjs';
 import * as ownerRoutes from './routes/owner.mjs';
 import * as adminRoutes from './routes/admin.mjs';
 import * as ingestRoutes from './routes/ingest.mjs';
+import * as sensorHistoryRoutes from './routes/sensor-history.mjs';
 
 export async function createApp(config) {
   const db = openDatabase(config.dbFile);
@@ -31,7 +34,7 @@ export async function createApp(config) {
   };
 
   const api = createRouter();
-  for (const routes of [publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes]) routes.register(api, deps);
+  for (const routes of [publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes]) routes.register(api, deps);
   const serveStatic = createStaticHandler(config.staticDir);
 
   async function handle(req, res) {
@@ -55,10 +58,26 @@ export async function createApp(config) {
   }
 
   const server = createServer(handle);
+  deps.sensors = createSensorService(deps);
+  deps.sensorGateway = createSensorGateway(server, deps);
   const purge = setInterval(() => deps.sessions.purge(), 3600 * 1000); purge.unref();
+  let closePromise;
   return {
     server, deps,
-    listen: (port = config.port, host = config.host) => new Promise(resolve => server.listen(port, host, () => resolve(server.address()))),
-    async close() { deps.hub.close(); clearInterval(purge); await new Promise(resolve => server.close(resolve)); server.closeAllConnections?.(); db.close(); }
+    listen: (port = config.port, host = config.host) => new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, () => { server.off('error', reject); resolve(server.address()); });
+    }),
+    close() {
+      return closePromise ??= (async () => {
+        clearInterval(purge);
+        await deps.sensorGateway.close();
+        deps.hub.close();
+        const stopped = new Promise(resolve => server.close(resolve));
+        server.closeAllConnections?.();
+        await stopped;
+        db.close();
+      })();
+    }
   };
 }

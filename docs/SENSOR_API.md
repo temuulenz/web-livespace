@@ -1,5 +1,7 @@
 # Sensor data: format, ingestion and real-time updates
 
+This is the original HTTP measurement API, which remains supported. Android/OkHttp and the development simulator use the [WebSocket telemetry protocol](SENSOR_PROTOCOL.md); see [backend setup](SENSOR_BACKEND.md). Its numeric `schemaVersion: 1` envelope carries observed people and explicit RMS/dBFS/calibration fields. The legacy HTTP format remains unchanged; test/simulator readings now also receive an explicit simulated source tag in storage.
+
 This is the contract between the devices installed in partner cafés (cameras, noise sensors, Wi-Fi probes, or a gateway that combines them) and the LiveSpace backend.
 
 ## 1. Register a device

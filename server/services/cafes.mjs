@@ -1,9 +1,13 @@
 // Café records for the public site, built from static info + the latest measurements.
 import { json } from '../lib/db.mjs';
+import { sensorSnapshot } from './sensor-state.mjs';
 import { noiseLevel, wifiLevel, occupancyPercent, openState, ulaanbaatarMinutes, walkFrom } from '../../js/live/levels.js';
 
 export function createCafeService(db, config) {
-  const recent = db.prepare('SELECT * FROM measurements WHERE cafe_id = ? AND is_test = ? ORDER BY ts DESC, id DESC LIMIT 30');
+  // People-only frames must not evict legacy seat/Wi-Fi data from the lookback.
+  const recent = db.prepare(`SELECT * FROM measurements WHERE cafe_id = ? AND is_test = ?
+    AND (available_seats IS NOT NULL OR occupied_seats IS NOT NULL OR noise_db IS NOT NULL OR wifi_quality IS NOT NULL OR wifi_down_mbps IS NOT NULL)
+    ORDER BY ts DESC, id DESC LIMIT 30`);
   const activeRows = db.prepare("SELECT * FROM cafes WHERE status = 'active' ORDER BY sort_order, created_at");
   const byId = db.prepare('SELECT * FROM cafes WHERE id = ?');
 
@@ -30,7 +34,14 @@ export function createCafeService(db, config) {
   // mode: 'demo' (labelled example values) | 'live' (real sensors) | 'test' (test devices only) | 'none' (no data yet)
   function liveSummary(row) {
     if (row.data_mode === 'demo') return { mode: 'demo', updated_at: null, stale: false };
-    return liveFromRows(recent.all(row.id, 0), 'live') || liveFromRows(recent.all(row.id, 1), 'test') || { mode: 'none', updated_at: null, stale: false };
+    const real = liveFromRows(recent.all(row.id, 0), 'live'), realSensor = sensorSnapshot(db, config, row.id, 'real');
+    const mode = real || realSensor ? 'live' : 'test';
+    const sensor = realSensor || (mode === 'test' ? sensorSnapshot(db, config, row.id, 'simulated') : null);
+    const legacy = mode === 'live' ? real : liveFromRows(recent.all(row.id, 1), 'test');
+    if (!legacy && !sensor) return { mode: 'none', updated_at: null, stale: false };
+    const updated = [legacy?.updated_at, sensor?.timestamp].filter(Boolean).sort().at(-1);
+    return { ...legacy, mode, updated_at: updated, stale: sensor ? Date.now() - Date.parse(sensor.timestamp) > config.sensorStaleAfterSec * 1000 : legacy.stale,
+      ...(sensor ? { sensor } : {}) };
   }
 
   function publicCafe(row, minutes = ulaanbaatarMinutes()) {
@@ -51,7 +62,7 @@ export function createCafeService(db, config) {
       ...base, dist, walk, open: open && has, opens: has ? opens : null, note: row.description.slice(0, 120),
       // No measurement yet: say so instead of showing invented numbers.
       status_text: has ? null : 'Бодит хэмжилт хараахан ирээгүй',
-      occ: has && live.free_pct != null ? 100 - live.free_pct : 0,
+      occ: has && live.free_pct != null ? 100 - live.free_pct : null,
       sound: has ? live.noise_level || 0 : 0,
       wifi: has ? live.wifi_level || 0 : 0,
       mbps: has && live.wifi_mbps != null ? Math.round(live.wifi_mbps) : null,

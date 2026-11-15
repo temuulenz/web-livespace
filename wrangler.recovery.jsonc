@@ -1,0 +1,56 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "livespace",
+  "account_id": "9e5256db4932b2064ca5982039f4e121",
+  "main": "cloudflare/recovery.mjs",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "assets": {
+    "directory": ".artifacts/production-before/2026-11-15T19-23-41.351Z/assets",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/ws/*"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "livespace",
+      "database_id": "40e181a5-4058-4f82-bdf2-e26c79392056",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SENSORS",
+        "class_name": "SensorGateway"
+      },
+      {
+        "name": "BACKEND",
+        "class_name": "AppBackend"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "sensor-v1",
+      "new_sqlite_classes": [
+        "SensorGateway",
+        "AppBackend"
+      ]
+    }
+  ],
+  "vars": {
+    "LS_POLL_INTERVAL_SEC": "10",
+    "LS_SENSOR_EXPECTED_INTERVAL_SEC": "15",
+    "LS_SENSOR_STALE_AFTER_SEC": "30"
+  },
+  "observability": {
+    "enabled": false
+  }
+}
