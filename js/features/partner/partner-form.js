@@ -1,5 +1,6 @@
 // "Хамтран ажиллах" application form and the café-owner account step that follows it.
 //
+// The form is split into three steps: 1) contact person, 2) café details, 3) photos.
 // The original form fields (f1–f7) keep their ids and look; the additions are the
 // address, opening hours, seats, purposes, a description and 3–4 photographs that
 // our team uses to build the café's own animated interior.
@@ -19,21 +20,42 @@ const MAX_PHOTOS = 4, MIN_PHOTOS = 3;
 export function partnerFormHTML() {
   const text = ([id, label, placeholder, type, req]) => `<div class="fld"><label for="${id}">${label}</label><input id="${id}" type="${type}" placeholder="${placeholder}" ${req ? 'required' : ''}><span class="em"></span></div>`;
   return `<form class="form" id="pf" novalidate>
-  ${[['f1', 'Кафены нэр', 'Жишээ: Кафе A', 'text', 1], ['f2', 'Холбоо барих хүн', 'Овог, нэр', 'text', 1], ['f3', 'Утасны дугаар', '8800 0000', 'tel', 1], ['f4', 'И-мэйл', 'name@example.com', 'email', 1]].map(text).join('')}
-  <div class="fld"><label for="f5">Дүүрэг</label><select id="f5"><option>Сүхбаатар</option><option>Чингэлтэй</option><option>Баянгол</option><option>Хан-Уул</option><option>Баянзүрх</option><option>Сонгинохайрхан</option></select></div>
-  <div class="fld"><label for="f6">Байгууллагын төрөл</label><select id="f6"><option>Кафе</option><option>Коворкинг</option><option>Номын сан</option></select></div>
-  <div class="fld full"><label for="f8">Хаяг</label><input id="f8" type="text" placeholder="Гудамж, байр, давхар — газрын зураг дээр байршуулахад хэрэгтэй" required data-kind="text"><span class="em"></span></div>
-  <div class="fld"><label for="f9">Ажлын цаг</label><div class="pf-hours"><input id="f9" type="time" value="08:00" required aria-label="Нээх цаг"><span>–</span><input id="f10" type="time" value="22:00" required aria-label="Хаах цаг"></div><span class="em"></span></div>
-  <div class="fld"><label for="f11">Суудлын тоо <small class="muted">(заавал биш)</small></label><input id="f11" type="number" min="1" max="2000" inputmode="numeric" placeholder="Жишээ: 30"><span class="em"></span></div>
-  <div class="fld full"><label>Юунд тохиромжтой вэ?</label><div class="chips pf-purp">${PURPOSES.map(([p, ic]) => `<label class="chip"><input type="checkbox" name="purposes" value="${p}">${ic}${p}</label>`).join('')}</div></div>
-  <div class="fld full"><label for="f12">Кафены тухай</label><textarea id="f12" rows="3" placeholder="Орчин, онцлог, хэн ихэвчлэн ирдэг вэ" required data-kind="text"></textarea><span class="em"></span></div>
-  <div class="fld full"><label for="f7">Нэмэлт мэдээлэл</label><textarea id="f7" rows="3" placeholder="Кафенийхаа тухай товч бичнэ үү"></textarea></div>
-  <div class="fld full pf-photos"><label for="fPhotos">Кафены зураг <small class="muted">(3–4 ширхэг)</small></label>
-   <p class="muted pf-hint">Орц, танхим, суудал, лангууны зургийг оруулаарай. Манай баг эдгээрээр танай кафены өөрийн хөдөлгөөнт зураглалыг бүтээнэ.</p>
-   <div class="ph-grid" id="phGrid"></div>
-   <label class="ph-add" for="fPhotos">${I.photo}<span>Зураг нэмэх</span><input id="fPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
-   <span class="em"></span></div>
-  <div class="fld full" style="flex-direction:row;align-items:center;gap:14px;flex-wrap:wrap"><button class="btn btn-p">Хүсэлт илгээх</button><span class="muted" style="font-size:13px">Эсвэл: [И-мэйл хаяг] · [Утасны дугаар]</span></div>
+  <ol class="pf-steps">
+    <li class="on"><b>1</b>Хувийн мэдээлэл</li>
+    <li><b>2</b>Кафены мэдээлэл</li>
+    <li><b>3</b>Зураг</li>
+  </ol>
+
+  <fieldset class="pf-step" data-step="1">
+    ${[['f2', 'Холбоо барих хүн', 'Овог, нэр', 'text', 1], ['f3', 'Утасны дугаар', '8800 0000', 'tel', 1], ['f4', 'И-мэйл', 'name@example.com', 'email', 1]].map(text).join('')}
+  </fieldset>
+
+  <fieldset class="pf-step" data-step="2" hidden>
+    ${text(['f1', 'Кафены нэр', 'Жишээ: Кафе A', 'text', 1])}
+    <div class="fld"><label for="f5">Дүүрэг</label><select id="f5"><option>Сүхбаатар</option><option>Чингэлтэй</option><option>Баянгол</option><option>Хан-Уул</option><option>Баянзүрх</option><option>Сонгинохайрхан</option></select></div>
+    <div class="fld"><label for="f6">Байгууллагын төрөл</label><select id="f6"><option>Кафе</option><option>Коворкинг</option><option>Номын сан</option></select></div>
+    <div class="fld full"><label for="f8">Хаяг</label><input id="f8" type="text" placeholder="Гудамж, байр, давхар — газрын зураг дээр байршуулахад хэрэгтэй" required data-kind="text"><span class="em"></span></div>
+    <div class="fld"><label for="f9">Ажлын цаг</label><div class="pf-hours"><input id="f9" type="time" value="08:00" required aria-label="Нээх цаг"><span>–</span><input id="f10" type="time" value="22:00" required aria-label="Хаах цаг"></div><span class="em"></span></div>
+    <div class="fld"><label for="f11">Суудлын тоо <small class="muted">(заавал биш)</small></label><input id="f11" type="number" min="1" max="2000" inputmode="numeric" placeholder="Жишээ: 30"><span class="em"></span></div>
+    <div class="fld full"><label>Юунд тохиромжтой вэ?</label><div class="chips pf-purp">${PURPOSES.map(([p, ic]) => `<label class="chip"><input type="checkbox" name="purposes" value="${p}">${ic}${p}</label>`).join('')}</div></div>
+    <div class="fld full"><label for="f12">Кафены тухай</label><textarea id="f12" rows="3" placeholder="Орчин, онцлог, хэн ихэвчлэн ирдэг вэ" required data-kind="text"></textarea><span class="em"></span></div>
+    <div class="fld full"><label for="f7">Нэмэлт мэдээлэл</label><textarea id="f7" rows="3" placeholder="Кафенийхаа тухай товч бичнэ үү"></textarea></div>
+  </fieldset>
+
+  <fieldset class="pf-step" data-step="3" hidden>
+    <div class="fld full pf-photos"><label for="fPhotos">Кафены зураг <small class="muted">(3–4 ширхэг)</small></label>
+     <p class="muted pf-hint">Орц, танхим, суудал, лангууны зургийг оруулаарай. Манай баг эдгээрээр танай кафены өөрийн хөдөлгөөнт зураглалыг бүтээнэ.</p>
+     <div class="ph-grid" id="phGrid"></div>
+     <label class="ph-add" for="fPhotos">${I.photo}<span>Зураг нэмэх</span><input id="fPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+     <span class="em"></span></div>
+  </fieldset>
+
+  <div class="fld full pf-nav">
+    <button type="button" class="btn btn-g" data-prev hidden>← Буцах</button>
+    <span class="muted" style="font-size:13px">Эсвэл: [И-мэйл хаяг] · [Утасны дугаар]</span>
+    <button type="button" class="btn btn-p" data-next>Үргэлжлүүлэх →</button>
+    <button type="submit" class="btn btn-p" data-submit hidden>Хүсэлт илгээх</button>
+  </div>
  </form>`;
 }
 
@@ -60,21 +82,53 @@ export function bindPartnerForm(form) {
 
   const setError = (el, message) => { const f = el.closest('.fld'); f.classList.toggle('err', !!message); $('.em', f).textContent = message || ''; return !message; };
 
-  form.onsubmit = async e => {
-    e.preventDefault();
+  /* ---------- steps ---------- */
+  const steps = $$('.pf-step', form), dots = $$('.pf-steps li', form);
+  let step = 0;
+  const showStep = n => {
+    step = n;
+    steps.forEach((s, i) => { s.hidden = i !== n; });
+    dots.forEach((d, i) => { d.classList.toggle('on', i === n); d.classList.toggle('past', i < n); });
+    $('[data-prev]', form).hidden = n === 0;
+    $('[data-next]', form).hidden = n === steps.length - 1;
+    $('[data-submit]', form).hidden = n !== steps.length - 1;
+    form.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
+  // Original validation rules, run only for the fields inside `scope` (one step).
+  const validate = scope => {
     let ok = true;
-    // Original rules for the original fields, unchanged.
-    $$('#pf [required]').forEach(i => {
+    $$('[required]', scope).forEach(i => {
       if (i.type === 'time') return;
       const bad = !i.value.trim() || (i.type === 'email' && !/^\S+@\S+\.\S+$/.test(i.value)) || (i.type === 'tel' && i.value.replace(/\D/g, '').length < 8);
       if (!setError(i, bad ? (i.value.trim() ? (i.type === 'email' ? 'И-мэйл хаяг буруу байна' : '8 оронтой дугаар оруулна уу') : 'Энэ талбарыг бөглөнө үү') : '')) ok = false;
     });
-    const open = $('#f9', form).value, close = $('#f10', form).value;
-    if (!setError($('#f9', form), open && close && open !== close ? '' : 'Нээх, хаах цагаа оруулна уу')) ok = false;
-    const seats = $('#f11', form).value;
-    if (!setError($('#f11', form), !seats || (+seats >= 1 && +seats <= 2000 && Number.isInteger(+seats)) ? '' : '1–2000 хооронд тоо')) ok = false;
-    if (!setError(fileInput, photos.length >= MIN_PHOTOS ? '' : `Кафены ${MIN_PHOTOS}–${MAX_PHOTOS} зураг оруулна уу (одоо ${photos.length})`)) ok = false;
-    if (!ok) { Snd.ui('err'); $('.fld.err', form)?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    if (scope.contains($('#f9', form))) {
+      const open = $('#f9', form).value, close = $('#f10', form).value;
+      if (!setError($('#f9', form), open && close && open !== close ? '' : 'Нээх, хаах цагаа оруулна уу')) ok = false;
+    }
+    if (scope.contains($('#f11', form))) {
+      const seats = $('#f11', form).value;
+      if (!setError($('#f11', form), !seats || (+seats >= 1 && +seats <= 2000 && Number.isInteger(+seats)) ? '' : '1–2000 хооронд тоо')) ok = false;
+    }
+    if (scope.contains(fileInput)) {
+      if (!setError(fileInput, photos.length >= MIN_PHOTOS ? '' : `Кафены ${MIN_PHOTOS}–${MAX_PHOTOS} зураг оруулна уу (одоо ${photos.length})`)) ok = false;
+    }
+    return ok;
+  };
+
+  $('[data-next]', form).onclick = () => {
+    if (!validate(steps[step])) { Snd.ui('err'); $('.fld.err', steps[step])?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    Snd.ui('click'); showStep(step + 1);
+  };
+  $('[data-prev]', form).onclick = () => { Snd.ui('click'); showStep(step - 1); };
+
+  form.onsubmit = async e => {
+    e.preventDefault();
+    if (step < steps.length - 1) { $('[data-next]', form).click(); return; } // Enter pressed on step 1 or 2
+    const bad = steps.findIndex(s => !validate(s));
+    if (bad !== -1) { Snd.ui('err'); showStep(bad); return; }
+    const open = $('#f9', form).value, close = $('#f10', form).value, seats = $('#f11', form).value;
 
     const values = readForm(form);
     const body = {
@@ -87,8 +141,9 @@ export function bindPartnerForm(form) {
     // Static demo without a backend: behave like the original prototype.
     if (!platform.online) { Snd.ui('chime'); form.innerHTML = doneHTML('Хүсэлт хүлээж авлаа', 'Бид 2 ажлын өдөрт тантай холбогдоно. (Прототип — хүсэлт хаашаа ч илгээгдээгүй.)'); return; }
 
-    const button = $('button.btn-p', form);
-    button.disabled = true; button.textContent = 'Зураг бэлтгэж байна…';
+    const button = $('[data-submit]', form);
+    const prev = $('[data-prev]', form);
+    button.disabled = true; prev.disabled = true; button.textContent = 'Зураг бэлтгэж байна…';
     try {
       body.photos = await Promise.all(photos.map(file => resizePhoto(file)));
       button.textContent = 'Илгээж байна…';
@@ -104,11 +159,14 @@ export function bindPartnerForm(form) {
       }
     } catch (error) {
       Snd.ui('err');
-      button.disabled = false; button.textContent = 'Хүсэлт илгээх';
+      button.disabled = false; prev.disabled = false; button.textContent = 'Хүсэлт илгээх';
       if (error.details) for (const [key, message] of Object.entries(error.details)) {
         const id = { cafe_name: 'f1', contact_name: 'f2', phone: 'f3', email: 'f4', address: 'f8', hours: 'f9', seats: 'f11', description: 'f12', photos: 'fPhotos' }[key];
         if (id) setError($('#' + id, form), message);
       }
+      // Jump back to the first step that has a server-side error.
+      const errStep = steps.findIndex(s => s.querySelector('.fld.err'));
+      if (errStep !== -1) showStep(errStep);
       toast(error.isNetwork ? 'Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.' : error.message || 'Хүсэлт илгээхэд алдаа гарлаа');
     }
   };

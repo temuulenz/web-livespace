@@ -487,6 +487,15 @@
       margin: 0;
       font-size: 13px
     }
+    .pf-steps { grid-column: 1/-1; display: flex; gap: 8px; list-style: none; margin: 0 0 4px; padding: 0 }
+    .pf-steps li { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--ink2); padding-bottom: 10px; border-bottom: 3px solid var(--line) }
+    .pf-steps li b { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--cream); border: 1.5px solid var(--line2); font-size: 12px }
+    .pf-steps li.on, .pf-steps li.past { color: var(--brown); border-color: var(--brown) }
+    .pf-steps li.on b, .pf-steps li.past b { background: var(--brown); border-color: var(--brown); color: #fff }
+    .pf-step { grid-column: 1/-1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border: 0; margin: 0; padding: 0; min-width: 0; animation: lIn .3s }
+    .pf-step[hidden], .pf-nav [hidden] { display: none !important }
+    .pf-nav { flex-direction: row; align-items: center; gap: 12px; flex-wrap: wrap }
+    .pf-nav [data-next], .pf-nav [data-submit] { margin-left: auto }
 
     .ph-grid {
       display: grid;
@@ -765,6 +774,9 @@
     @media (max-width:820px) {
       .own-grid {
         grid-template-columns: minmax(0, 1fr)
+      }
+      .pf-step {
+        grid-template-columns: 1fr
       }
     }
 
