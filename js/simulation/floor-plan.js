@@ -29,7 +29,10 @@ const THEMES = {
 };
 class FloorPlan {
   constructor(wrap, cafe, o) {
-    this.wrap = wrap; this.cafe = cafe; this.o = o; this.W = 800; this.H = 520; this.sound = o.sound || 2; this.reduced = Prefs.reduced; this.zoom = isMobile() ? 1.5 : 1;
+    this.wrap = wrap; this.cafe = cafe; this.o = o; this.W = 800; this.H = 520; this.sound = o.sound || 2; this.reduced = Prefs.reduced;
+    // o.portrait (café page on phones): the plan is shown turned upright, so the whole café fits
+    // the narrow screen without scrolling and is taller. Only the display turns; the world stays 800×520.
+    this.portrait = !!o.portrait; this.zoom = !this.portrait && isMobile() ? 1.5 : 1;
     this.L = resolveLayout(o.layout, cafe);
     this.cv = document.createElement('canvas'); this.cv.setAttribute('role', 'img'); this.cv.setAttribute('aria-label', `${cafe.name}-ийн дээрээс харсан зураглал: сандал, ширээ, лангуу${this.L.kitchen ? ', гал тогоо' : ''}`); wrap.appendChild(this.cv); this.ctx = this.cv.getContext('2d');
     this.r = rng(seedOf(cafe.id)); this.layout(); this.buildGrid(); this.bg = this.drawStatic();
@@ -127,7 +130,9 @@ class FloorPlan {
   setTarget(pct, fast) { this.target = Math.round(pct * this.countable() / 100); this.busyUntil = fast ? performance.now() + 20000 : 0; this.nextEv = fast ? 150 : 800 }
   setZoom(f) { this.zoom = clamp(this.zoom * f, 1, 2.6); this.resize(true) }
   resize(force) {
-    const w = Math.floor(this.wrap.getBoundingClientRect().width); if (!w) return; const cssW = Math.min(2400, Math.round(w * this.zoom)); if (!force && cssW === this.cssW) return; this.cssW = cssW; const cssH = Math.round(cssW * this.H / this.W); const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.floor(this.wrap.getBoundingClientRect().width); if (!w) return;
+    if (this.portrait) return this.resizePortrait(w, force);
+    const cssW = Math.min(2400, Math.round(w * this.zoom)); if (!force && cssW === this.cssW) return; this.cssW = cssW; const cssH = Math.round(cssW * this.H / this.W); const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.cv.style.width = cssW + 'px'; this.cv.style.height = cssH + 'px'; this.cv.width = cssW * dpr; this.cv.height = cssH * dpr; this.k = cssW / this.W * dpr;
     // Re-render the cached background at the canvas's own resolution so every frame is a 1:1 copy
     // rather than a resample of a larger image (large canvases were slow to blit in software).
@@ -135,7 +140,26 @@ class FloorPlan {
     this.wrap.style.height = Math.min(cssH, Math.round(w * this.H / this.W * (isMobile() ? 1.15 : 1))) + 'px';
     if (this.o.editor && this.alive) this.draw()
   }
-  pt(e) { const r = this.cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * this.W, (e.clientY - r.top) / r.height * this.H] }
+  // Upright: the canvas keeps its 800×520 drawing and is turned 90° clockwise; the wrapper is
+  // as wide as the café is deep and as tall as it is wide. A sizer gives the scroll area when zoomed.
+  resizePortrait(w, force) {
+    const cssH = Math.min(1600, Math.round(w * this.zoom)), cssW = Math.round(cssH * this.W / this.H);
+    if (!force && cssW === this.cssW) return; this.cssW = cssW; const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (!this.sizer) { this.sizer = document.createElement('div'); this.sizer.className = 'plan-sizer'; this.wrap.appendChild(this.sizer); Object.assign(this.cv.style, { position: 'absolute', left: '0', top: '0', transformOrigin: '0 0' }) }
+    this.sizer.style.width = cssH + 'px'; this.sizer.style.height = cssW + 'px';
+    this.cv.style.width = cssW + 'px'; this.cv.style.height = cssH + 'px'; this.cv.style.transform = `translateX(${cssH}px) rotate(90deg)`;
+    this.cv.width = cssW * dpr; this.cv.height = cssH * dpr; this.k = cssW / this.W * dpr;
+    if (this.bg.width !== this.cv.width) this.bg = this.drawStatic(this.k);
+    this.wrap.style.height = Math.min(cssW, Math.round(w * this.W / this.H)) + 'px';
+    if (this.o.editor && this.alive) this.draw()
+  }
+  pt(e) {
+    const r = this.cv.getBoundingClientRect();
+    if (this.portrait) return [(e.clientY - r.top) / r.height * this.W, (r.right - e.clientX) / r.width * this.H];
+    return [(e.clientX - r.left) / r.width * this.W, (e.clientY - r.top) / r.height * this.H]
+  }
+  // Text is drawn turned back the other way, so it reads upright when the plan is shown upright.
+  label(x, t, a, b) { if (!this.portrait) { x.fillText(t, a, b); return } x.save(); x.translate(a, b); x.rotate(-Math.PI / 2); x.fillText(t, 0, 0); x.restore() }
   hit([x, y]) { let best = null, bd = 20; this.seats.forEach(s => { const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = s } }); return best }
   click(e) { const s = this.hit(this.pt(e)); this.sel = s; if (s) { Snd.ui('pop'); s.flash = 1 } this.o.onSeat && this.o.onSeat(s) }
   destroy() { this.alive = false; cancelAnimationFrame(this.raf); cancelAnimationFrame(this.rz); this.ro.disconnect(); this.io?.disconnect(); this.events.abort() }
@@ -229,7 +253,7 @@ class FloorPlan {
     L.long.forEach(t => t.label && labels.push([t.name, ...t.label]));
     L.sofas.forEach(f => f.label && labels.push([f.name || 'Буйдан', ...f.label]));
     if (L.kitchen) labels.push(['Гал тогоо', 690, 280]);
-    x.font = '700 11px Manrope, sans-serif'; x.fillStyle = 'rgba(107,80,56,.8)'; x.textAlign = 'center'; labels.forEach(([t, a, b]) => x.fillText(t, a, b));
+    x.font = '700 11px Manrope, sans-serif'; x.fillStyle = 'rgba(107,80,56,.8)'; x.textAlign = 'center'; labels.forEach(([t, a, b]) => this.label(x, t, a, b));
     // chairs (static silhouettes)
     this.seats.forEach(s => {
       if (s.kind === 'sofa') return; x.save(); x.translate(s.x, s.y); if (s.kind === 'stool') { x.fillStyle = 'rgba(62,42,23,.15)'; x.beginPath(); x.arc(1, 2, 10, 0, 7); x.fill(); x.fillStyle = '#8A5A2B'; x.beginPath(); x.arc(0, 0, 10, 0, 7); x.fill(); x.fillStyle = '#C9955C'; x.beginPath(); x.arc(0, 0, 7.5, 0, 7); x.fill() }
@@ -311,7 +335,7 @@ class FloorPlan {
     if (L.windowBar) labels.push(['Цонхны баар', ...L.windowBar.label]);
     L.long.forEach(t => t.label && labels.push([t.name, ...t.label]));
     L.sofas.forEach(f => f.label && labels.push([f.name || 'Буйдан', ...f.label]));
-    x.font = '700 11px Manrope, sans-serif'; x.fillStyle = T.label; x.textAlign = 'center'; labels.forEach(([t, a, b]) => x.fillText(t, a, b));
+    x.font = '700 11px Manrope, sans-serif'; x.fillStyle = T.label; x.textAlign = 'center'; labels.forEach(([t, a, b]) => this.label(x, t, a, b));
     // chairs (static silhouettes)
     this.seats.forEach(s => {
       if (s.kind === 'sofa') return; x.save(); x.translate(s.x, s.y);
@@ -340,7 +364,7 @@ class FloorPlan {
     this.seats.forEach(s => {
       if (s.state === 'free') { x.fillStyle = 'rgba(243,226,196,.62)'; x.beginPath(); x.arc(s.x, s.y, s.kind === 'stool' ? 12 : 14, 0, 7); x.fill() }
       if (s.state === 'occ') { x.fillStyle = 'rgba(255,157,0,.9)'; x.beginPath(); x.arc(s.x, s.y, s.kind === 'stool' ? 14 : 16, 0, 7); x.fill(); x.strokeStyle = '#7B542F'; x.lineWidth = 2; x.stroke() }
-      if (s.state === 'unknown') { x.strokeStyle = 'rgba(154,133,112,.9)'; x.lineWidth = 1.6; x.setLineDash([3, 3]); this.rr(x, s.x - 14, s.y - 12, 28, 22, 6); x.stroke(); x.setLineDash([]); x.fillStyle = '#9A8570'; x.font = '800 12px Manrope, sans-serif'; x.textAlign = 'center'; x.fillText('?', s.x, s.y + 4) }
+      if (s.state === 'unknown') { x.strokeStyle = 'rgba(154,133,112,.9)'; x.lineWidth = 1.6; x.setLineDash([3, 3]); this.rr(x, s.x - 14, s.y - 12, 28, 22, 6); x.stroke(); x.setLineDash([]); x.fillStyle = '#9A8570'; x.font = '800 12px Manrope, sans-serif'; x.textAlign = 'center'; this.label(x, '?', s.x + (this.portrait ? 4 : 0), s.y + (this.portrait ? 0 : 4)) }
       if (s.flash > 0) { x.fillStyle = `rgba(255,207,113,${s.flash * .6})`; x.beginPath(); x.arc(s.x, s.y, 18, 0, 7); x.fill() }
     });
     // seated people & items
