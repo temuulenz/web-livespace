@@ -19,7 +19,7 @@ export function modeBadge(c) {
   if (mode === 'demo') return '<span class="badge b-demo">ДЕМО</span>';
   if (mode === 'none') return '<span class="badge b-stale">МЭДЭЭЛЭЛГҮЙ</span>';
   if (c.live.stale) return '<span class="badge b-stale">ХУУЧИРСАН</span>';
-  return mode === 'test' ? '<span class="badge b-typ">ТУРШИЛТ</span>' : '<span class="badge b-live">ШУУД</span>';
+  return mode === 'test' ? '<span class="badge b-typ">ТУРШИЛТ · SIMULATED</span>' : '<span class="badge b-live">ШУУД · REAL</span>';
 }
 
 export function freshnessHTML(c) {

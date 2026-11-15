@@ -15,20 +15,21 @@ import { validateMeasurement } from '../lib/sensor-schema.mjs';
 import { liveUpdate } from './public.mjs';
 
 export function register(router, { db, cafes, hub, limit }) {
-  const insert = db.prepare(`INSERT INTO measurements (cafe_id, device_id, ts, received_at, available_seats, occupied_seats, total_seats, noise_db, wifi_quality, wifi_down_mbps, wifi_up_mbps, wifi_latency_ms, temperature_c, humidity_pct, co2_ppm, is_test, raw)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insert = db.prepare(`INSERT INTO measurements (cafe_id, device_id, ts, received_at, available_seats, occupied_seats, total_seats, noise_db, wifi_quality, wifi_down_mbps, wifi_up_mbps, wifi_latency_ms, temperature_c, humidity_pct, co2_ppm, is_test, raw, data_source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
   function authenticate(ctx) {
     const match = /^Bearer\s+(lsd_[A-Za-z0-9_-]+)$/.exec(ctx.req.headers.authorization || '');
-    const device = match && db.prepare('SELECT * FROM devices WHERE token_hash = ? AND revoked_at IS NULL').get(sha256(match[1]));
+    const device = match && db.prepare('SELECT * FROM devices WHERE token_hash = ? AND revoked_at IS NULL AND enabled = 1').get(sha256(match[1]));
     if (!device) throw new HttpError(401, 'invalid_device_token', 'Unknown or revoked device token');
     return device;
   }
 
   router.post('/api/v1/ingest/measurements', async ctx => {
-    const device = authenticate(ctx);
+    let device = authenticate(ctx);
     limit(`ingest:${device.id}`, 120, 60 * 1000);
     const body = await readJson(ctx, 512 * 1024);
+    device = authenticate(ctx); // Recheck rotation/disable/reassignment after reading the body.
     const batch = Array.isArray(body.measurements_batch) ? body.measurements_batch.slice(0, 100) : [body];
     const results = [];
     const accepted = [];
@@ -46,7 +47,8 @@ export function register(router, { db, cafes, hub, limit }) {
       transaction(db, () => {
         for (const v of accepted) {
           const m = v.measurements;
-          insert.run(v.cafe_id, v.device_id, v.timestamp, received, m.available_seats ?? null, m.occupied_seats ?? null, m.total_seats ?? null, m.noise_level_db ?? null, m.wifi_quality ?? null, m.wifi_download_mbps ?? null, m.wifi_upload_mbps ?? null, m.wifi_latency_ms ?? null, m.temperature_c ?? null, m.humidity_pct ?? null, m.co2_ppm ?? null, device.is_test, JSON.stringify(v));
+          const simulated = device.is_test || device.kind === 'simulator';
+          insert.run(v.cafe_id, v.device_id, v.timestamp, received, m.available_seats ?? null, m.occupied_seats ?? null, m.total_seats ?? null, m.noise_level_db ?? null, m.wifi_quality ?? null, m.wifi_download_mbps ?? null, m.wifi_upload_mbps ?? null, m.wifi_latency_ms ?? null, m.temperature_c ?? null, m.humidity_pct ?? null, m.co2_ppm ?? null, simulated ? 1 : 0, JSON.stringify(v), simulated ? 'simulated' : 'real');
         }
         const last = accepted.at(-1);
         db.prepare('UPDATE devices SET last_seen_at = ?, last_status = ? WHERE id = ?').run(received, JSON.stringify(last.device_status || { state: 'online' }), device.id);

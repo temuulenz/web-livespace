@@ -44,7 +44,7 @@ function mapSVG() {
 }
 function markerHTML(c) {
   const t = tone(c); const pd = { q: '3.4s', b: '2.4s', y: '1.5s' }[t] || '0s';
-  return `<button class="mk${c.open ? '' : ' closed'}" data-mk="${c.id}" style="left:${c.x}px;top:${c.y}px;--pc:${toneVar(t)};--pd:${pd}" aria-label="${c.name}: ${c.open ? freePct(c) + '% суудал сул, ' + SS[c.sound].short + ' дуу, Wi-Fi ' + WIFI[c.wifi] : 'хаалттай'}">
+  return `<button class="mk${c.open ? '' : ' closed'}" data-mk="${c.id}" style="left:${c.x}px;top:${c.y}px;--pc:${toneVar(t)};--pd:${pd}" aria-label="${c.name}: ${c.open ? (freePct(c) == null ? 'суудлын хэмжилтгүй, ' : freePct(c) + '% суудал сул, ') + SS[c.sound].short + ' дуу, Wi-Fi ' + WIFI[c.wifi] : 'хаалттай'}">
   <span class="mk-name">${c.name}</span>
   <span class="mk-pinw">${c.open ? '<span class="mk-ring"></span>' : ''}${pinSVG(c.open ? '#FF9D00' : '#C9C2B4')}</span>
   <span class="mk-pill">${seatRow(c.occ)}<span class="sep"></span><span class="sg">${ssGlyph(c.sound)}</span><span class="sep"></span>${wifiSVG(c.wifi, 15)}</span>

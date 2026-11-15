@@ -6,6 +6,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { delay, root, startBrowser } from './support/browser.mjs';
 import { ADMIN, startServer } from './support/server.mjs';
+import { runSimulator, simulatorOptions } from '../scripts/sensor-simulator.mjs';
 
 const output = join(root, '.artifacts', 'e2e');
 await mkdir(output, { recursive: true });
@@ -29,12 +30,21 @@ const fill = (selector, value) => evaluate(`(() => { const el = document.querySe
 const logout = async () => { await click('#accBtn'); await click('[data-logout]'); await waitFor(`!document.querySelector('#accBtn .acc-dot')`); };
 const shot = async name => { await delay(500); const { data } = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(join(output, `${name}.png`), Buffer.from(data, 'base64')); };
 const pageFetch = (path, method = 'GET', body) => evaluate(`fetch(${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, headers: { 'Content-Type': 'application/json' }, ${body ? `body: JSON.stringify(${JSON.stringify(body)})` : ''} }).then(r => r.json())`);
+async function navigateDocument(method, params = {}) {
+  const start = events.length;
+  await send(method, params);
+  for (let i = 0; i < 200; i++) {
+    if (events.slice(start).some(event => event.method === 'Page.loadEventFired')) return;
+    await delay(50);
+  }
+  throw new Error('Document navigation did not finish');
+}
 
 try {
   await send('Network.setBlockedURLs', { urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'] });
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  await send('Page.navigate', { url: origin + '/#home' });
-  await waitFor(`document.documentElement.classList.contains('ls-online') && document.querySelector('#app').children.length > 0`);
+  await navigateDocument('Page.navigate', { url: origin + '/#home' });
+  await waitFor(`document.documentElement?.classList.contains('ls-online') && document.querySelector('#app')?.children.length > 0`);
 
   await check('guest explores without an account; real map shows every café', async () => {
     assert.equal(await evaluate(`document.querySelector('#accBtn').hidden`), false);
@@ -61,7 +71,7 @@ try {
   });
 
   await check('favourites survive a reload and a new login', async () => {
-    await send('Page.reload');
+    await navigateDocument('Page.reload');
     await waitFor(`document.documentElement.classList.contains('ls-online') && !!document.querySelector('.cd-act [data-fav="A"]')`);
     await waitFor(`document.querySelector('.cd-act [data-fav="A"]').getAttribute('aria-pressed') === 'true'`);
     await logout();
@@ -189,6 +199,63 @@ try {
     await waitFor(`!!document.querySelector('.own-tiles') && !!document.querySelector('.own-plan canvas')`, 200);
     assert.match(await evaluate(`document.querySelector('.own-live').innerText`), /ШУУД/);
     await shot('owner-dashboard-active');
+  });
+
+  await check('virtual sensor → WebSocket → SQLite → existing SSE framework → browser', async () => {
+    const admin = server.client(); await admin.post('/api/v1/auth/login', ADMIN);
+    const registered = await admin.post('/api/v1/admin/devices', { id: 'virtual_browser', cafe_id: cafeId, kind: 'simulator' });
+    assert.equal(registered.status, 201);
+    await evaluate(`(async () => {
+      const { createLiveChannel } = await import('/framework/index.js');
+      window.__sensorEvents = [];
+      window.__sensorChannel = createLiveChannel({ streamUrl: '/api/v1/stream', events: ['sensor.telemetry'], onMessage: (type, data) => window.__sensorEvents.push(data) });
+      window.__sensorChannel.start();
+    })()`);
+    try {
+      await waitFor(`window.__sensorChannel.status === 'live'`);
+      const options = simulatorOptions(['--url', origin.replace('http', 'ws') + '/ws/sensors', '--device', 'virtual_browser', '--location', cafeId, '--count', '1', '--people', '11'], { LS_SENSOR_TOKEN: registered.data.token });
+      assert.equal((await runSimulator(options, { log: () => {} })).sent, 1);
+      await waitFor(`window.__sensorEvents.some(e => e.locationId === ${JSON.stringify(cafeId)})`);
+      const event = await evaluate(`window.__sensorEvents[0]`);
+      assert.equal(event.occupancy.observedPeople, 11); assert.equal(event.dataSource, 'simulated'); assert.equal(event.device, undefined);
+      const row = server.app.deps.db.prepare('SELECT observed_people, data_source FROM measurements WHERE device_id = ?').get('virtual_browser');
+      assert.equal(row.observed_people, 11); assert.equal(row.data_source, 'simulated');
+    } finally { await evaluate(`window.__sensorChannel.stop()`); }
+  });
+
+  await check('public sensor UI updates counts/noise/status without inventing seats or rebuilding canvas', async () => {
+    const admin = server.client(); await admin.post('/api/v1/auth/login', ADMIN);
+    await admin.patch('/api/v1/admin/cafes/A', { data_mode: 'live', hours: '00:00–23:59' });
+    const registered = await admin.post('/api/v1/admin/devices', { id: 'public_demo', cafe_id: 'A', kind: 'simulator' });
+    await go('#cafe-A'); await waitFor(`!!document.querySelector('#publicSensor')`);
+    const options = simulatorOptions(['--url', origin.replace('http', 'ws') + '/ws/sensors', '--device', 'public_demo', '--location', 'A', '--interval', '1000', '--people', '7'], { LS_SENSOR_TOKEN: registered.data.token });
+    const controller = new AbortController();
+    const running = runSimulator(options, { signal: controller.signal, log: () => {} }).catch(error => { if (!controller.signal.aborted) throw error; });
+    try {
+      await waitFor(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '7' && !!document.querySelector('#planWrap canvas')`);
+      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /dBFS/);
+      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /SIMULATED/);
+      assert.equal(await evaluate(`document.querySelector('#freePct').textContent`), '—');
+      assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /simulation/);
+      await evaluate(`window.__sensorCanvas = document.querySelector('#planWrap canvas')`);
+      options.people = 12;
+      await waitFor(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '12'`);
+      assert.equal(await evaluate(`window.__sensorCanvas === document.querySelector('#planWrap canvas')`), true);
+      assert.equal(await evaluate(`document.querySelector('#publicSensor [data-sensor-status]').dataset.sensorStatus`), 'online');
+      assert.equal(await evaluate(`document.querySelector('#publicSensor [data-device-diagnostics]')`), null);
+      await waitFor(`document.querySelector('#publicSensorHistory [data-history-reading]')?.textContent.includes('12')`);
+      assert.equal(await evaluate(`document.querySelector('#publicSensorHistory [data-history-source]').value`), 'simulated');
+      await evaluate(`(() => { const input = document.querySelector('#publicSensorHistory [data-history-interval]'); input.value = '15'; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+      await waitFor(`!!document.querySelector('#publicSensorHistory [data-history-bucket]')`);
+    } finally { controller.abort(); await running; }
+    await waitFor(`document.querySelector('#publicSensor [data-sensor-status]')?.dataset.sensorStatus === 'offline'`);
+    await go('#admin?tab=devices');
+    await logout(); await click('#accBtn'); await click('[data-auth="login"]');
+    await waitFor(`!!document.querySelector('#modal .auth-form')`);
+    await fill('#au-email', ADMIN.email); await fill('#au-password', ADMIN.password);
+    await evaluate(`document.querySelector('#modal form').requestSubmit()`);
+    await waitFor(`!!document.querySelector('[data-device-diagnostics="public_demo"]')`);
+    assert.match(await evaluate(`document.querySelector('[data-device-diagnostics="public_demo"]').textContent`), /36.5/);
   });
 
   await check('framework DOM layer: patch keeps input, focus, preserved and keyed nodes; components clean up', async () => {

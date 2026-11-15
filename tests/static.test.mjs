@@ -25,7 +25,8 @@ test('HTML assets and the complete native module graph resolve on a static host'
     }
   }
   const manifest = JSON.parse(await readFile('package.json', 'utf8'));
-  assert.equal(Object.keys(manifest.dependencies || {}).length, 0);
+  // The server uses ws; the browser import graph above stays dependency-free.
+  assert.deepEqual(Object.keys(manifest.dependencies || {}), ['ws']);
   assert.equal(Object.keys(manifest.devDependencies || {}).length, 0);
 });
 

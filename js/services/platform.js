@@ -36,12 +36,13 @@ let channel = null;
 function startLive() {
   channel = createLiveChannel({
     streamUrl: '/api/v1/stream',
-    events: ['measurement', 'cafe', 'catalog'],
+    events: ['measurement', 'cafe', 'catalog', 'sensor.telemetry', 'sensor.status'],
     poll: async () => (await api.get('/live')).updates.map(u => ['measurement', u]),
     interval: platform.config.poll_interval_sec * 1000,
     onStatus: status => { platform.liveStatus = status; bus.emit('live:status', status); },
     onMessage(type, data) {
       if (type === 'measurement') applyLive(data);
+      else if (type === 'sensor.telemetry' || type === 'sensor.status') bus.emit('sensor:updated', data.locationId);
       else if (type === 'cafe') { upsertCafe(data); bus.emit('cafe:updated', data.id); }
       else if (type === 'catalog') loadCatalogue().then(() => bus.emit('catalog:changed', data)).catch(() => { });
     }
