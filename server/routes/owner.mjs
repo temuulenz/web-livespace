@@ -3,12 +3,13 @@ import { readJson, sendJson, notFound, HttpError } from '../lib/http.mjs';
 import { requireRole } from '../lib/auth.mjs';
 import { json, now } from '../lib/db.mjs';
 import { parseHours } from '../../js/live/levels.js';
+import { deviceStatus } from '../services/sensor-state.mjs';
 
 export function ownerCafeView({ db, config, cafes }, row) {
   const app = db.prepare('SELECT * FROM applications WHERE cafe_id = ? ORDER BY created_at LIMIT 1').get(row.id);
   const photos = app ? db.prepare('SELECT id, mime, size, position FROM application_photos WHERE application_id = ? ORDER BY position').all(app.id) : [];
-  const devices = db.prepare('SELECT id, label, kind, is_test, last_seen_at, last_status, revoked_at FROM devices WHERE cafe_id = ? AND revoked_at IS NULL').all(row.id)
-    .map(d => ({ ...d, is_test: !!d.is_test, last_status: json(d.last_status), online: !!d.last_seen_at && Date.now() - Date.parse(d.last_seen_at) < config.deviceOfflineSec * 1000 }));
+  const devices = db.prepare('SELECT id, cafe_id, label, kind, is_test, enabled, connection_status, last_seen_at, last_status, revoked_at FROM devices WHERE cafe_id = ? AND revoked_at IS NULL').all(row.id)
+    .map(d => ({ ...d, is_test: !!d.is_test, enabled: !!d.enabled, status: deviceStatus(db, config, d), last_status: json(d.last_status), online: deviceStatus(db, config, d) === 'online' }));
   const history = db.prepare('SELECT from_status, to_status, note, at FROM status_history WHERE cafe_id = ? ORDER BY id').all(row.id);
   const visualization = json(row.visualization, { status: 'not_started' });
   return {

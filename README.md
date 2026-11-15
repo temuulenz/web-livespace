@@ -12,7 +12,7 @@ npm.cmd start
 
 Open `http://127.0.0.1:8080/`. The 12 demo cafés are seeded on first start and labelled as demo data. Configuration and deployment are covered in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the sensor JSON format and real-time updates in [docs/SENSOR_API.md](docs/SENSOR_API.md).
 
-**Android sensors (Phases A/B):** `/ws/sensors` reuses registered device bearer tokens and cafe assignments, durably stores telemetry, and publishes through the existing SSE hub. Read the [protocol](docs/SENSOR_PROTOCOL.md), [backend/Android settings and file inventory](docs/SENSOR_BACKEND.md), and [test results](docs/SENSOR_TESTING.md). People counts do not create seat positions or available seats; uncalibrated dBFS is not treated as SPL. New sensor widgets are deferred to Phase C.
+**Android sensors (Phases A–D):** `/ws/sensors` reuses registered device bearer tokens and cafe assignments, durably stores telemetry, and publishes through the existing SSE hub. Read the [protocol](docs/SENSOR_PROTOCOL.md), [backend/Android settings and file inventory](docs/SENSOR_BACKEND.md), and [test results](docs/SENSOR_TESTING.md). People counts do not create seat positions or available seats; uncalibrated dBFS is not treated as SPL. Cafe cards/details and owner/admin dashboards show live people/noise/source/status/time, authorized diagnostics, and 5/15/60-minute history. Follow the [university demonstration runbook](docs/SENSOR_DEMO.md), including direct Wi-Fi setup. Advanced forecasting remains out of scope.
 
 Register a simulator device in `#admin`, set its one-time token in `LS_SENSOR_TOKEN`, and use the actual assigned cafe ID:
 

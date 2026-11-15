@@ -5,7 +5,7 @@ import { validateTelemetry } from '../lib/telemetry-schema.mjs';
 import { liveUpdate } from '../routes/public.mjs';
 
 export function createSensorService({ db, config, hub, cafes }) {
-  const byToken = db.prepare('SELECT * FROM devices WHERE token_hash = ? AND revoked_at IS NULL');
+  const byToken = db.prepare('SELECT * FROM devices WHERE token_hash = ? AND revoked_at IS NULL AND enabled = 1');
   const receipt = db.prepare('SELECT * FROM sensor_receipts WHERE device_id = ? AND message_id = ?');
   const insert = db.prepare(`INSERT INTO measurements (
     cafe_id, device_id, ts, received_at, is_test, raw, message_id, data_source,
@@ -67,6 +67,7 @@ export function createSensorService({ db, config, hub, cafes }) {
       AND CASE WHEN is_test = 1 OR kind = 'simulator' THEN 'simulated' ELSE 'real' END = ?`).all(device.cafe_id, dataSource);
     const publicStatus = states.some(d => d.connection_status === 'online') ? 'online' : states.some(d => d.connection_status === 'stale') ? 'stale' : 'offline';
     hub.broadcast('sensor.status', { locationId: cafe.id, status: publicStatus, dataSource, updatedAt: now() });
+    hub.broadcast('measurement', liveUpdate(cafes.publicCafe(cafe)));
   }
   function retain() {
     if (!config.sensorRetentionDays) return 0;

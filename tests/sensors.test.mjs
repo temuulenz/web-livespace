@@ -274,7 +274,7 @@ test('migration upgrades a real v1 database without losing cafe, device or measu
   legacy.prepare('INSERT INTO measurements (device_id, cafe_id, ts, received_at, raw, occupied_seats) VALUES (?, ?, ?, ?, ?, ?)').run('old-sim', 'old-cafe', '2020-01-01', '2020-01-01', '{"legacy":true}', 12); legacy.close();
   const db = openDatabase(file);
   try {
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 2); assert.equal(db.prepare('PRAGMA synchronous').get().synchronous, 2);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 3); assert.equal(db.prepare('PRAGMA synchronous').get().synchronous, 2);
     const row = db.prepare('SELECT * FROM measurements').get(); assert.equal(row.occupied_seats, 12); assert.equal(row.raw, '{"legacy":true}'); assert.equal(row.data_source, 'simulated');
     assert.equal(db.prepare('SELECT name FROM cafes').get().name, 'Existing cafe'); assert.equal(db.prepare('SELECT is_test FROM devices').get().is_test, 1);
   } finally { db.close(); await rm(directory, { recursive: true, force: true }); }

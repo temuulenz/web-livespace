@@ -1,13 +1,13 @@
-# Sensor test results: Phases A and B
+# Sensor test results: Phases A–D
 
-Verified on 2026-11-15 using Node 22.23.1, Linux, file-backed SQLite, `ws` 8.23.0 and headless Chromium 159. All integration databases and browser profiles were disposable; no production database was used.
+Verified on 2026-11-16 using Node 22.23.1, Linux, file-backed SQLite, `ws` 8.23.0 and headless Chromium 159. All integration databases and browser profiles were disposable; no production database was used. The Android application is developed in parallel; this report does not claim physical phone testing.
 
 | Suite | Result |
 | --- | --- |
-| `npm test` | 65 passed, 0 failed |
+| `npm test` | 69 passed, 0 failed |
 | `npm run test:browser` | 16 passed, 0 failed |
-| `npm run test:e2e` | 10 passed, 0 failed |
-| Physical Samsung Note 4 / Android 6 | Not tested; hardware unavailable |
+| `npm run test:e2e` | 11 passed, 0 failed |
+| Physical Samsung Note 4 / Android 6 | Not tested in this session |
 
 ## Reproduce
 
@@ -21,7 +21,7 @@ BROWSER_PATH=/absolute/path/to/chrome npm run test:browser
 BROWSER_PATH=/absolute/path/to/chrome npm run test:e2e
 ```
 
-The browser harness defaults to Windows Edge when `BROWSER_PATH` is absent. `BROWSER_NO_SANDBOX=1` was used for the isolated test environment; use normal Chromium sandboxing on ordinary desktop runs. The existing browser installed during the earlier attempt was reused as test tooling; no browser automation dependency was added to the project.
+The browser harness defaults to Windows Edge when `BROWSER_PATH` is absent. `BROWSER_NO_SANDBOX=1` was used for the isolated test environment; use normal Chromium sandboxing on ordinary desktop runs. The installed Chromium was reused as test tooling; no browser automation dependency was added to the project. End-to-end navigation waits for a new document's load event so a reload cannot interact with the old document and cascade into false onboarding failures.
 
 ## Sensor coverage
 
@@ -49,7 +49,15 @@ The browser harness defaults to Windows Edge when `BROWSER_PATH` is absent. `BRO
 Virtual Sensor → WebSocket → Authentication → Validation → SQLite → SSE → Browser
 ```
 
-The browser does not open a sensor WebSocket. Existing end-to-end cases still cover guest browsing, favorites/accounts, partner onboarding, owner/admin dashboards, legacy HTTP sensor updates and absence of uncaught browser errors. Static browser regressions cover search, map, navigation, filters, comparison, sound, canvas simulation and responsive behavior.
+The browser does not open a sensor WebSocket. The new public-view case sends live simulator counts 7 then 12, verifies dBFS and SIMULATED/online labels, asserts unknown seats stay `—`, checks that the same Canvas remains mounted, observes offline status after disconnect, and verifies admin-only temperature display. It also checks historical readings appear and switches aggregation from 5 to 15 minutes. Existing cases still cover guest browsing, favorites/accounts, partner onboarding, owner/admin dashboards, legacy HTTP sensor updates and absence of uncaught browser errors. Static browser regressions cover search, map, navigation, filters, comparison, sound, canvas simulation and responsive behavior.
+
+## Phase C/D regression coverage
+
+[sensor-views.test.mjs](../tests/sensor-views.test.mjs) tests public/polling projections, unknown seat semantics, REAL precedence over simulation, private battery/temperature, owner scoping, device enable/disable, and measurement/source/status rendering including zero and null values.
+
+[sensor-history.test.mjs](../tests/sensor-history.test.mjs) verifies 5/15/60-minute sample counts, average/min/max people, calibrated SPL means, coverage, Ulaanbaatar hour/day features, separate simulation previews, exclusion of stale/invalid rows, one-device series selection, complete-range aggregation despite limited raw rows, and ownership/role/query validation. Mathematical fixtures use disposable databases only; they are not training observations.
+
+Phase A/B were inspected and revalidated before C; Phase C projection/permission and browser checks passed before implementing D. The final full Node suite has 69 passing tests; the focused sensor script includes all 23 gateway/view/history tests. No model was trained, no branch switch/commit/push/merge was performed, and the original engine/style fixtures were preserved.
 
 ## Manual development scenario
 
@@ -60,4 +68,4 @@ The browser does not open a sensor WebSocket. Existing end-to-end cases still co
 5. With an admin session, inspect `GET /api/v1/admin/measurements?device_id=LS-SIM-001`: six logical accepted readings, all simulated/test; retries create no extra rows. Inspect the browser EventSource stream for `sensor.telemetry`, `sensor.status` and compatible `measurement` events.
 6. Stop the simulator and verify stored offline connection status. A connected but silent device should become stale. Do not infer seat positions or calibrated SPL from the generated people/dBFS values.
 
-Before deployment, separately test the physical Note 4 Camera2/TFLite/AudioRecord pipeline, microphone calibration and camera coverage, battery/thermal endurance, Android outbox across restarts, real Wi-Fi interruptions, production proxy/TLS and Android 6 certificate compatibility. Phase C UI and Phase D aggregation/forecasting need their own implementation and validation.
+Before deployment, separately test the physical Note 4 Camera2/TFLite/AudioRecord pipeline, microphone calibration and camera coverage, battery/thermal endurance, Android outbox across restarts, real Wi-Fi interruptions, production proxy/TLS and Android 6 certificate compatibility. Advanced forecasting remains unimplemented. Use [SENSOR_DEMO.md](SENSOR_DEMO.md) for direct Wi-Fi setup and the browser rehearsal sequence.

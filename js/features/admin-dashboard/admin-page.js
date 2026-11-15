@@ -10,12 +10,14 @@ import { toast } from '../../components/feedback.js';
 import { openAuth } from '../authentication/auth-modal.js';
 import { signInPrompt } from '../account/account.js';
 import { liveTilesHTML, timelineHTML, visLabel } from '../owner-dashboard/owner-page.js';
+import { deviceDiagnosticsHTML, sensorStatusLabel, sensorSourceLabel } from '../../live/sensor-ui.js';
+import { SensorHistory } from '../sensors/sensor-history.js';
 
 const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт']];
 const when = iso => iso ? dateTime(iso) : '—';
 const statusBadge = status => html`<span class="badge ${status === 'active' ? 'b-live' : status === 'rejected' ? 'b-stale' : 'b-typ'}">${statusLabel(status)}</span>`;
 const modeBadge = mode => html`<span class="badge ${mode === 'demo' ? 'b-demo' : 'b-live'}">${mode === 'demo' ? 'ДЕМО' : 'БОДИТ'}</span>`;
-const exampleBody = (cafeId, deviceId) => JSON.stringify({ schema_version: '1.0', cafe_id: cafeId, device_id: deviceId, timestamp: '2026-11-01T10:30:00Z', measurements: { available_seats: 12, occupied_seats: 18, total_seats: 30, noise_level_db: 42, wifi_quality: 85, wifi_download_mbps: 64 }, device_status: { state: 'online', battery_pct: 90 } }, null, 2);
+const exampleBody = (cafeId, deviceId) => JSON.stringify({ schemaVersion: 1, type: 'sensor.telemetry', messageId: 'GENERATE-A-NEW-UUID', deviceId, locationId: cafeId, timestamp: new Date().toISOString(), occupancy: { observedPeople: 8, confidence: 0.87 }, noise: { rms: 0.014, dbfs: -37.1, estimatedDbSpl: null, calibrated: false }, device: { batteryPercent: 85, batteryTemperatureC: 36.5, charging: true, inferenceMs: 1200, uptimeSeconds: 3600 } }, null, 2);
 
 export class AdminPage extends Component {
   initialState() {
@@ -33,6 +35,7 @@ export class AdminPage extends Component {
       'click [data-suggest]': () => this.suggest(),
       'click [data-rotate]': (e, b) => this.rotate(b.dataset.rotate),
       'click [data-revoke]': (e, b) => this.revoke(b.dataset.revoke),
+      'click [data-enable-device]': (e, b) => this.toggleDevice(b.dataset.enableDevice, b.dataset.enabled !== 'true'),
       'change [data-filter]': (e, el) => { this.setState({ filter: { ...this.state.filter, [el.name]: el.value } }); this.load(); },
       'change [data-auto]': (e, el) => this.setState({ auto: el.checked }),
       'change [name="role"]': () => this.load()
@@ -40,11 +43,24 @@ export class AdminPage extends Component {
   }
   onMount() {
     this.watch(platform.session.store, s => s.user, () => { this.invalidate(); this.load(); });
+    this.onCleanup(platform.bus.on('sensor:updated', () => {
+      if (this._sensorRefresh) return;
+      this._sensorRefresh = true;
+      this.timeout(() => { this._sensorRefresh = false; if (!document.hidden) this.load(); }, 150);
+    }));
+    this.interval(() => { if (!document.hidden && (this.state.cafe || ['devices', 'measurements'].includes(this.state.tab))) this.load(); }, 5000);
     this.interval(() => { if (this.state.auto && !document.hidden && this.state.tab === 'measurements' && !this.state.cafe) this.load(); }, 15000);
     this.load();
   }
-  onDestroy() { this.editor?.destroy(); }
-  onUpdate() { this.syncEditor(); }
+  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); }
+  onUpdate() { this.syncEditor(); this.syncHistory(); }
+  syncHistory() {
+    const cafeId = this.state.cafe?.id || this.state.filter.cafe_id, root = this.$('[data-admin-sensor-history]');
+    if (!cafeId || !root) { this.historyView?.destroy(); this.historyView = null; return; }
+    if (this.historyCafe === cafeId && this.historyView?.el === root) return;
+    this.historyView?.destroy(); this.historyCafe = cafeId;
+    this.historyView = this.child(SensorHistory, root, { cafeId, role: 'admin', source: this.state.cafe?.live?.sensor?.dataSource || 'real' });
+  }
 
   go(tab) {
     Snd.ui('click');
@@ -129,7 +145,14 @@ export class AdminPage extends Component {
   async rotate(id) {
     if (!confirm(`${id}: шинэ токен үүсгэх үү? Хуучин токен ажиллахаа болино.`)) return;
     const result = await this.run(platform.api.post(`/admin/devices/${encodeURIComponent(id)}/token`), 'Шинэ токен үүслээ');
-    if (result) this.setState({ token: { id, cafe_id: this.state.cafe?.id || '', value: result.token } });
+    if (result) this.setState({ token: { id, cafe_id: this.state.cafe?.id || this.state.data.devices?.find(d => d.id === id)?.cafe_id || '', value: result.token } });
+  }
+  async toggleDevice(id, enabled) {
+    if (await this.run(platform.api.patch(`/admin/devices/${encodeURIComponent(id)}`, { enabled }), enabled ? 'Идэвхжүүллээ' : 'Түр зогсоолоо')) this.state.cafe ? this.openCafe(this.state.cafe.id, true) : this.load();
+  }
+  async updateDevice(form) {
+    const v = readForm(form);
+    if (await this.run(platform.api.patch(`/admin/devices/${encodeURIComponent(v.device_id)}`, { cafe_id: v.cafe_id, label: v.label, kind: v.kind, is_test: !!v.is_test }), 'Хадгалагдлаа')) this.state.cafe ? this.openCafe(this.state.cafe.id, true) : this.load();
   }
   async revoke(id) {
     if (!confirm(`${id}: төхөөрөмжийг идэвхгүй болгох уу? Энэ төхөөрөмжөөс ирэх хэмжилтийг хүлээж авахгүй.`)) return;
@@ -157,9 +180,9 @@ export class AdminPage extends Component {
     return html`<section class="card adm-token" data-key="token"><h2>${raw(I.sensor)} ${id} — төхөөрөмжийн токен</h2>
       <p>Энэ токеныг <b>одоо</b> хуулж төхөөрөмжид тохируулна уу. Дахин харагдахгүй (зөвхөн hash хадгалагдана).</p>
       <pre class="adm-code">${value}</pre>
-      <details><summary>Илгээх жишээ</summary><pre class="adm-code">POST ${location.origin}/api/v1/ingest/measurements
+      <p>Device ID: <code>${id}</code> · Location ID: <code>${cafeId}</code></p>
+      <details><summary>Android WebSocket тохиргоо / JSON</summary><pre class="adm-code">${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/sensors
 Authorization: Bearer ${value}
-Content-Type: application/json
 
 ${exampleBody(cafeId, id)}</pre></details></section>`;
   }
@@ -212,9 +235,13 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
     if (!devices.length) return html`<p class="muted">Төхөөрөмж алга.</p>`;
     return html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>ID</th><th>Кафе</th><th>Нэр / төрөл</th><th>Төлөв</th><th>Сүүлд</th><th>Батарей</th><th></th></tr></thead><tbody>
       ${devices.map(d => html`<tr class="${d.revoked_at ? 'muted' : ''}"><td><code>${d.id}</code>${d.is_test ? html` <span class="badge b-typ">ТУРШИЛТ</span>` : ''}</td><td>${d.cafe_name || d.cafe_id}</td><td>${d.label || '—'}<br><small class="muted">${d.kind}</small></td>
-        <td>${d.revoked_at ? 'Идэвхгүй' : html`<span class="dot ${d.online ? 'on' : ''}"></span> ${d.online ? 'Онлайн' : 'Офлайн'}`}${d.last_status?.state && d.last_status.state !== 'online' ? html`<br><small>${d.last_status.state} ${d.last_status.message || ''}</small>` : ''}</td>
-        <td class="num">${when(d.last_seen_at)}</td><td class="num">${d.last_status?.battery_pct != null ? d.last_status.battery_pct + '%' : '—'}</td>
-        <td>${d.revoked_at ? '' : html`<button class="btn btn-g" data-rotate="${d.id}">Токен</button> <button class="btn btn-g" data-revoke="${d.id}">Цуцлах</button>`}</td></tr>`)}</tbody></table></div>`;
+        <td data-admin-device-status="${d.id}"><span class="dot ${d.online ? 'on' : ''}"></span> ${sensorStatusLabel(d.status)}<br><small>${sensorSourceLabel(d.is_test ? 'simulated' : 'real')}</small></td>
+        <td class="num">${when(d.last_seen_at)}</td><td>${raw(deviceDiagnosticsHTML(d))}</td>
+        <td>${d.revoked_at ? '' : html`<button class="btn btn-g" data-rotate="${d.id}">Токен</button> <button class="btn btn-g" data-enable-device="${d.id}" data-enabled="${d.enabled}">${d.enabled ? 'Түр зогсоох' : 'Идэвхжүүлэх'}</button> <button class="btn btn-g" data-revoke="${d.id}">Цуцлах</button>
+          <details><summary>Байршил / тохиргоо</summary><form class="form" data-form="updateDevice"><input type="hidden" name="device_id" value="${d.id}">
+          <label>Location ID<input name="cafe_id" value="${d.cafe_id}" required></label><label>Нэр<input name="label" value="${d.label}"></label>
+          <label>Төрөл<select name="kind">${['sensor', 'camera', 'gateway', 'simulator'].map(k => html`<option value="${k}" ${raw(d.kind === k ? 'selected' : '')}>${k}</option>`)}</select></label>
+          <label><input type="checkbox" name="is_test" ${raw(d.is_test ? 'checked' : '')}> Симуляц / туршилт</label><button class="btn btn-o">Хадгалах</button></form></details>`}</td></tr>`)}</tbody></table></div>`;
   }
 
   devicesView() {
@@ -224,9 +251,9 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
 
   measurementsTable(rows) {
     if (!rows.length) return html`<p class="muted">Хэмжилт алга.</p>`;
-    return html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>#</th><th>Хэмжсэн</th><th>Хүлээн авсан</th><th>Кафе / төхөөрөмж</th><th>Суудал (сул/хүнтэй/нийт)</th><th>Дуу dB</th><th>Wi-Fi</th><th>JSON</th></tr></thead><tbody>
+    return html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>#</th><th>Хэмжсэн</th><th>Хүлээн авсан</th><th>Кафе / төхөөрөмж</th><th>Хүн / эх үүсвэр</th><th>Суудал (сул/хүнтэй/нийт)</th><th>Дуу чимээ</th><th>Wi-Fi</th><th>JSON</th></tr></thead><tbody>
       ${rows.map(m => html`<tr><td class="num">${m.id}</td><td class="num">${when(m.ts)}</td><td class="num">${when(m.received_at)}</td><td>${m.cafe_id}<br><small class="muted">${m.device_id}${m.is_test ? ' · туршилт' : ''}</small></td>
-        <td class="num">${m.available_seats ?? '—'} / ${m.occupied_seats ?? '—'} / ${m.total_seats ?? '—'}</td><td class="num">${m.noise_db ?? '—'}</td><td class="num">${m.wifi_quality ?? '—'}${m.wifi_down_mbps != null ? ` · ${m.wifi_down_mbps} Mbps` : ''}</td>
+        <td class="num">${m.observed_people ?? '—'} · ${sensorSourceLabel(m.data_source)}</td><td class="num">${m.available_seats ?? '—'} / ${m.occupied_seats ?? '—'} / ${m.total_seats ?? '—'}</td><td class="num">${m.noise_dbfs == null ? '—' : m.noise_dbfs + ' dBFS'}${m.noise_db != null ? ` / ${m.noise_db} dB SPL` : ''}</td><td class="num">${m.wifi_quality ?? '—'}${m.wifi_down_mbps != null ? ` · ${m.wifi_down_mbps} Mbps` : ''}</td>
         <td><details><summary>харах</summary><pre class="adm-code">${JSON.stringify(m.raw, null, 2)}</pre></details></td></tr>`)}</tbody></table></div>`;
   }
 
@@ -236,7 +263,7 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
       <label class="adm-filter">Кафе <select name="cafe_id" data-filter><option value="">Бүгд</option>${cafes.map(c => html`<option value="${c.id}" ${raw(f.cafe_id === c.id ? 'selected' : '')}>${c.name}</option>`)}</select></label>
       <label class="adm-filter">Төхөөрөмж <select name="device_id" data-filter><option value="">Бүгд</option>${devices.map(d => html`<option value="${d.id}" ${raw(f.device_id === d.id ? 'selected' : '')}>${d.id}</option>`)}</select></label>
       <label class="adm-check"><input type="checkbox" data-auto ${raw(this.state.auto ? 'checked' : '')}> 15 сек тутам шинэчлэх</label></div>
-      ${this.measurementsTable(measurements)}`;
+      ${this.measurementsTable(measurements)}${f.cafe_id ? html`<section class="card"><div data-admin-sensor-history data-preserve data-key="history-${f.cafe_id}"></div></section>` : ''}`;
   }
 
   cafeView() {
@@ -287,6 +314,7 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
 
         <section class="card adm-wide"><h3>Төхөөрөмж</h3>${this.devicesTable(c.devices.map(d => ({ ...d, cafe_name: c.name })))}${this.deviceForm([], c.id)}</section>
         <section class="card adm-wide"><h3>Сүүлийн хэмжилтүүд</h3>${this.measurementsTable(c.measurements)}</section>
+        <section class="card adm-wide"><div data-admin-sensor-history data-preserve data-key="history-${c.id}"></div></section>
       </div></div>`;
   }
 }

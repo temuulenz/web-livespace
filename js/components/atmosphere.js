@@ -26,8 +26,8 @@ function ssArt(l, w = 120) {
 function wifiSVG(l, w = 40) { return `<svg class="wf w${l}" width="${w}" height="${w * .8}" viewBox="0 0 40 32" style="color:${l ? 'var(--brown)' : 'var(--ink3)'}" aria-hidden="true"><path class="a a3${l >= 3 ? ' on' : ''}" d="M4 12.5a23 23 0 0 1 32 0"/><path class="a a2${l >= 2 ? ' on' : ''}" d="M9.5 18a15 15 0 0 1 21 0"/><path class="a a1 on" d="M15 23.5a7.5 7.5 0 0 1 10 0"/><circle class="d" cx="20" cy="28" r="2.6" fill="${l ? 'currentColor' : 'var(--line2)'}"/></svg>` }
 /* one value → one shape: seats are always a row of chairs — occupied = solid & bold, free = faint */
 function seatRow(occ, n = 5) { const k = clamp(Math.round(occ / 100 * n), 0, n); let s = ''; for (let i = 0; i < n; i++)s += `<i class="${i < k ? 'o' : ''}"></i>`; return `<span class="seats" aria-hidden="true">${s}</span>` }
-const mSeat = c => `<span class="m" title="Сул суудал · ${crowdCat(c.occ)[0]}">${seatRow(c.occ)}<b class="num">${freePct(c)}%</b></span>`;
-const mSound = l => `<span class="m" title="Дуу чимээ · ${SS[l].t}"><span class="sg">${ssGlyph(l)}</span><b>${SS[l].short}</b></span>`;
+const mSeat = c => `<span class="m" title="Сул суудал">${seatRow(c.occ)}<b class="num">${freePct(c) == null ? '—' : freePct(c) + '%'}</b></span>`;
+const mSound = l => `<span class="m" title="Дуу чимээ · ${SS[l]?.t || 'Хэмжилтгүй'}"><span class="sg">${ssGlyph(l)}</span><b>${SS[l]?.short || 'Хэмжилтгүй'}</b></span>`;
 const mWifi = l => `<span class="m" title="Wi-Fi · ${WIFI_S[l]}">${wifiSVG(l, 18)}<b>${WIFI[l]}</b></span>`;
 const TAGIC = { 'Сурах': I.book, 'Ажиллах': I.laptop, 'Найзуудтай': I.people, 'Тухтай': I.sofa };
 const tagPills = c => c.tags.map(t => `<span class="tagp2">${TAGIC[t] || ''}${t}</span>`).join('');

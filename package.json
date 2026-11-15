@@ -10,7 +10,7 @@
     "create-admin": "node --disable-warning=ExperimentalWarning server/create-admin.mjs",
     "device": "node tools/device-client.mjs",
     "sensor:simulate": "node scripts/sensor-simulator.mjs",
-    "test:sensors": "node --disable-warning=ExperimentalWarning --test tests/sensors.test.mjs",
+    "test:sensors": "node --disable-warning=ExperimentalWarning --test tests/sensors.test.mjs tests/sensor-views.test.mjs tests/sensor-history.test.mjs",
     "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.mjs",
     "test:browser": "node tests/browser.mjs",
     "test:visual": "node tests/browser.mjs --visual",

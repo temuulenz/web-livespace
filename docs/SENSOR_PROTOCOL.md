@@ -1,5 +1,18 @@
 # Android edge telemetry protocol v1
 
+**Android integration contract: v1 is finalized for the university demonstration.** Phases C/D add browser views and history APIs; they do not change the device envelope, bearer-header handshake or acknowledgement rules below.
+
+## Direct Wi-Fi quick start (no USB or ADB)
+
+1. On the server computer, install dependencies with `npm ci`, create an admin with `npm run create-admin -- EMAIL PASSWORD`, then start `HOST=0.0.0.0 PORT=8080 npm start`.
+2. Put the computer and phone on the same private Wi-Fi, allow TCP 8080 from that LAN in the computer's firewall, and use the computer's LAN IPv4 address (for example `192.168.1.240`; this was the host address checked on 2026-11-16). Guest-network client isolation must be disabled or use a Wi-Fi network that permits clients to communicate.
+3. Open `http://192.168.1.240:8080/api/v1/health` in the phone browser. An `ok: true` response verifies Wi-Fi reachability before configuring the Android app. Replace the example IP with the computer's actual IP; localhost on the phone is the phone itself.
+4. In the website admin Devices tab, register `LS-NOTE4-001`, assign the intended cafe, choose kind `sensor`, and leave test mode off for physical observations. Copy the one-time token. Register the virtual sensor separately as kind `simulator`; never share its token with the real phone.
+5. Configure Android/OkHttp with `ws://192.168.1.240:8080/ws/sensors`, upgrade header `Authorization: Bearer <one-time-token>`, and the exact registered device ID and assigned cafe ID. `locationId` is the database cafe ID, not the cafe's display name. Wait for `sensor.ready` and verify both IDs, then send the JSON schema below every 5 seconds.
+6. Use UTC timestamps, a new persistent UUID per logical reading, and a durable Android SQLite outbox. Delete an entry only after a matching accepted/duplicate acknowledgement. Automatically answer ping (OkHttp does this); reconnect with exponential delay/jitter (suggested 1–30 seconds), retaining the same envelope/ID for unacknowledged retries.
+
+These `ws://` settings are for the private local demonstration. Production requires `wss://` and normal certificate verification. No USB, ADB, tunnel, TLS bypass or public port forwarding is required.
+
 The Android app processes camera/microphone data locally. This protocol accepts JSON measurements only. Recordings, facial recognition, identity metadata and unknown fields are rejected.
 
 ## Endpoint and authentication
@@ -118,6 +131,12 @@ Active cafes in live mode publish through `/api/v1/stream`:
 
 - `sensor.telemetry`: `locationId`, observation `timestamp`, `receivedAt`, `dataSource`, `stale`, `occupancy`, and `noise`. No device IDs, credentials or diagnostics. Delayed queue uploads remain historical events; consumers must compare observation timestamps.
 - `sensor.status`: `locationId`, `status`, `dataSource`, `updatedAt`. Aggregated across non-revoked devices at that cafe/source: any online device wins, otherwise any stale device, otherwise offline. This describes sensor health, not cafe occupancy.
-- `measurement`: the existing compatible cafe summary. Calibrated SPL can update existing noise values; people/dBFS widgets and polling projection are deferred to Phase C.
+- `measurement`: the existing compatible cafe summary. Calibrated SPL can update existing noise values; people/dBFS widgets and polling projection are implemented through the same `live.sensor` object.
 
-SSE is best-effort without persistent replay. The existing `/api/v1/live` polling fallback and browser framework remain unchanged. Duplicates do not republish telemetry. No browser WebSocket is needed.
+SSE is best-effort without persistent replay. The `/api/v1/live` polling fallback now includes the same sanitized `live.sensor` projection as SSE. The browser still uses its original native framework. Duplicates do not republish telemetry. No browser WebSocket is needed.
+
+## Website management and history (device protocol unchanged)
+
+Admins can temporarily disable/enable credentials with `PATCH /api/v1/admin/devices/:id` and a boolean `enabled`; disabled credentials fail authentication until enabled again. `DELETE` remains permanent revocation. The gateway rechecks the registration, and the existing owner/admin dashboards display private diagnostics through their authenticated HTTP APIs.
+
+Public `GET /api/v1/cafes/:id/sensor-history` is available for active live-mode cafes. Owner/admin equivalents are `/api/v1/owner/cafes/:id/sensor-history` and `/api/v1/admin/cafes/:id/sensor-history`; owner access is cafe-scoped. Query `source=real|simulated|manual` (default real), `interval=5|15|60`, ISO `since`/`until` (up to 31 days), optional `device_id`, and `limit=1..500`. These return historical readings and source-separated aggregates, not predictions. Public history excludes diagnostics and device IDs. Full response semantics and the rehearsal sequence are in [SENSOR_BACKEND.md](SENSOR_BACKEND.md) and [SENSOR_DEMO.md](SENSOR_DEMO.md).

@@ -144,7 +144,8 @@ const MIGRATIONS = [
        SELECT m.*, ROW_NUMBER() OVER (
          PARTITION BY device_id, cafe_id, data_source ORDER BY ts DESC, id DESC
        ) AS latest_rank FROM measurements m WHERE message_id IS NOT NULL
-     ) WHERE latest_rank = 1;`
+     ) WHERE latest_rank = 1;`,
+  `ALTER TABLE devices ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1));`
 ];
 
 export function openDatabase(file) {

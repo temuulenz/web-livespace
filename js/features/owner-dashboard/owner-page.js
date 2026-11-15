@@ -10,6 +10,8 @@ import { FloorPlan } from '../../simulation/floor-plan.js';
 import { LAYOUTS } from '../../simulation/layouts.js';
 import { SETUP_STEPS, statusLabel, VIS_STATUSES } from '../../live/levels.js';
 import { freshnessHTML } from '../../live/freshness.js';
+import { sensorPanelHTML, deviceDiagnosticsHTML, sensorStatusLabel, sensorSourceLabel } from '../../live/sensor-ui.js';
+import { SensorHistory } from '../sensors/sensor-history.js';
 import { platform } from '../../services/platform.js';
 import { toast } from '../../components/feedback.js';
 import { openAuth, field } from '../authentication/auth-modal.js';
@@ -38,7 +40,7 @@ export function liveTilesHTML(live) {
   const seats = live.free_pct != null ? html`<div class="own-tile"><small>${raw(I.seat)} Сул суудал</small>${raw(seatRow(100 - live.free_pct))}<b class="num">${live.free_pct}%</b><span class="muted num">${live.total_seats != null ? `${live.total_seats}-оос ${live.available_seats ?? '—'} сул` : ''}</span></div>` : '';
   const noise = live.noise_level ? html`<div class="own-tile"><small>${raw(ssGlyph(2))} Дуу чимээ</small><span class="sg">${raw(ssGlyph(live.noise_level))}</span><b>${SS[live.noise_level].short}</b><span class="muted num">${Math.round(live.noise_db)} dB</span></div>` : '';
   const wifi = live.wifi_level ? html`<div class="own-tile"><small>${raw(wifiSVG(3, 14))} Wi-Fi</small>${raw(wifiSVG(live.wifi_level, 26))}<b>${WIFI[live.wifi_level]}</b><span class="muted num">${live.wifi_mbps != null ? `${Math.round(live.wifi_mbps)} Mbps` : `чанар ${Math.round(live.wifi_quality)}/100`}</span></div>` : '';
-  return html`<div class="own-tiles">${seats}${noise}${wifi}</div>`;
+  return html`${raw(sensorPanelHTML({ live }))}<div class="own-tiles">${seats}${noise}${wifi}</div>`;
 }
 
 export class OwnerPage extends Component {
@@ -55,10 +57,10 @@ export class OwnerPage extends Component {
     this.watch(platform.session.store, s => s.user, () => this.load());
     this.listen(document, 'visibilitychange', () => { if (!document.hidden) this.load(); });
     this.onCleanup(platform.bus.on('cafe:updated', id => { if (this.state.cafes?.some(c => c.id === id)) this.load(); }));
-    this.interval(() => { if (!document.hidden) this.load(); }, platform.config.poll_interval_sec * 1000);
+    this.interval(() => { if (!document.hidden) this.load(); }, Math.min(5000, platform.config.poll_interval_sec * 1000));
     this.load();
   }
-  onDestroy() { this.fp?.destroy(); }
+  onDestroy() { this.fp?.destroy(); this.historyView?.destroy(); }
   async load() {
     if (!platform.online || !platform.session.hasRole('owner', 'admin')) { this.setState({ cafes: null }); return; }
     try {
@@ -77,7 +79,14 @@ export class OwnerPage extends Component {
     this.setState({ saving: false });
   }
   current() { return this.state.cafes?.find(c => c.id === this.state.selected); }
-  onUpdate() { this.syncPlan(); }
+  onUpdate() { this.syncPlan(); this.syncHistory(); }
+  syncHistory() {
+    const cafe = this.current(), root = this.$('[data-owner-sensor-history]');
+    if (!cafe || !root) return;
+    if (this.historyCafe === cafe.id && this.historyView?.el === root) { this.historyView.setProps({ source: cafe.live?.sensor?.dataSource || 'real' }); return; }
+    this.historyView?.destroy(); this.historyCafe = cafe.id;
+    this.historyView = this.child(SensorHistory, root, { cafeId: cafe.id, source: cafe.live?.sensor?.dataSource || 'real', role: 'owner' });
+  }
   // The café's own animated interior, kept alive across re-renders.
   syncPlan() {
     const cafe = this.current(), wrap = this.$('[data-own-plan]');
@@ -125,15 +134,16 @@ export class OwnerPage extends Component {
           <div class="card-h"><h2>Хөдөлгөөнт зураглал</h2><span class="badge ${c.visualization.status === 'ready' ? 'b-live' : 'b-typ'}">${visLabel(c.visualization.status).toUpperCase()}</span></div>
           ${c.visualization.status === 'ready' ? html`
             <div class="plan-wrap own-plan" data-own-plan data-preserve data-key="plan-${c.id}"></div>
-            <p class="muted own-note">${layoutName ? `«${layoutName}» загвар дээр үндэслэсэн.` : ''} ${hasData ? 'Хүмүүсийн тоо бодит хэмжилтийг дагана.' : 'Урьдчилсан харагдац — доторх хүмүүс бол жишээ.'}</p>`
+            <p class="muted own-note">${layoutName ? `«${layoutName}» загвар дээр үндэслэсэн.` : ''} Дүрслэл / simulation — сандал дээрх хүмүүс, байршил нь бодит суудлын илрүүлэлт биш.</p>`
             : html`<p class="own-msg">${c.visualization.status === 'in_progress' ? 'Таны илгээсэн зургаар кафены өөрийн зураглалыг бэлтгэж байна.' : 'Манай баг тантай холбогдсоны дараа таны зургаар кафены өөрийн хөдөлгөөнт зураглалыг бүтээнэ.'}</p>`}
         </section>
 
         <section class="card own-dev" data-key="dev">
           <div class="card-h"><h2>Мэдрэгч, камер</h2></div>
-          ${c.devices.length ? html`<ul class="own-devices">${c.devices.map(d => html`<li><span class="dot ${d.online ? 'on' : ''}"></span><b>${d.label || d.id}</b><small class="muted">${d.online ? 'Холбогдсон' : 'Холбогдоогүй'}${d.last_seen_at ? ` · сүүлд ${dateTime(d.last_seen_at)}` : ''}${d.is_test ? ' · туршилтын' : ''}</small></li>`)}</ul>`
+          ${c.devices.length ? html`<ul class="own-devices">${c.devices.map(d => html`<li><span class="dot ${d.online ? 'on' : ''}"></span><b>${d.label || d.id}</b><small class="muted">${sensorStatusLabel(d.status)} · ${sensorSourceLabel(d.is_test ? 'simulated' : 'real')}${d.last_seen_at ? ` · сүүлд ${dateTime(d.last_seen_at)}` : ''}</small>${raw(deviceDiagnosticsHTML(d))}</li>`)}</ul>`
             : html`<p class="own-msg">Төхөөрөмж хараахан суурилуулаагүй.</p>`}
         </section>
+        <section class="card" data-key="sensor-history"><div data-owner-sensor-history data-preserve data-key="sensor-history-${c.id}"></div></section>
 
         ${c.application?.photos.length ? html`<section class="card own-photos" data-key="photos"><div class="card-h"><h2>Илгээсэн зураг</h2></div>
           <div class="ph-grid">${c.application.photos.map((p, i) => html`<figure class="ph"><img src="${p.url}" alt="Кафены зураг ${i + 1}" loading="lazy" decoding="async"></figure>`)}</div></section>` : ''}

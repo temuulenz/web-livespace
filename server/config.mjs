@@ -26,6 +26,7 @@ export function loadConfig(env = process.env, overrides = {}) {
     sensorStaleAfterSec: int(env.LS_SENSOR_STALE_AFTER_SEC, 30, 5, 86400),
     sensorMaxConnections: int(env.LS_SENSOR_MAX_CONNECTIONS, 500, 1, 10000),
     sensorRetentionDays: int(env.LS_SENSOR_RETENTION_DAYS, 0, 0, 3650),
+    sensorExpectedIntervalSec: int(env.LS_SENSOR_EXPECTED_INTERVAL_SEC, 5, 1, 300),
     sessionDays: int(env.LS_SESSION_DAYS, 30, 1, 365),
     secureCookies: env.NODE_ENV === 'production' || env.LS_SECURE_COOKIES === '1',
     trustProxy: env.LS_TRUST_PROXY === '1',

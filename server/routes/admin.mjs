@@ -5,6 +5,7 @@ import { json, now, transaction } from '../lib/db.mjs';
 import { SETUP_STATUSES, VIS_STATUSES, parseHours, projectToMap } from '../../js/live/levels.js';
 import { sanitizeLayout } from '../services/visualization.mjs';
 import { ownerCafeView } from './owner.mjs';
+import { deviceStatus } from '../services/sensor-state.mjs';
 
 const EDITABLE = { name: ['text', 80], category: ['text', 40], district: ['text', 40], address: ['text', 200], hours: ['hours'], phone: ['text', 30], contact_name: ['text', 80], email: ['text', 200], description: ['text', 1000], lat: ['number', -90, 90], lng: ['number', -180, 180], map_x: ['number', 0, 1000], map_y: ['number', 0, 680], total_seats: ['int', 1, 2000], sort_order: ['int', 0, 100000], data_mode: ['enum', ['demo', 'live']], tags: ['tags'], demo: ['demo'] };
 
@@ -31,7 +32,7 @@ export function register(router, deps) {
   const admin = requireRole('admin');
   const online = lastSeen => !!lastSeen && Date.now() - Date.parse(lastSeen) < config.deviceOfflineSec * 1000;
   const getCafe = id => { const row = db.prepare('SELECT * FROM cafes WHERE id = ?').get(id); if (!row) throw notFound('Кафе олдсонгүй'); return row; };
-  const deviceView = d => ({ ...d, token_hash: undefined, is_test: !!d.is_test, last_status: json(d.last_status), online: !d.revoked_at && online(d.last_seen_at) });
+  const deviceView = d => ({ ...d, token_hash: undefined, is_test: !!d.is_test, enabled: !!d.enabled, status: deviceStatus(db, config, d), last_status: json(d.last_status), online: deviceStatus(db, config, d) === 'online' });
 
   // Tell open browsers when the public catalogue or a café's state changed.
   function publish(row) {
@@ -48,7 +49,7 @@ export function register(router, deps) {
       pending_applications: count("SELECT COUNT(*) n FROM cafes c JOIN applications a ON a.cafe_id = c.id WHERE c.status NOT IN ('active', 'rejected')"),
       owners: count("SELECT COUNT(*) n FROM users WHERE role = 'owner'"),
       devices: count('SELECT COUNT(*) n FROM devices WHERE revoked_at IS NULL'),
-      devices_online: db.prepare('SELECT last_seen_at FROM devices WHERE revoked_at IS NULL').all().filter(d => online(d.last_seen_at)).length,
+      devices_online: db.prepare('SELECT * FROM devices WHERE revoked_at IS NULL').all().filter(d => deviceStatus(db, config, d) === 'online').length,
       measurements_24h: count('SELECT COUNT(*) n FROM measurements WHERE received_at > ?', new Date(Date.now() - 86400000).toISOString()),
       stream_clients: hub.size,
       config: { poll_interval_sec: config.pollIntervalSec, stale_after_sec: config.staleAfterSec, device_offline_sec: config.deviceOfflineSec, visualization_provider: customizer.provider }
@@ -152,6 +153,7 @@ export function register(router, deps) {
     const body = await readJson(ctx);
     const id = body.id ? String(body.id).trim() : newId('dev');
     if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(id)) throw new HttpError(422, 'validation_failed', 'Маягтаа шалгана уу', { id: 'A–Z, 0–9, _ . : - (≤ 64)' });
+    if (typeof body.cafe_id !== 'string' || !body.cafe_id) throw new HttpError(422, 'validation_failed', 'cafe_id is required');
     getCafe(body.cafe_id);
     if (db.prepare('SELECT 1 FROM devices WHERE id = ?').get(id)) throw new HttpError(409, 'device_exists', 'Ийм ID-тай төхөөрөмж бүртгэлтэй байна');
     const token = newToken('lsd_');
@@ -167,11 +169,16 @@ export function register(router, deps) {
     if (!device) throw notFound('Төхөөрөмж олдсонгүй');
     const body = await readJson(ctx);
     if (body.cafe_id) getCafe(body.cafe_id);
-    db.prepare('UPDATE devices SET label = ?, kind = ?, is_test = ?, cafe_id = ? WHERE id = ?').run(
+    const kind = ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : device.kind;
+    if (body.enabled != null && typeof body.enabled !== 'boolean') throw new HttpError(422, 'validation_failed', 'enabled must be a boolean');
+    db.prepare('UPDATE devices SET label = ?, kind = ?, is_test = ?, cafe_id = ?, enabled = ? WHERE id = ?').run(
       body.label != null ? String(body.label).slice(0, 80) : device.label,
-      ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : device.kind,
-      (body.kind || device.kind) === 'simulator' || (body.is_test != null ? body.is_test : device.is_test) ? 1 : 0,
-      body.cafe_id || device.cafe_id, device.id);
+      kind,
+      kind === 'simulator' || (body.is_test != null ? body.is_test : device.is_test) ? 1 : 0,
+      body.cafe_id || device.cafe_id, body.enabled == null ? device.enabled : Number(body.enabled), device.id);
+    if (body.enabled === false || (body.cafe_id && body.cafe_id !== device.cafe_id)) deps.sensors.setStatus(device, 'offline');
+    publish(getCafe(device.cafe_id));
+    if (body.cafe_id && body.cafe_id !== device.cafe_id) publish(getCafe(body.cafe_id));
     sendJson(ctx.res, 200, { device: deviceView(db.prepare('SELECT * FROM devices WHERE id = ?').get(device.id)) });
   });
 
@@ -187,6 +194,8 @@ export function register(router, deps) {
   router.delete('/api/v1/admin/devices/:id', ctx => {
     admin(ctx);
     db.prepare('UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(now(), ctx.params.id);
+    const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(ctx.params.id);
+    if (device) deps.sensors.setStatus(device, 'offline');
     sendJson(ctx.res, 200, { ok: true });
   });
 

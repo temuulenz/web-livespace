@@ -20,15 +20,16 @@ export function register(router, { db, cafes, hub, limit }) {
 
   function authenticate(ctx) {
     const match = /^Bearer\s+(lsd_[A-Za-z0-9_-]+)$/.exec(ctx.req.headers.authorization || '');
-    const device = match && db.prepare('SELECT * FROM devices WHERE token_hash = ? AND revoked_at IS NULL').get(sha256(match[1]));
+    const device = match && db.prepare('SELECT * FROM devices WHERE token_hash = ? AND revoked_at IS NULL AND enabled = 1').get(sha256(match[1]));
     if (!device) throw new HttpError(401, 'invalid_device_token', 'Unknown or revoked device token');
     return device;
   }
 
   router.post('/api/v1/ingest/measurements', async ctx => {
-    const device = authenticate(ctx);
+    let device = authenticate(ctx);
     limit(`ingest:${device.id}`, 120, 60 * 1000);
     const body = await readJson(ctx, 512 * 1024);
+    device = authenticate(ctx); // Recheck rotation/disable/reassignment after reading the body.
     const batch = Array.isArray(body.measurements_batch) ? body.measurements_batch.slice(0, 100) : [body];
     const results = [];
     const accepted = [];

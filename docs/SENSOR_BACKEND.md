@@ -1,4 +1,4 @@
-# LiveSpace sensor backend: Phases A and B
+# LiveSpace sensor backend: Phases A–D
 
 ## Architecture findings
 
@@ -114,12 +114,72 @@ Production should terminate TLS at a controlled proxy that forwards WebSocket up
 | New [sensors.test.mjs](../tests/sensors.test.mjs), [database-v1.sql](../tests/fixtures/database-v1.sql); modified [e2e.mjs](../tests/e2e.mjs), [static.test.mjs](../tests/static.test.mjs) | Sensor integration, actual migration fixture, browser flow, native module regression |
 | New [SENSOR_PROTOCOL.md](SENSOR_PROTOCOL.md), [SENSOR_BACKEND.md](SENSOR_BACKEND.md), [SENSOR_TESTING.md](SENSOR_TESTING.md), [AGENTS.md](../AGENTS.md); modified [README.md](../README.md), [ARCHITECTURE.md](ARCHITECTURE.md), [SENSOR_API.md](SENSOR_API.md) | Protocol, setup, results, repository guidance and architecture |
 
-## Limits and next phases
+## Completed live views and historical aggregation
 
-This is a single Node process with SQLite and in-memory admission/rate limits. Multi-worker deployment requires shared device routing, limits and SSE fan-out. Individual diagnostics and connection state are stored and available through existing private admin data; existing dashboard online badges still use their original last-seen logic until Phase C. Public SSE is best-effort; existing polling exposes its original fields. The simulator's pending queue is in memory, not restart-persistent.
+Phase C adds sanitized `live.sensor` state to the existing cafe and polling payloads. Real data takes precedence over simulated data, each measured field carries its own observation time/staleness, and status changes publish the compatible `measurement` SSE event. Public cafe cards, map/list previews and detail pages show people/noise/source/status/time. The Canvas stays mounted across telemetry updates and is explicitly a visualization; absent seat data stays unknown. Uncalibrated dBFS never drives SPL noise filters. The owner/admin dashboards fetch diagnostics through authorized HTTP routes and refresh through SSE notifications, with bounded polling fallback.
 
-Phase C adds sensor widgets, people/dBFS public projections and polling, reliability/source/status indicators, owner diagnostics, and honest floor-plan labels. A single count cannot establish occupied seat positions or exact available seats. Multiple-camera overlap requires a deliberate aggregation policy.
+Migration **3** adds `devices.enabled` (default 1). Existing rows/history are preserved. The original device API now supports boolean enable/disable, existing assignments/token rotation/revocation, actual socket status and private diagnostics. HTTP ingestion also rechecks authorization after reading the body. No additional runtime dependencies were needed.
 
-Phase D adds 5-minute/15-minute/hourly aggregation and forecasting preparation. Use only real observations, exclude invalid/stale/backfilled-at-arrival samples, define coverage and camera field of view, and avoid overlapping-camera double counting. Track average/min/max people, sample count, coverage and calibrated SPL averages; store buckets in UTC and derive local hour/day using `Asia/Ulaanbaatar`. Do not use simulated readings or demo forecast profiles as training observations. No model was trained in this work.
+History uses the existing measurement indexes and table; there is no duplicated aggregation table or training model. Endpoints:
 
-Hardware, Camera2/TFLite/AudioRecord behavior, thermal endurance, Android durable outbox and production TLS certificate compatibility remain untested. See [test evidence](SENSOR_TESTING.md).
+- Public `GET /api/v1/cafes/:id/sensor-history`: active cafes in live mode only; sanitized observations/aggregates.
+- Owner `GET /api/v1/owner/cafes/:id/sensor-history`: own cafes only (admin can inspect); historical battery/temperature allowed.
+- Admin `GET /api/v1/admin/cafes/:id/sensor-history`: admin only; private device selection/diagnostics.
+
+Query: `source=real|simulated|manual` (default **real**), `interval=5|15|60` minutes (default 5), optional `device_id`, `since`/`until` with timezone (default last 24 hours, maximum 31 days), and integer `limit=1..500` for recent raw readings. Public reads are rate limited. Aggregation covers the full selected range independently of the raw-reading limit. Multiple cameras are never summed: the default series chooses the most recent people-reporting device for that cafe/source, or the latest reporting device if no people readings exist. Private callers can select a specific device.
+
+`readings` retain stale-at-arrival flags and observation/receipt times. Public responses omit IDs, battery/temperature and other diagnostics. Each `aggregates` row contains UTC `timestamp`, `sampleCount` (non-null people), `totalSamples`, average/minimum/maximum people, average calibrated SPL and its sample count, `coverage`, `coveredSeconds`, source, `localHour` and `dayOfWeek` (Sunday=0) in **Asia/Ulaanbaatar**. Empty buckets are omitted, not filled with invented zeros. SPL averages are arithmetic dB averages, not Leq.
+
+Aggregates require the selected source and matching test flag, valid ranges and receipt minus observation time between -60 seconds and `LS_SENSOR_STALE_AFTER_SEC`. New WebSocket rows alone are used; historical backfills that arrived stale are excluded. `LS_SENSOR_EXPECTED_INTERVAL_SEC` (default **5**) defines expected cadence. Coverage estimates distinct occupied cadence slots divided by slots per whole bucket, capped at 1; partial query buckets may therefore have low coverage. It measures sampling presence, not continuous coverage or camera accuracy.
+
+`eligibleForForecast` is true only for real-source, non-test, valid/fresh-at-arrival buckets with a people sample and at least 50% estimated coverage. Simulated/manual previews never qualify. This is a preparation flag, not authorization to train automatically; validate camera field of view, calibration, collection coverage and real-world quality before future modelling. No machine learning model was trained, and demo forecast profiles are never used for real data.
+
+Additional files for C/D: [sensor-state.mjs](../server/services/sensor-state.mjs), [history service](../server/services/sensor-history.mjs), [history routes](../server/routes/sensor-history.mjs), [sensor presentation](../js/live/sensor-ui.js), [history component](../js/features/sensors/sensor-history.js), [projection/security tests](../tests/sensor-views.test.mjs), [aggregation tests](../tests/sensor-history.test.mjs), and [demo runbook](SENSOR_DEMO.md). Integration edits are concentrated in the existing cafe service, device/owner routes, SSE platform bridge, dashboards and [app.js](../app.js). Original stylesheets and engine fixtures remain unchanged.
+
+## Remaining limitations
+
+This remains a single Node/SQLite process with in-memory admission/rate limits. Multiple workers need shared routing/limits/SSE fan-out. SSE is best-effort without durable replay; polling recovers latest state and history can be refreshed. Receipts remain indefinitely; plan archival beyond the pilot. The virtual CLI outbox is memory-only. Manual source is reserved for a future explicit manual ingestion workflow. The legacy staff prototype remains labelled DEMO, and advanced forecasting is not implemented.
+
+Physical Note 4 Camera2/TFLite/AudioRecord behavior, camera coverage, microphone calibration, battery/thermal endurance, Android durable outbox and deployed TLS certificate compatibility remain unverified. See [test evidence](SENSOR_TESTING.md) and the [direct Wi-Fi rehearsal guide](SENSOR_DEMO.md).
+
+## Current-session file inventory and collaboration
+
+Branch: `android-test`. The session began with a clean checkout. No branch switch, commit, merge, push or force push was performed. No conflict markers were found. Shared integration points include the app entry point, existing dashboards, server assembly, cafe projections, device routes and ordered database migrations; coordinate these files before merging parallel work. The Android wire envelope is unchanged.
+
+| File | Change |
+| --- | --- |
+| [AGENTS.md](../AGENTS.md) | Modified |
+| [README.md](../README.md) | Modified |
+| [app.js](../app.js) | Modified |
+| [docs/ARCHITECTURE.md](ARCHITECTURE.md) | Modified |
+| [docs/SENSOR_BACKEND.md](SENSOR_BACKEND.md) | Modified |
+| [docs/SENSOR_DEMO.md](SENSOR_DEMO.md) | New |
+| [docs/SENSOR_PROTOCOL.md](SENSOR_PROTOCOL.md) | Modified |
+| [docs/SENSOR_TESTING.md](SENSOR_TESTING.md) | Modified |
+| [js/cafe-metrics.js](../js/cafe-metrics.js) | Modified |
+| [js/cafes.js](../js/cafes.js) | Modified |
+| [js/components/atmosphere.js](../js/components/atmosphere.js) | Modified |
+| [js/features/admin-dashboard/admin-page.js](../js/features/admin-dashboard/admin-page.js) | Modified |
+| [js/features/owner-dashboard/owner-page.js](../js/features/owner-dashboard/owner-page.js) | Modified |
+| [js/features/sensors/sensor-history.js](../js/features/sensors/sensor-history.js) | New |
+| [js/live/freshness.js](../js/live/freshness.js) | Modified |
+| [js/live/sensor-ui.js](../js/live/sensor-ui.js) | New |
+| [js/map.js](../js/map.js) | Modified |
+| [js/services/platform.js](../js/services/platform.js) | Modified |
+| [package.json](../package.json) | Modified |
+| [server/app.mjs](../server/app.mjs) | Modified |
+| [server/config.mjs](../server/config.mjs) | Modified |
+| [server/lib/db.mjs](../server/lib/db.mjs) | Modified |
+| [server/routes/admin.mjs](../server/routes/admin.mjs) | Modified |
+| [server/routes/ingest.mjs](../server/routes/ingest.mjs) | Modified |
+| [server/routes/owner.mjs](../server/routes/owner.mjs) | Modified |
+| [server/routes/sensor-history.mjs](../server/routes/sensor-history.mjs) | New |
+| [server/services/cafes.mjs](../server/services/cafes.mjs) | Modified |
+| [server/services/sensor-history.mjs](../server/services/sensor-history.mjs) | New |
+| [server/services/sensor-state.mjs](../server/services/sensor-state.mjs) | New |
+| [server/services/sensors.mjs](../server/services/sensors.mjs) | Modified |
+| [styles/livespace.css](../styles/livespace.css) | Modified |
+| [tests/e2e.mjs](../tests/e2e.mjs) | Modified |
+| [tests/sensor-history.test.mjs](../tests/sensor-history.test.mjs) | New |
+| [tests/sensor-views.test.mjs](../tests/sensor-views.test.mjs) | New |
+| [tests/sensors.test.mjs](../tests/sensors.test.mjs) | Modified |
