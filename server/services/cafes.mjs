@@ -3,7 +3,10 @@ import { json } from '../lib/db.mjs';
 import { noiseLevel, wifiLevel, occupancyPercent, openState, ulaanbaatarMinutes, walkFrom } from '../../js/live/levels.js';
 
 export function createCafeService(db, config) {
-  const recent = db.prepare('SELECT * FROM measurements WHERE cafe_id = ? AND is_test = ? ORDER BY ts DESC, id DESC LIMIT 30');
+  // People-only frames must not evict legacy seat/Wi-Fi data from the lookback.
+  const recent = db.prepare(`SELECT * FROM measurements WHERE cafe_id = ? AND is_test = ?
+    AND (available_seats IS NOT NULL OR occupied_seats IS NOT NULL OR noise_db IS NOT NULL OR wifi_quality IS NOT NULL OR wifi_down_mbps IS NOT NULL)
+    ORDER BY ts DESC, id DESC LIMIT 30`);
   const activeRows = db.prepare("SELECT * FROM cafes WHERE status = 'active' ORDER BY sort_order, created_at");
   const byId = db.prepare('SELECT * FROM cafes WHERE id = ?');
 

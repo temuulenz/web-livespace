@@ -7,6 +7,8 @@ import { createRealtimeHub } from './lib/realtime.mjs';
 import { createCafeService } from './services/cafes.mjs';
 import { createUploads } from './services/uploads.mjs';
 import { createCustomizer } from './services/visualization.mjs';
+import { createSensorService } from './services/sensors.mjs';
+import { createSensorGateway } from './lib/sensor-gateway.mjs';
 import { seedDemoCafes, ensureAdmin } from './seed.mjs';
 import * as publicRoutes from './routes/public.mjs';
 import * as authRoutes from './routes/auth.mjs';
@@ -55,10 +57,26 @@ export async function createApp(config) {
   }
 
   const server = createServer(handle);
+  deps.sensors = createSensorService(deps);
+  deps.sensorGateway = createSensorGateway(server, deps);
   const purge = setInterval(() => deps.sessions.purge(), 3600 * 1000); purge.unref();
+  let closePromise;
   return {
     server, deps,
-    listen: (port = config.port, host = config.host) => new Promise(resolve => server.listen(port, host, () => resolve(server.address()))),
-    async close() { deps.hub.close(); clearInterval(purge); await new Promise(resolve => server.close(resolve)); server.closeAllConnections?.(); db.close(); }
+    listen: (port = config.port, host = config.host) => new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, () => { server.off('error', reject); resolve(server.address()); });
+    }),
+    close() {
+      return closePromise ??= (async () => {
+        clearInterval(purge);
+        await deps.sensorGateway.close();
+        deps.hub.close();
+        const stopped = new Promise(resolve => server.close(resolve));
+        server.closeAllConnections?.();
+        await stopped;
+        db.close();
+      })();
+    }
   };
 }

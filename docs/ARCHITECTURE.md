@@ -22,7 +22,9 @@ server/app.mjs ── routes/{public,auth,partner,owner,admin,ingest} ── lib
                   data/livespace.db (SQLite, node:sqlite)   data/uploads/<application>/photo-N.jpg
 ```
 
-There are no npm dependencies. The server uses Node's built-in `http`, `crypto` and `node:sqlite` (Node 22.13+; tested on 24.11). The browser uses native modules.
+The server uses Node's built-in `http`, `crypto` and `node:sqlite` (Node 22.13+), with one npm runtime dependency, `ws`, for Android sensor WebSocket framing. The browser uses native modules with no package dependencies or build step.
+
+The authenticated `/ws/sensors` upgrade attaches to the same HTTP server and reuses the existing device token hashes/cafe assignments. [The sensor service](../server/services/sensors.mjs) atomically commits telemetry into the existing measurements table, a durable replay receipt and device last-seen/diagnostics before acknowledging and publishing through the same SSE hub. Latest state is a view of that history. [Migration 2 and configuration](SENSOR_BACKEND.md) cover source tags, optional retention and Android setup; [the protocol](SENSOR_PROTOCOL.md) defines the distinct WebSocket envelope. Dashboard/public people and dBFS projections are Phase C; historical aggregation is Phase D.
 
 ## Roles
 
@@ -91,7 +93,7 @@ A café's visualization is `{ status, layout: { preset, overrides }, notes, gene
 
 ## Live data
 
-See [SENSOR_API.md](SENSOR_API.md) for the JSON format, ingestion, SSE with polling fallback, and how demo, live, test, outdated and missing data are labelled.
+See [SENSOR_API.md](SENSOR_API.md) for the legacy HTTP format, SSE/polling and demo/live/test/outdated/missing labels. Android/OkHttp and the virtual device use [SENSOR_PROTOCOL.md](SENSOR_PROTOCOL.md). Public `sensor.telemetry` and `sensor.status` events omit credentials and private diagnostics. Existing `measurement` events stay compatible; people counts and uncalibrated dBFS do not become seat or SPL readings.
 
 ## Configuration (environment variables)
 

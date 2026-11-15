@@ -1,15 +1,27 @@
-LiveSpace helps people in Ulaanbaatar find a café by seeing its free seats, noise and Wi-Fi before they go. The front end uses HTML, CSS, native JavaScript modules, canvas and Web Audio, plus our own small framework (`framework/`, see [docs/FRAMEWORK.md](docs/FRAMEWORK.md)). The optional backend is plain Node.js with the built-in SQLite. There are no package dependencies and no build step.
+LiveSpace helps people in Ulaanbaatar find a café by seeing its free seats, noise and Wi-Fi before they go. The front end uses HTML, CSS, native JavaScript modules, canvas and Web Audio, plus our own small framework (`framework/`, see [docs/FRAMEWORK.md](docs/FRAMEWORK.md)). The optional backend uses plain Node.js, built-in SQLite and the lightweight `ws` package for edge sensors. The frontend has no package dependencies or build step.
 
 ## Run
 
 **Full platform** (accounts, favourites, partner applications, owner and admin dashboards, live sensor data). Requires Node 22.13+.
 
 ```powershell
+npm.cmd ci
 npm.cmd run create-admin -- you@example.com "a long password"
 npm.cmd start
 ```
 
 Open `http://127.0.0.1:8080/`. The 12 demo cafés are seeded on first start and labelled as demo data. Configuration and deployment are covered in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the sensor JSON format and real-time updates in [docs/SENSOR_API.md](docs/SENSOR_API.md).
+
+**Android sensors (Phases A/B):** `/ws/sensors` reuses registered device bearer tokens and cafe assignments, durably stores telemetry, and publishes through the existing SSE hub. Read the [protocol](docs/SENSOR_PROTOCOL.md), [backend/Android settings and file inventory](docs/SENSOR_BACKEND.md), and [test results](docs/SENSOR_TESTING.md). People counts do not create seat positions or available seats; uncalibrated dBFS is not treated as SPL. New sensor widgets are deferred to Phase C.
+
+Register a simulator device in `#admin`, set its one-time token in `LS_SENSOR_TOKEN`, and use the actual assigned cafe ID:
+
+```bash
+npm run sensor:simulate -- --device LS-SIM-001 --location ACTUAL-CAFE-ID --people 8 --noise=-37.1
+npm run sensor:simulate -- --device LS-SIM-001 --location ACTUAL-CAFE-ID --mode manual
+```
+
+Default interval: 5 seconds. Simulator data is explicitly tagged simulated, and the tool refuses real registrations. See the backend guide for duplicates/invalid messages/network failures and private-LAN phone access.
 
 **Static demo** (as before; no backend features):
 
@@ -45,6 +57,7 @@ The stylesheets must stay in this order: `styles.css`, `styles/pages.css`, `styl
 
 ```powershell
 npm.cmd test              # Node: engine fidelity, layouts, framework, server API, schema, storage, CSS
+npm.cmd run test:sensors  # WebSocket auth, SQLite, SSE, simulator, replay and failures
 npm.cmd run test:browser  # browser regression checks of the original site (static mode)
 npm.cmd run test:e2e      # real server + browser: guest, user, owner, admin, live sensor data
 npm.cmd run test:visual   # screenshots into .artifacts/

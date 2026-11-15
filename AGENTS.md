@@ -1,0 +1,11 @@
+# LiveSpace repository guidance
+
+- Preserve native JavaScript, the custom framework, built-in Node HTTP and SQLite. The sole runtime dependency is `ws` for sensor WebSockets; the frontend has no build step.
+- Read [README.md](README.md), [architecture](docs/ARCHITECTURE.md), [sensor backend](docs/SENSOR_BACKEND.md) and [wire protocol](docs/SENSOR_PROTOCOL.md) as applicable. Assembly is [server/app.mjs](server/app.mjs); migrations are ordered, additive entries in [server/lib/db.mjs](server/lib/db.mjs).
+- Reuse existing devices, measurements, sessions/RBAC, cafe assignments and SSE. Do not introduce competing credentials or latest-state storage. Recheck device authorization after connection; never publish tokens, hashes or private diagnostics.
+- A telemetry acknowledgement must follow durable COMMIT. Stable device/message IDs must remain idempotent through reconnects, restarts and retention. Tag simulator/test observations as simulated; never infer seat positions from people counts or convert uncalibrated dBFS to SPL.
+- Keep JSON whitelists, size/rate limits, numeric/time validation, heartbeat/stale handling and graceful shutdown. Raw recordings, facial recognition and identity tracking are outside the protocol. Production requires WSS and normal certificate verification.
+- Preserve the legacy HTTP API, static demo, frontend conventions and original stylesheets. Phases A/B provide the backend and simulator; sensor UI projections are Phase C and historical aggregation/forecasting is Phase D. Do not claim later phases or physical Android testing are complete.
+- Run `npm ci`, then `npm test`. Focused sensors: `npm run test:sensors`. Browser checks: `npm run test:browser` and `npm run test:e2e`, with `BROWSER_PATH` set to installed Chromium when required. Use disposable databases and profiles, never production data, for tests.
+- Keep [the v1 database fixture](tests/fixtures/database-v1.sql) as the pre-Android schema. Do not regenerate original simulation/style fidelity fixtures from changed implementations.
+- Store UTC timestamps. Future local time features must use `Asia/Ulaanbaatar`; real-world analytics must exclude simulated, stale and invalid observations. Do not train on demo forecasts.

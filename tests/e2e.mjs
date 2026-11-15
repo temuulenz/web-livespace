@@ -6,6 +6,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { delay, root, startBrowser } from './support/browser.mjs';
 import { ADMIN, startServer } from './support/server.mjs';
+import { runSimulator, simulatorOptions } from '../scripts/sensor-simulator.mjs';
 
 const output = join(root, '.artifacts', 'e2e');
 await mkdir(output, { recursive: true });
@@ -189,6 +190,28 @@ try {
     await waitFor(`!!document.querySelector('.own-tiles') && !!document.querySelector('.own-plan canvas')`, 200);
     assert.match(await evaluate(`document.querySelector('.own-live').innerText`), /ШУУД/);
     await shot('owner-dashboard-active');
+  });
+
+  await check('virtual sensor → WebSocket → SQLite → existing SSE framework → browser', async () => {
+    const admin = server.client(); await admin.post('/api/v1/auth/login', ADMIN);
+    const registered = await admin.post('/api/v1/admin/devices', { id: 'virtual_browser', cafe_id: cafeId, kind: 'simulator' });
+    assert.equal(registered.status, 201);
+    await evaluate(`(async () => {
+      const { createLiveChannel } = await import('/framework/index.js');
+      window.__sensorEvents = [];
+      window.__sensorChannel = createLiveChannel({ streamUrl: '/api/v1/stream', events: ['sensor.telemetry'], onMessage: (type, data) => window.__sensorEvents.push(data) });
+      window.__sensorChannel.start();
+    })()`);
+    try {
+      await waitFor(`window.__sensorChannel.status === 'live'`);
+      const options = simulatorOptions(['--url', origin.replace('http', 'ws') + '/ws/sensors', '--device', 'virtual_browser', '--location', cafeId, '--count', '1', '--people', '11'], { LS_SENSOR_TOKEN: registered.data.token });
+      assert.equal((await runSimulator(options, { log: () => {} })).sent, 1);
+      await waitFor(`window.__sensorEvents.some(e => e.locationId === ${JSON.stringify(cafeId)})`);
+      const event = await evaluate(`window.__sensorEvents[0]`);
+      assert.equal(event.occupancy.observedPeople, 11); assert.equal(event.dataSource, 'simulated'); assert.equal(event.device, undefined);
+      const row = server.app.deps.db.prepare('SELECT observed_people, data_source FROM measurements WHERE device_id = ?').get('virtual_browser');
+      assert.equal(row.observed_people, 11); assert.equal(row.data_source, 'simulated');
+    } finally { await evaluate(`window.__sensorChannel.stop()`); }
   });
 
   await check('framework DOM layer: patch keeps input, focus, preserved and keyed nodes; components clean up', async () => {

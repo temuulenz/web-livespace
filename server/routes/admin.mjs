@@ -156,7 +156,7 @@ export function register(router, deps) {
     if (db.prepare('SELECT 1 FROM devices WHERE id = ?').get(id)) throw new HttpError(409, 'device_exists', 'Ийм ID-тай төхөөрөмж бүртгэлтэй байна');
     const token = newToken('lsd_');
     db.prepare('INSERT INTO devices (id, cafe_id, label, kind, is_test, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id, body.cafe_id, String(body.label || '').slice(0, 80), ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : 'sensor', body.is_test ? 1 : 0, sha256(token), now());
+      .run(id, body.cafe_id, String(body.label || '').slice(0, 80), ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : 'sensor', body.is_test || body.kind === 'simulator' ? 1 : 0, sha256(token), now());
     // The token is shown once; only its hash is stored.
     sendJson(ctx.res, 201, { device: deviceView(db.prepare('SELECT * FROM devices WHERE id = ?').get(id)), token });
   });
@@ -170,7 +170,7 @@ export function register(router, deps) {
     db.prepare('UPDATE devices SET label = ?, kind = ?, is_test = ?, cafe_id = ? WHERE id = ?').run(
       body.label != null ? String(body.label).slice(0, 80) : device.label,
       ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : device.kind,
-      body.is_test != null ? (body.is_test ? 1 : 0) : device.is_test,
+      (body.kind || device.kind) === 'simulator' || (body.is_test != null ? body.is_test : device.is_test) ? 1 : 0,
       body.cafe_id || device.cafe_id, device.id);
     sendJson(ctx.res, 200, { device: deviceView(db.prepare('SELECT * FROM devices WHERE id = ?').get(device.id)) });
   });
