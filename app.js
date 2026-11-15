@@ -181,7 +181,7 @@ $('#sndBtn').onclick = e => {
  <div class="tgl-row"><div><b>Хөдөлгөөн багасгах</b><small>Анимацыг зогсоож, статик дүрслэл харуулна</small></div><button class="sw" role="switch" id="swRm" aria-checked="${Prefs.reduced}" aria-label="Хөдөлгөөн багасгах"></button></div>
  <div class="tgl-row"><div><b>Орчны дуу сонсох</b><small>Кафе бүрийн «Сонсох» товчоор зөвхөн өөрөө асаана. Автоматаар тоглохгүй.</small></div></div>`;
     $('#swSnd').onclick = () => { Prefs.sound = !Prefs.sound; store.set('sound', Prefs.sound); $('#swSnd').setAttribute('aria-checked', Prefs.sound); renderSndBtn(); if (Prefs.sound) { Snd.ensure(); Snd.ui('chime') } };
-    $('#swRm').onclick = () => { Prefs.reduced = !Prefs.reduced; store.set('reduced', Prefs.reduced); $('#swRm').setAttribute('aria-checked', Prefs.reduced); document.documentElement.classList.toggle('rm', Prefs.reduced); if (fp) fp.reduced = Prefs.reduced; Snd.ui('click') }
+    $('#swRm').onclick = () => { Prefs.reduced = !Prefs.reduced; store.set('reduced', Prefs.reduced); $('#swRm').setAttribute('aria-checked', Prefs.reduced); document.documentElement.classList.toggle('rm', Prefs.reduced); syncRoadMotion(); if (fp) fp.reduced = Prefs.reduced; Snd.ui('click') }
   }
 };
 $('#favBtn').onclick = e => { e.stopPropagation(); const p = $('#favPop'); $('#sndPop').hidden = true; $('#accPop').hidden = true; p.hidden = !p.hidden; if (!p.hidden) { p.innerHTML = `<h3>Хадгалсан кафе</h3>` + (platform.online && !platform.session.user ? `<p class="muted" style="margin:0 0 12px">Дуртай кафегаа хадгалж, дараа нь эндээс харахын тулд нэвтэрнэ үү.</p><button class="btn btn-p" data-fav-login>Нэвтрэх</button>` : favs.size ? [...favs].map(id => { const c = byId(id); if (!c) return ''; return `<div class="fav-item">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="26"')}<a href="#cafe-${id}">${escapeHTML(c.name)}</a><span class="muted" style="font-size:13px">${c.open ? freePct(c) + '% сул' : openTag(c)}</span></div>` }).join('') : `<p class="muted" style="margin:0">Одоогоор хадгалсан кафе алга. Картын ♡ товчийг дарж хадгална.</p>`) } };
@@ -214,6 +214,45 @@ const lampSVG = (c, shape) => shape === 0 ? `<svg viewBox="0 0 110 60"><path d="
 function lamp(x, cord, c, shape, stat, cls = '') { return `<div class="lamp ${cls}" style="left:${x}"><div class="cord" style="height:${cord}px"></div>${lampSVG(c, shape)}<div class="cone"></div>${stat ? `<div class="stat" style="--st:${cord + 120}px">${stat}</div>` : ''}</div>` }
 function plantSVG(w, flip) { return `<svg width="${w}" viewBox="0 0 120 170" style="${flip ? 'transform:scaleX(-1)' : ''}"><path d="M60 110C55 70 60 30 62 0c10 30 12 70 0 110z" fill="#7A8A4E"/><path d="M60 110C40 80 15 70 0 72c20 10 40 25 58 40z" fill="#8A9A5B"/><path d="M62 110c18-30 40-42 58-42-18 12-36 28-56 44z" fill="#8A9A5B"/><path d="M28 120h64l-8 50H36z" fill="#B6771D"/></svg>` }
 
+// The four goals. Desktop shows them as buttons under the search; phones show them as
+// stops along an animated road (see .hroad in styles/livespace.css).
+const HOME_PURP = [['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Хурдан Wi-Fi'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']];
+// Road geometry in a 356×400 box; the stop times below match the CSS card delays (18s loop).
+const ROAD = 'M -10 74 L 270 74 C 345 74 345 198 270 198 L 84 198 C 9 198 9 322 84 322 L 290 322';
+const ROAD_STOPS = [[16, 0, '0.9s', [81, 48, 58, 57]], [140, 103, '3.24s', [205, 90, 103, 91]], [76, 245, '10.8s', [141, 293, 306, 305]], [150, 351, '12.6s', [215, 338, 351, 339]]];
+function homeRoad() {
+  const stems = ROAD_STOPS.map(([, , , [x, y1, y2, dy]]) => `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#D9B07A" stroke-width="2" stroke-dasharray="2 3"/><circle cx="${x}" cy="${dy}" r="4" fill="#FF9D00" stroke="#FFF9EC" stroke-width="2"/>`).join('');
+  const spl = Array(10).fill('.45 0 .55 1').join(';');
+  return `<div class="hroad"><div class="hroad-in">
+   <svg class="hr-scene" viewBox="0 0 356 400" aria-hidden="true" focusable="false">
+    <path d="${ROAD}" fill="none" stroke="#F6E3C7" stroke-width="50" stroke-linejoin="round"/>
+    <path d="${ROAD}" fill="none" stroke="#7B542F" stroke-width="34" stroke-linejoin="round"/>
+    <path class="hr-dash" d="${ROAD}" fill="none" stroke="#FFF4DC" stroke-width="2.5" stroke-dasharray="10 12" stroke-linecap="round"/>
+    ${stems}
+    <path d="M303 290h28l12 14h-52z" fill="#7B542F"/><path d="M291 304h52l6 14h-64z" fill="#FF9D00"/>
+    <path d="M297 304h6l-3.3 14h-7.3zM314 304h6l.6 14h-7.2zM331 304h6l4.6 14h-7.3z" fill="#FFF9EC"/>
+    <rect x="290" y="318" width="54" height="26" rx="3" fill="#FBEEDC" stroke="#7B542F" stroke-width="2"/>
+    <rect x="318" y="323" width="18" height="12" rx="2" fill="#FFF4DC" stroke="#7B542F" stroke-width="1.5"><animate attributeName="fill" dur="18s" repeatCount="indefinite" values="#FFF4DC;#FFF4DC;#FFCF71;#FFCF71;#FFF4DC" keyTimes="0;.79;.82;.9;1"/></rect>
+    <rect x="296" y="326" width="14" height="18" rx="2" fill="#7B542F"/>
+    <g opacity="0">
+     <animateMotion dur="18s" repeatCount="indefinite" calcMode="spline" path="${ROAD}" keyPoints="0;.087;.087;.205;.205;.858;.858;.928;.928;1;1" keyTimes="0;.07;.12;.2;.25;.62;.67;.72;.77;.81;1" keySplines="${spl}"/>
+     <animate attributeName="opacity" dur="18s" repeatCount="indefinite" values="0;1;1;0;0" keyTimes="0;.02;.81;.89;1"/>
+     <circle r="17" fill="#FF9D00" stroke="#FFF9EC" stroke-width="3"/>
+     <g transform="translate(-10 -10) scale(.84)" fill="none" stroke="#3E2A17" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 10h12v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/>
+      <path d="M8 3c0 1.5 1 1.5 1 3M12 3c0 1.5 1 1.5 1 3"><animate attributeName="opacity" values="0;1;0" dur="1.8s" repeatCount="indefinite"/></path>
+     </g>
+    </g>
+   </svg>
+   ${HOME_PURP.map(([p, ic, d], i) => { const [x, y, delay] = ROAD_STOPS[i]; return `<button class="hr-stop" data-go-purpose="${p}" style="--x:${x};--y:${y};animation-delay:${delay}"><span class="hr-ic">${ic}</span><span class="hr-t"><b>${p}</b><small>${d}</small></span></button>` }).join('')}
+  </div></div>`;
+}
+// SVG (SMIL) animation is not covered by the CSS reduced-motion rule, so it is paused here.
+function syncRoadMotion() {
+  const s = $('.hr-scene'); if (!s || !s.pauseAnimations) return;
+  if (Prefs.reduced) { s.setCurrentTime(1.5); s.pauseAnimations() } else s.unpauseAnimations();
+}
+
 function renderHome() {
   const open = CAFES.filter(c => c.open); const avg = Math.round(open.reduce((s, c) => s + freePct(c), 0) / open.length); const good = open.filter(c => c.wifi >= 3).length;
   const stat = (n, l) => `<b class="num" data-count="${n}">${n}</b><span>${l}</span>`;
@@ -223,13 +262,15 @@ function renderHome() {
   ${lamp('0%', 30, '#FF9D00', 0, stat(CAFES.length, 'кафе газрын зураг дээр'), 'l1')}${lamp('9%', 150, '#B6771D', 1, stat(open.length, 'одоо нээлттэй'), 'l2')}
   ${lamp('78%', 130, '#FFCF71', 1, `<b class="num" data-count="${avg}" data-suf="%">${avg}%</b><span>дундаж сул суудал</span>`, 'l3')}${lamp('89%', 60, '#7B542F', 2, stat(good, 'кафед Wi-Fi сайн'), 'l4')}
   <div class="arch">
+   <div class="arch-lamp" aria-hidden="true"><div class="cord"></div>${lampSVG('#FF9D00', 0)}<div class="cone"></div></div>
    <span class="hero-kick">${I.map}Газрын зурагтай кафе хайгч</span>
    <h1>Өнөөдөр <em>хаана</em><br>суух вэ?</h1>
    <form class="hsearch" id="hs" role="search"><input id="hq" placeholder="Кафе хайх, жишээ нь «Кафе A»" aria-label="Кафе хайх" autocomplete="off" enterkeyhint="search"><button class="hs-go" aria-label="Хайх" title="Хайх">${I.search}</button></form>
-   <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${[['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Хурдан Wi-Fi'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']].map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
+   <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${HOME_PURP.map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
    <div class="hero-map ex-map" id="miniMap" aria-label="Газрын зургийн урьдчилсан харагдац">
     <a class="hm-open" href="#explore" aria-label="Газрын зураг нээх" title="Газрын зураг нээх">${I.map}</a>
    </div>
+   ${homeRoad()}
   </div>
   <div class="shelf"></div>
   <div class="deco" style="left:5%">${plantSVG(120)}</div><div class="deco" style="left:15%">${plantSVG(70, 1)}</div>
@@ -248,6 +289,7 @@ function renderHome() {
   $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.hsearch')) { Snd.ui('whoosh'); location.hash = 'explore' } });
   $$('[data-go-purpose]').forEach(b => b.onclick = () => { F.purpose.clear(); F.purpose.add(b.dataset.goPurpose); Snd.ui('pop'); location.hash = 'explore' });
   $('#hs').onsubmit = e => { e.preventDefault(); F.q = $('#hq').value.trim(); const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
+  syncRoadMotion();
   countUp();
 }
 
@@ -606,4 +648,3 @@ if (platform.online) {
   pullFavorites();
 }
 router.start();
-
