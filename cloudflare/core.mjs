@@ -1,3 +1,4 @@
+import { recordD1,d1Metrics } from './resources.mjs';
 import { accessUser, SESSION_SELECT, rejectPublicPrivilegeFields } from '../server/services/user-access.mjs';
 import { securityHeaders } from './security.mjs';
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
@@ -10,11 +11,14 @@ export const parse = (x, fallback = null) => { try { return x == null ? fallback
 export class APIError extends Error { constructor(status, code, message, details) { super(message); Object.assign(this,{status,code,details}); } }
 export const fail = (status,code,message,details) => { throw new APIError(status,code,message,details); };
 export const json = (body, status=200, headers={}) => Response.json(body,{status,headers:{'Cache-Control':'no-store',...securityHeaders,...headers}});
-export const error = e => json({error:{code:e.code || 'internal',message:e.status ? e.message : 'Internal server error',...(e.details ? {details:e.details}: {})}},e.status || 500);
-export const first = (db,sql,...args) => db.prepare(sql).bind(...args).first();
-export const all = async (db,sql,...args) => (await db.prepare(sql).bind(...args).all()).results;
-export const run = (db,sql,...args) => db.prepare(sql).bind(...args).run();
-export const batch = (db,entries) => db.batch(entries.map(([sql,...args])=>db.prepare(sql).bind(...args)));
+export const isQuotaError = e => /7500|daily.*(?:read|writ)|(?:read|writ).*limit.*exceed/i.test(String(e?.message || '')+' '+String(e?.cause?.message || ''));
+export const unavailable = () => json({error:{code:'d1_quota_exhausted',message:'Temporary service interruption. Please try again later.'}},503,{'Retry-After':'900'});
+export const error = e => isQuotaError(e) ? unavailable() : json({error:{code:e.code || 'internal',message:e.status ? e.message : 'Internal server error',...(e.details ? {details:e.details}: {})}},e.status || 500);
+async function measured(operation){const start=performance.now();try{return recordD1(await operation(),start);}catch(e){d1Metrics.failures++;throw e;}}
+export const first=async(db,sql,...args)=>(await measured(()=>db.prepare(sql).bind(...args).all())).results[0]||null;
+export const all=async(db,sql,...args)=>(await measured(()=>db.prepare(sql).bind(...args).all())).results;
+export const run=(db,sql,...args)=>measured(()=>db.prepare(sql).bind(...args).run());
+export const batch=(db,entries)=>measured(()=>db.batch(entries.map(([sql,...args])=>db.prepare(sql).bind(...args))));
 export async function body(req, limit=65536) {
   if (!/^application\/json\b/i.test(req.headers.get('content-type') || '')) fail(415,'unsupported_media_type','Content-Type must be application/json');
   const reader=req.body?.getReader(); if(!reader) return {};

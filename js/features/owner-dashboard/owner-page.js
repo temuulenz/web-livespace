@@ -4,7 +4,7 @@
 import { Component, html, raw, readForm, dateTime } from '../../../framework/index.js';
 import { I } from '../../icons.js';
 import { Snd } from '../../audio.js';
-import { SS, WIFI } from '../../cafes.js';
+import { SS, WIFI, byId } from '../../cafes.js';
 import { seatRow, ssGlyph, wifiSVG } from '../../components/atmosphere.js';
 import { FloorPlan } from '../../simulation/floor-plan.js';
 import { LAYOUTS } from '../../simulation/layouts.js';
@@ -56,17 +56,19 @@ export class OwnerPage extends Component {
   onMount() {
     this.watch(platform.session.store, s => s.user, () => this.load());
     this.listen(document, 'visibilitychange', () => { if (!document.hidden) this.load(); });
-    this.onCleanup(platform.bus.on('cafe:updated', id => { if (this.state.cafes?.some(c => c.id === id)) this.load(); }));
-    this.interval(() => { if (!document.hidden) this.load(); }, Math.min(5000, platform.config.poll_interval_sec * 1000));
+    this.onCleanup(platform.bus.on('cafe:updated', id => { const live=byId(id)?.live;if(live&&this.state.cafes?.some(c=>c.id===id))this.setState({cafes:this.state.cafes.map(c=>c.id===id?{...c,live}:c)}); }));
+    this.interval(() => { if (!document.hidden) this.load(); }, Math.max(30000, platform.config.poll_interval_sec * 1000));
     this.load();
   }
   onDestroy() { this.fp?.destroy(); this.historyView?.destroy(); }
   async load() {
+    if(this.loadingRequest || Date.now()<(this.retryAfter || 0))return;
     if (!platform.online || !platform.session.hasRole('owner', 'admin')) { this.setState({ cafes: null }); return; }
+    this.loadingRequest=true;
     try {
       const { cafes } = await platform.api.get('/owner/cafes');
       this.setState({ cafes, error: null, selected: this.state.selected && cafes.some(c => c.id === this.state.selected) ? this.state.selected : cafes[0]?.id });
-    } catch (error) { this.setState({ error: error.message || 'Алдаа гарлаа' }); }
+    } catch (error) { if(error.status===503)this.retryAfter=Date.now()+900000;this.setState({ error: error.message || 'Алдаа гарлаа' }); } finally {this.loadingRequest=false;}
   }
   async save(form) {
     const cafe = this.current();

@@ -1,3 +1,4 @@
+import { createBrowserRooms } from '../../framework/api/browser-realtime.js';
 // LiveSpace platform services: API, session, café catalogue and live updates.
 //
 // The site works in two modes:
@@ -34,12 +35,13 @@ export async function loadCatalogue() {
 
 let channel = null;
 function startLive() {
-  channel = createLiveChannel({
+  channel?.stop();
+  const fallback = createLiveChannel({
     streamUrl: platform.config.stream_enabled === false ? null : '/api/v1/stream',
     events: ['measurement', 'cafe', 'catalog', 'sensor.telemetry', 'sensor.status'],
     poll: async () => (await api.get('/live')).updates.map(u => ['measurement', u]),
     interval: platform.config.poll_interval_sec * 1000,
-    onStatus: status => { platform.liveStatus = status; bus.emit('live:status', status); },
+    onStatus: status => { showInterruption(status==='unavailable'); platform.liveStatus = status; bus.emit('live:status', status); },
     onMessage(type, data) {
       if (type === 'measurement') applyLive(data);
       else if (type === 'sensor.telemetry' || type === 'sensor.status') bus.emit('sensor:updated', data.locationId);
@@ -47,14 +49,22 @@ function startLive() {
       else if (type === 'catalog') loadCatalogue().then(() => bus.emit('catalog:changed', data)).catch(() => { });
     }
   });
+  channel=platform.config.browser_realtime ? createBrowserRooms({cafeIds:getCafes().filter(c=>c.live&&c.live.mode!=='demo').map(c=>c.id),fallback,onSnapshot:applyLive,onStatus:status=>{platform.liveStatus=status;bus.emit('live:status',status);}}) : fallback;
   channel.start();
+}
+
+function showInterruption(show) {
+  let banner=document.getElementById('ls-service-interruption');
+  if(show && !banner){banner=document.createElement('p');banner.id='ls-service-interruption';banner.setAttribute('role','alert');banner.textContent='Үйлчилгээ түр тасалдсан. Дараа дахин оролдоно уу. / Temporary service interruption. Please try again later.';document.body.prepend(banner);}
+  if(!show)banner?.remove();
 }
 
 // Probe the backend quickly; a static host answers 404 and the site stays offline.
 export async function initPlatform() {
   try {
     await api.get('/health', { timeout: 2500, retry: 0 });
-  } catch {
+  } catch (error) {
+    if(error.status===503){platform.online=true;showInterruption(true);document.documentElement.classList.add('ls-online');retainCafes(new Set());}
     session.store.set({ ready: true });
     return platform;
   }
@@ -62,7 +72,7 @@ export async function initPlatform() {
   document.documentElement.classList.add('ls-online');
   await Promise.allSettled([
     api.get('/config').then(config => { platform.config = config; }),
-    loadCatalogue(),
+    loadCatalogue().catch(error=>{if(error.status===503){retainCafes(new Set());showInterruption(true);}throw error;}),
     session.load()
   ]);
   startLive();

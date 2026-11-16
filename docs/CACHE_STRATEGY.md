@@ -1,0 +1,11 @@
+# Cache boundaries
+
+Phase 7.1 current live and history caches remain in AppBackend; they never enter KV. D1 remains authoritative. Optional `PUBLIC_CACHE` KV plus `LS_KV_PUBLIC_ENABLED=1` applies only to `/api/v1/cafes/:id/profile`, an explicit whitelist projection without owner IDs, sessions, live measurements or device diagnostics. No future menus/orders/inventory are implemented.
+
+Profile keys: `public:v1:cafe:{encoded-id}:profile:g{epoch}`. The existing singleton AppBackend stores each tenant epoch durably; successful cafe mutations advance it. Old KV values can remain eventually consistent but cannot satisfy the new generation key. TTL is one hour in KV and at most one minute in the 128-entry memory cache. A cold generation reads D1 once; hits do not query D1 merely to check freshness. Public address/hours/name data can remain stale for the documented TTL if edited outside application mutation routes. Never use this cache for publication of private information.
+
+Concurrent misses share an in-flight Promise. Invalidating during a miss prevents old results from repopulating memory. KV errors fall back to D1 and preserve the response contract. Writes have a persisted 400/day admission budget, counting attempts before put, to leave room beneath KV's 1,000/day free write quota. This is not an account-wide provider billing cap. Failed invalidation persistence returns an error; authoritative mutation may already be committed, so reconcile and retry reads rather than assuming rollback. KV is disabled by default: ten low-traffic cafes seldom benefit from a separate store, and frequently invalidated keys can cost more than the existing DO cache.
+
+The Cache API handles only non-sensitive `/api/v1/config` for 60 seconds, saving backend DO requests and storage work without any KV writes. It does not reduce initial Worker invocations and is local to a Cloudflare cache location. Public profile responses retain no-store externally. Private image requests authorize before conditional 304 responses. No private response enters shared Cache API/KV caches.
+
+Metrics are exposed in the future resource-monitoring interface as counters for hits, misses, KV reads/writes and failures. Memory counters reset on DO restart and must not be presented as billing totals.

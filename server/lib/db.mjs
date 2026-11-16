@@ -1,4 +1,8 @@
+import { REVIEWS_SCHEMA } from '../../shared/business/reviews-schema.mjs';
+import { INVENTORY_SCHEMA } from '../../shared/business/inventory-schema.mjs';
+import { MENU_HARDENING_SCHEMA } from '../../shared/business/menu-hardening-schema.mjs';
 // SQLite storage (node:sqlite, built into Node ≥ 22.5; no external packages).
+import { MENU_SCHEMA } from '../../shared/business/menu-schema.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -191,7 +195,7 @@ BEGIN
  VALUES('super-admin-bind:' || NEW.user_id,'operator-bootstrap',NEW.user_id,'super_admin.bind',NEW.bound_at,'{}');
 END;
 `
-];
+, MENU_SCHEMA, MENU_HARDENING_SCHEMA, INVENTORY_SCHEMA, REVIEWS_SCHEMA];
 
 export function openDatabase(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });

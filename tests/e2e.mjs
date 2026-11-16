@@ -302,6 +302,8 @@ try {
       assert.equal(await evaluate(`window.__sensorCanvas === document.querySelector('#planWrap canvas')`), true);
       assert.equal(await evaluate(`document.querySelector('#publicSensor [data-sensor-status]').dataset.sensorStatus`), 'online');
       assert.equal(await evaluate(`document.querySelector('#publicSensor [data-device-diagnostics]')`), null);
+      // Historical aggregation refreshes independently of responsive live counts.
+      await click('#publicSensorHistory [data-history-refresh]');
       await waitFor(`document.querySelector('#publicSensorHistory [data-history-reading]')?.textContent.includes('12')`);
       assert.equal(await evaluate(`document.querySelector('#publicSensorHistory [data-history-source]').value`), 'simulated');
       await evaluate(`(() => { const input = document.querySelector('#publicSensorHistory [data-history-interval]'); input.value = '15'; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
