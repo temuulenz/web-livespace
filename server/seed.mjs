@@ -24,7 +24,11 @@ export function seedDemoCafes(db) {
 // LS_ADMIN_EMAIL / LS_ADMIN_PASSWORD or `npm run create-admin`; nothing is hard-coded.
 export async function ensureAdmin(db, email, password, name = 'Admin') {
   email = email.trim().toLowerCase();
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  const existing = db.prepare('SELECT id, role FROM users WHERE email = ?').get(email);
+  if (db.prepare('SELECT 1 FROM super_admin_identity').get()) {
+    if (existing?.role === 'admin') return existing.id;
+    throw new Error('Administrator provisioning requires the Super Admin account');
+  }
   if (existing) { db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(existing.id); return existing.id; }
   const id = newId('usr');
   db.prepare("INSERT INTO users (id, email, password_hash, name, role, created_at) VALUES (?, ?, ?, ?, 'admin', ?)").run(id, email, await hashPassword(password), name, now());

@@ -1,3 +1,4 @@
+import { accessUser, SESSION_SELECT, rejectPublicPrivilegeFields } from '../services/user-access.mjs';
 // Passwords, sessions, roles and simple rate limiting.
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual, randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -26,7 +27,9 @@ export async function verifyPassword(password, stored) {
   return timingSafeEqual(key, expected);
 }
 
-export function validateCredentials({ email, password, name }) {
+export function validateCredentials(input) {
+  rejectPublicPrivilegeFields(input, (status,code,message)=>{throw new HttpError(status,code,message);});
+  const { email, password, name } = input;
   const details = {};
   if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || email.length > 200) details.email = 'И-мэйл хаяг буруу байна';
   if (typeof password !== 'string' || password.length < 8 || password.length > 200) details.password = 'Нууц үг дор хаяж 8 тэмдэгт байна';
@@ -35,20 +38,21 @@ export function validateCredentials({ email, password, name }) {
   return { email: email.trim().toLowerCase(), password, name: (name || '').trim() };
 }
 
-export const publicUser = user => user && { id: user.id, email: user.email, name: user.name, role: user.role };
+export const publicUser = accessUser;
 
 export function createSessions(db, { days = 30, secure = false } = {}) {
-  const insert = db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)');
-  const lookup = db.prepare('SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?');
+  const insert = db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at, authenticated_at, user_auth_version) SELECT ?,id,?,?,?,auth_version FROM users WHERE id=? AND disabled_at IS NULL AND auth_version=?');
+  const lookup = db.prepare(SESSION_SELECT);
   const remove = db.prepare('DELETE FROM sessions WHERE token_hash = ?');
   const purge = db.prepare('DELETE FROM sessions WHERE expires_at <= ?');
   const maxAge = days * 24 * 3600;
 
   return {
     // Creates a session and returns the Set-Cookie header value.
-    start(userId) {
+    start(userId, expectedVersion = 0) {
       const token = newToken();
-      insert.run(sha256(token), userId, now(), new Date(Date.now() + maxAge * 1000).toISOString());
+      const created=insert.run(sha256(token),now(),new Date(Date.now()+maxAge*1000).toISOString(),now(),userId,expectedVersion);
+      if (!created.changes) throw new HttpError(401,'authentication_changed','Credentials changed; sign in again');
       return cookie(SESSION_COOKIE, token, { maxAge, secure });
     },
     user(token) { return token ? lookup.get(sha256(token), now()) || null : null; },

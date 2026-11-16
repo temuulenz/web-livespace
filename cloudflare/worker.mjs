@@ -1,3 +1,4 @@
+import { createUserAccess, SUPER_ADMIN_SELECT } from '../server/services/user-access.mjs';
 import { DurableObject } from 'cloudflare:workers';
 import { ingest } from './ingest.mjs';
 import { partner } from './partner.mjs';
@@ -36,7 +37,7 @@ async function handle(req,env) {
  }
  if(p==='/api/v1/ingest/measurements' && m==='POST')return ingest(req,db,limit);
  if(p==='/api/v1/health') {
-  try {await first(db,'SELECT id FROM devices LIMIT 1');await first(db,'SELECT message_id FROM sensor_receipts LIMIT 1');await first(db,'SELECT photo_id FROM photo_bytes LIMIT 1');return json({ok:true,api:'1',time:now(),deployment:'cloudflare',database:'d1',sensorGateway:!!env.SENSORS,transport:'polling',schema:4});}
+  try {await first(db,'SELECT id FROM devices LIMIT 1');await first(db,'SELECT message_id FROM sensor_receipts LIMIT 1');await first(db,'SELECT photo_id FROM photo_bytes LIMIT 1');return json({ok:true,api:'1',time:now(),deployment:'cloudflare',database:'d1',sensorGateway:!!env.SENSORS,transport:'polling',schema:5});}
   catch{return json({ok:false,api:'1',deployment:'cloudflare',database:'unavailable_or_unmigrated'},503);}
  }
  if(p==='/api/v1/config')return json({poll_interval_sec:Number(env.LS_POLL_INTERVAL_SEC || 10),stale_after_sec:900,sensor_stale_after_sec:staleAfterSec,sensor_expected_interval_sec:expectedIntervalSec,stream_enabled:false});
@@ -50,12 +51,25 @@ async function handle(req,env) {
  const user=await session(db,req);
  const auth=env.SENSORS.get(env.SENSORS.idFromName('auth'));
  const registerUser=(db,input,role='user')=>createUser(db,input,role,auth);
+ const userAccess=createUserAccess({sql:{first:(query,...args)=>first(db,query,...args),all:(query,...args)=>all(db,query,...args),batch:entries=>batch(db,entries)},hashPassword:password=>auth.passwordHash(password),verifyPassword:(password,hash)=>auth.passwordVerify(password,hash),fail,id});
+ if(p==='/api/v1/auth/reauthenticate' && m==='POST'){limit(`reauth:${user?.id}:${req.headers.get('cf-connecting-ip')}`,10,900000);return json(await userAccess.reauthenticate(user,(await body(req)).password));}
+ if(p==='/api/v1/admin/users' || /^\/api\/v1\/admin\/users\/[^/]+(?:\/password)?$/.test(p) || p==='/api/v1/admin/audit') {
+  guard(user,'admin');limit(`user-management:${user.id}`,30,60000);
+  if(p==='/api/v1/admin/users' && m==='GET')return json({users:await userAccess.list(user,query.role)});
+  if(p==='/api/v1/admin/users' && m==='POST')return json({user:await userAccess.create(user,await body(req))},201);
+  const target=routeId(p,/^\/api\/v1\/admin\/users\/([^/]+)(\/password)?$/);
+  if(target && !target[1] && m==='PATCH')return json({user:await userAccess.update(user,target[0],await body(req))});
+  if(target?.[1] && m==='POST')return json({user:await userAccess.resetPassword(user,target[0],await body(req))});
+  if(p==='/api/v1/admin/audit' && m==='GET')return json({events:await userAccess.audit(user)});
+  fail(405,'method_not_allowed','Method not allowed');
+ }
+
  const partnerResponse=await partner(req,db,user,registerUser,limit);if(partnerResponse)return partnerResponse;
  if(p==='/api/v1/auth/register' && m==='POST') {limit(`register:${req.headers.get('cf-connecting-ip')}`,10,3600000);const user=await registerUser(db,await body(req));return json({user:publicUser(user)},201,{'Set-Cookie':await startSession(db,user.id,req)});}
  if(p==='/api/v1/auth/login' && m==='POST') {
-  limit(`login:${req.headers.get('cf-connecting-ip')}`,20,900000);const x=await body(req);const found=typeof x.email==='string'?await first(db,'SELECT * FROM users WHERE email=?',x.email.trim().toLowerCase()):null;
-  if(!found || typeof x.password!=='string' || x.password.length>200 || !await auth.passwordVerify(x.password,found.password_hash))fail(401,'invalid_credentials','Invalid email or password');
-  return json({user:publicUser(found)},200,{'Set-Cookie':await startSession(db,found.id,req)});
+  limit(`login:${req.headers.get('cf-connecting-ip')}`,20,900000);const x=await body(req);const found=typeof x.email==='string'?await first(db,`SELECT u.*, ${SUPER_ADMIN_SELECT} FROM users u WHERE email=?`,x.email.trim().toLowerCase()):null;
+  if(!found || found.disabled_at || typeof x.password!=='string' || x.password.length>200 || !await auth.passwordVerify(x.password,found.password_hash))fail(401,'invalid_credentials','Invalid email or password');
+  return json({user:publicUser(found)},200,{'Set-Cookie':await startSession(db,found.id,req,found.auth_version)});
  }
  if(p==='/api/v1/auth/me'){guard(user);return json({user:publicUser(user)});}
  if(p==='/api/v1/auth/logout' && m==='POST'){const t=/(?:^|;\s*)ls_session=([^;]+)/.exec(req.headers.get('cookie') || '')?.[1];if(t)await run(db,'DELETE FROM sessions WHERE token_hash=?',sha(t));return json({ok:true},200,{'Set-Cookie':`ls_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${u.protocol==='https:'?'; Secure':''}`});}
@@ -122,7 +136,7 @@ async function handle(req,env) {
     await update(db,'devices',d.id,{...next,connection_status:'offline'});return json({device:await deviceView(db,await first(db,'SELECT * FROM devices WHERE id=?',d.id))});
    }
   }
-  if(p==='/api/v1/admin/users' && m==='GET'){const role=['user','owner','admin'].includes(query.role)?query.role:null;return json({users:await all(db,`SELECT u.id,u.email,u.name,u.role,u.created_at,(SELECT GROUP_CONCAT(name,', ') FROM cafes c WHERE c.owner_id=u.id) cafes FROM users u ${role?'WHERE u.role=?':''} ORDER BY u.created_at DESC`,...(role?[role]:[]))});}
+
   if(p==='/api/v1/admin/measurements' && m==='GET'){let where=[],args=[];for(const k of ['cafe_id','device_id'])if(query[k]){where.push(`${k}=?`);args.push(query[k]);}if(query.since){where.push('ts>=?');args.push(query.since);}if(query.before){where.push('id<?');args.push(Number(query.before));}const n=Math.min(500,Math.max(1,Number(query.limit)||100));return json({measurements:(await all(db,`SELECT * FROM measurements ${where.length?'WHERE '+where.join(' AND '):''} ORDER BY id DESC LIMIT ?`,...args,n)).map(r=>({...r,is_test:!!r.is_test,raw:parse(r.raw)}))});}
  }
  fail(404,'not_found','Endpoint not available');

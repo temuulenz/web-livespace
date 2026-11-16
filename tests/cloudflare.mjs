@@ -22,7 +22,7 @@ async function api(path,method='GET',value,authenticated=true) {
 }
 function socket(t){const ws=new WebSocket(origin.replace('http:','ws:')+'/ws/sensors',{headers:{Authorization:'Bearer '+t}});const queue=[],waiters=[];ws.on('message',x=>{const value=JSON.parse(x);if(waiters.length)waiters.shift()(value);else queue.push(value);});ws.on('unexpected-response',(_,res)=>console.error('WebSocket upgrade failed',res.statusCode));ws.on('error',e=>console.error('WebSocket error',e.message));return {ws,next:()=>queue.length?Promise.resolve(queue.shift()):Promise.race([new Promise(r=>waiters.push(r)),new Promise((_,r)=>setTimeout(()=>r(Error('WS timeout')),5000))])};}
 try {
- cli('d1','migrations','apply','livespace','--local');console.log('PASS four local D1 migrations');
+ cli('d1','migrations','apply','livespace','--local');console.log('PASS five local D1 migrations');
  cli('d1','execute','livespace','--local','--file','cloudflare/seed.sql');
  const adminSql=join(dir,'admin.sql'),h=await hashPassword('test-password-123');
  await writeFile(adminSql,`INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES('admin','admin@test.mn','${h}','Admin','admin','${new Date().toISOString()}');`,{mode:0o600});
@@ -32,6 +32,37 @@ try {
  await check('health, static allow-list and seeded catalog',async()=>{assert.equal((await api('/health')).data.ok,true);assert.equal((await api('/cafes')).data.cafes.length,12);assert.equal((await fetch(origin+'/server/lib/auth.mjs')).status,404);const page=await fetch(origin+'/');assert.equal(page.status,200);assert.match(page.headers.get('content-security-policy') || '',/default-src 'self'/);});
  await check('auth rejects anonymous admin and cross-origin writes',async()=>{assert.equal((await api('/admin/devices')).res.status,401);assert.equal((await fetch(origin+'/api/v1/auth/login',{method:'POST',headers:{Origin:'https://evil.invalid','Content-Type':'application/json'},body:'{}'})).status,403);});
  await check('unchanged scrypt password login and session',async()=>{const {res,data}=await api('/auth/login','POST',{email:'admin@test.mn',password:'test-password-123'});assert.equal(res.status,200,JSON.stringify(data));cookie=res.headers.get('set-cookie').split(';')[0];assert.equal((await api('/auth/me')).data.user.role,'admin');});
+ await check('Super Admin ID binding, administrator restrictions, recent auth and session revocation',async()=>{
+  const regularCookie=cookie;
+  const rootSql=join(dir,'root.sql');
+  await writeFile(rootSql,`INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES('root-id','temuulenbayarjargal@icloud.com','${h}','Root','admin','${new Date().toISOString()}'); INSERT INTO super_admin_identity(singleton,user_id,bound_at) VALUES(1,'root-id','${new Date().toISOString()}');`,{mode:0o600});
+  cli('d1','execute','livespace','--local','--file',rootSql);
+  const account={email:'managed-admin@test.mn',password:'managed-test-password-123',role:'admin'};
+  assert.equal((await api('/admin/users','POST',account)).res.status,403);
+  assert.equal((await api('/auth/register','POST',{email:'forge@test.mn',password:'test-password-123',is_super_admin:true},false)).res.status,422);
+  assert.equal((await api('/auth/register','POST',{email:'TEMUULENBAYARJARGAL@ICLOUD.COM',password:'test-password-123'},false)).res.status,403);
+  const login=await api('/auth/login','POST',{email:'temuulenbayarjargal@icloud.com',password:'test-password-123'});
+  assert.equal(login.data.user.is_super_admin,true);cookie=login.res.headers.get('set-cookie').split(';')[0];const rootCookie=cookie;
+  const created=await api('/admin/users','POST',account);assert.equal(created.res.status,201,JSON.stringify(created.data));const target=created.data.user.id;
+  const targetLogin=await api('/auth/login','POST',{email:account.email,password:account.password});const targetCookie=targetLogin.res.headers.get('set-cookie').split(';')[0];
+  cookie=regularCookie;
+  for(const value of [{role:'user'},{disabled:true},{name:'Changed'}])assert.equal((await api('/admin/users/'+target,'PATCH',value)).res.status,403);
+  assert.equal((await api('/admin/users/'+target+'/password','POST',{password:'changed-password-123'})).res.status,403);
+  cookie=rootCookie;
+  for(const value of [{role:'user'},{disabled:true}])assert.equal((await api('/admin/users/root-id','PATCH',value)).res.status,403);
+  assert.equal((await api('/admin/users/root-id/password','POST',{password:'changed-password-123'})).res.status,403);
+  cli('d1','execute','livespace','--local','--command',"UPDATE sessions SET authenticated_at='2000-01-01T00:00:00Z' WHERE user_id='root-id'");
+  assert.equal((await api('/admin/users/'+target,'PATCH',{role:'owner'})).data.error.code,'recent_auth_required');
+  assert.equal((await api('/auth/reauthenticate','POST',{password:'test-password-123'})).res.status,200);
+  assert.equal((await api('/admin/users/'+target+'/password','POST',{password:'changed-password-123'})).res.status,200);
+  cookie=targetCookie;assert.equal((await api('/auth/me')).res.status,401);
+  cookie=rootCookie;
+  assert.equal((await api('/admin/users/'+target,'PATCH',{role:'owner'})).res.status,200);
+  assert.equal((await api('/admin/users/'+target,'PATCH',{disabled:true})).res.status,200);
+  const events=(await api('/admin/audit')).data.events;
+  assert.ok(events.some(e=>e.action==='super_admin.bind'));assert.ok(events.some(e=>e.action==='user.password_reset'));assert.ok(!JSON.stringify(events).includes('scrypt$'));
+  cookie=regularCookie;
+ });
  await check('registration, RBAC and favorites',async()=>{const x=await api('/auth/register','POST',{email:'user@test.mn',password:'test-password-123'});assert.equal(x.res.status,201);const adminCookie=cookie;cookie=x.res.headers.get('set-cookie').split(';')[0];assert.equal((await api('/admin/devices')).res.status,403);assert.deepEqual((await api('/me/favorites/A','PUT')).data.favorites,['A']);cookie=adminCookie;});
  await check('configure cafe and register simulated device',async()=>{assert.equal((await api('/admin/cafes/A','PATCH',{data_mode:'live',hours:'00:00–23:59'})).res.status,200);});
  const registered=await api('/admin/devices','POST',{id:'CF-SIM',cafe_id:'A',kind:'simulator',is_test:false});assert.equal(registered.res.status,201,JSON.stringify(registered.data));const t=registered.data.token;

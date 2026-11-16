@@ -28,6 +28,8 @@ The authenticated `/ws/sensors` upgrade attaches to the same HTTP server and reu
 
 ## Roles
 
+Administrator-account management is restricted to the immutable Super Admin identity. See [access-control policy, bootstrap and audit behavior](SUPER_ADMIN.md).
+
 | Can… | Guest | User | Café owner | Admin |
 |---|:-:|:-:|:-:|:-:|
 | Browse home, map, search, filter by goal, café pages, visualizations, seats/noise/Wi-Fi | ✓ | ✓ | ✓ | ✓ |

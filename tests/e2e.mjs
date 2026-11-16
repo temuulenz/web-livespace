@@ -1,3 +1,4 @@
+import { hashPassword } from '../server/lib/auth.mjs';
 // End-to-end: the real LiveSpace server + a real (headless) browser.
 // Guest → favourite → login window → saved; partner application → owner account →
 // owner dashboard; admin workflow → device → live JSON measurement → café page updates.
@@ -314,6 +315,25 @@ try {
     await evaluate(`document.querySelector('#modal form').requestSubmit()`);
     await waitFor(`!!document.querySelector('[data-device-diagnostics="public_demo"]')`);
     assert.match(await evaluate(`document.querySelector('[data-device-diagnostics="public_demo"]').textContent`), /36.5/);
+  });
+
+  await check('user management hides administrator controls from regular admins and permits the bound Super Admin', async () => {
+    const db=server.app.deps.db, rootPassword='browser-root-test-password';
+    db.prepare("INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES('browser-root','temuulenbayarjargal@icloud.com',?,'Root','admin',?)").run(await hashPassword(rootPassword),new Date().toISOString());
+    db.prepare('INSERT INTO super_admin_identity(singleton,user_id,bound_at) VALUES(1,?,?)').run('browser-root',new Date().toISOString());
+    await go('#admin?tab=users');
+    await waitFor(`!!document.querySelector('[data-form="createManagedUser"]') && document.querySelector('.adm-t')?.textContent.includes('Super Admin')`);
+    assert.equal(await evaluate(`!!document.querySelector('[data-form="createManagedUser"] option[value="admin"]')`),false);
+    assert.equal(await evaluate(`!![...document.querySelectorAll('.adm-t tr')].find(row=>row.textContent.includes('temuulenbayarjargal@icloud.com'))?.querySelector('form')`),false);
+    const regularId=db.prepare('SELECT id FROM users WHERE email=?').get(ADMIN.email).id;
+    assert.equal(await evaluate(`!!document.querySelector('[data-user-id="${regularId}"]')`),false);
+    await evaluate(`import('/js/services/platform.js').then(({ platform })=>platform.session.login({email:'temuulenbayarjargal@icloud.com',password:${JSON.stringify(rootPassword)}}))`);
+    await waitFor(`!!document.querySelector('[data-form="createManagedUser"] option[value="admin"]') && !!document.querySelector('[data-user-id="${regularId}"]')`);
+    assert.equal(await evaluate(`!!document.querySelector('[data-user-id="browser-root"]')`),false);
+    await evaluate(`(() => { const form=document.querySelector('[data-form="createManagedUser"]');form.email.value='browser-created-admin@test.mn';form.name.value='Managed';form.account_role.value='admin';form.password.value='browser-managed-test-password';form.requestSubmit(); })()`);
+    await waitFor(`document.querySelector('.adm-t')?.textContent.includes('browser-created-admin@test.mn')`);
+    assert.equal(db.prepare('SELECT role FROM users WHERE email=?').get('browser-created-admin@test.mn').role,'admin');
+    assert.equal(await evaluate(`document.querySelector('[data-form="createManagedUser"] [name="password"]').value`),'');
   });
 
   await check('framework DOM layer: patch keeps input, focus, preserved and keyed nodes; components clean up', async () => {

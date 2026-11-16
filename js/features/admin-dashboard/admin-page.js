@@ -214,11 +214,39 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
       ${cafes.map(c => html`<tr><td><b>${c.name}</b><br><small class="muted">${c.id}</small></td><td>${statusBadge(c.status)}</td><td>${modeBadge(c.data_mode)}</td><td>${c.owner_email || '—'}</td><td class="num">${c.device_count}</td><td class="num">${when(c.last_measurement_at)}</td><td>${visLabel(c.visualization_status)}</td><td><button class="btn btn-o" data-open-cafe="${c.id}">Засах</button></td></tr>`)}</tbody></table></div>`;
   }
 
+  async confirmUserManagement(form) {
+    const { password } = readForm(form); form.reset();
+    await this.run(platform.api.post('/auth/reauthenticate', { password }), 'Нэвтрэлтийг баталгаажууллаа · 5 минут');
+  }
+  async createManagedUser(form) {
+    const input = readForm(form); form.reset();
+    const result = await this.run(platform.api.post('/admin/users', { email: input.email, name: input.name, role: input.account_role, password: input.password }), 'Хэрэглэгч үүслээ');
+    if (result) this.load();
+  }
+  async saveManagedUser(form) {
+    const input = readForm(form), password = input.password; form.querySelector('[name="password"]').value = '';
+    const result = password
+      ? await this.run(platform.api.post(`/admin/users/${encodeURIComponent(form.dataset.userId)}/password`, { password }), 'Нууц үг шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан')
+      : await this.run(platform.api.patch(`/admin/users/${encodeURIComponent(form.dataset.userId)}`, { name: input.name, role: input.account_role, disabled: form.querySelector('[name="disabled"]').checked }), 'Эрх шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
+    if (result) this.load();
+  }
   usersView() {
-    const users = this.state.data.users || [];
-    return html`<label class="adm-filter">Үүрэг: <select name="role"><option value="">Бүгд</option><option value="owner">Кафе эзэмшигч</option><option value="user">Хэрэглэгч</option><option value="admin">Админ</option></select></label>
-      <div class="adm-scroll"><table class="adm-t"><thead><tr><th>И-мэйл</th><th>Нэр</th><th>Үүрэг</th><th>Кафе</th><th>Бүртгүүлсэн</th></tr></thead><tbody>
-      ${users.map(u => html`<tr><td>${u.email}</td><td>${u.name || '—'}</td><td>${u.role}</td><td>${u.cafes || '—'}</td><td class="num">${when(u.created_at)}</td></tr>`)}</tbody></table></div>`;
+    const users = this.state.data.users || [], superAdmin = !!platform.session.user?.is_super_admin;
+    const roles = superAdmin ? ['user', 'owner', 'admin'] : ['user', 'owner'];
+    return html`<p class="muted">${superAdmin ? 'Super Admin · администраторын эрхийг удирдах боломжтой.' : 'Администратор болон Super Admin бүртгэлийг өөрчлөх эрхгүй.'}</p>
+      <form class="form adm-form" data-form="confirmUserManagement"><label>Мэдрэмтгий үйлдлийн өмнө одоогийн нууц үгээ баталгаажуулна (5 минут).</label><input name="password" type="password" autocomplete="current-password" maxlength="200" required aria-label="Одоогийн нууц үг"><button class="btn btn-o">Нэвтрэлт баталгаажуулах</button></form>
+      <details><summary>Хэрэглэгч үүсгэх</summary><form class="form adm-form" data-form="createManagedUser">
+        <label>И-мэйл<input name="email" type="email" maxlength="200" required autocomplete="off"></label><label>Нэр<input name="name" maxlength="100"></label>
+        <label>Үүрэг<select name="account_role">${roles.map(role => html`<option value="${role}">${role}</option>`)}</select></label>
+        <label>Шинэ нууц үг<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200" required></label><button class="btn btn-p">Үүсгэх</button></form></details>
+      <label class="adm-filter">Үүрэг: <select name="role"><option value="">Бүгд</option><option value="owner">Кафе эзэмшигч</option><option value="user">Хэрэглэгч</option><option value="admin">Админ</option></select></label>
+      <div class="adm-scroll"><table class="adm-t"><thead><tr><th>И-мэйл</th><th>Нэр</th><th>Үүрэг</th><th>Кафе</th><th>Бүртгүүлсэн</th><th>Удирдлага</th></tr></thead><tbody>
+      ${users.map(u => html`<tr><td>${u.email}</td><td>${u.name || '—'}</td><td>${u.is_super_admin ? 'Super Admin' : u.role}${u.disabled_at ? ' · идэвхгүй' : ''}</td><td>${u.cafes || '—'}</td><td class="num">${when(u.created_at)}</td><td>
+        ${!u.is_super_admin && (u.role !== 'admin' || superAdmin) ? html`<details><summary>Засах</summary><form class="form adm-form" data-form="saveManagedUser" data-user-id="${u.id}">
+          <label>Нэр<input name="name" value="${u.name}" maxlength="100"></label><label>Үүрэг<select name="account_role">${roles.map(role => html`<option value="${role}" ${raw(role === u.role ? 'selected' : '')}>${role}</option>`)}</select></label>
+          <label><input name="disabled" type="checkbox" ${raw(u.disabled_at ? 'checked' : '')}>Идэвхгүй болгох</label>
+          <label>Нууц үг солих бол шинэ утга оруулах<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200"></label><button class="btn btn-o">Хадгалах / нууц үг солих</button></form></details>` : html`<span class="muted">Хамгаалагдсан</span>`}
+      </td></tr>`)}</tbody></table></div>`;
   }
 
   deviceForm(cafes, cafeId) {

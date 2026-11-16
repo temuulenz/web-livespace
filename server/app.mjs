@@ -16,6 +16,7 @@ import * as partnerRoutes from './routes/partner.mjs';
 import * as ownerRoutes from './routes/owner.mjs';
 import * as adminRoutes from './routes/admin.mjs';
 import * as ingestRoutes from './routes/ingest.mjs';
+import * as userManagementRoutes from './routes/user-management.mjs';
 import * as sensorHistoryRoutes from './routes/sensor-history.mjs';
 
 export async function createApp(config) {
@@ -34,7 +35,7 @@ export async function createApp(config) {
   };
 
   const api = createRouter();
-  for (const routes of [publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes]) routes.register(api, deps);
+  for (const routes of [publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
   const serveStatic = createStaticHandler(config.staticDir);
 
   async function handle(req, res) {

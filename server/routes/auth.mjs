@@ -1,3 +1,4 @@
+import { SUPER_ADMIN_SELECT } from '../services/user-access.mjs';
 // Accounts, sessions and favourites.
 import { readJson, sendJson, HttpError, notFound } from '../lib/http.mjs';
 import { hashPassword, verifyPassword, validateCredentials, publicUser, requireUser, newId, SESSION_COOKIE } from '../lib/auth.mjs';
@@ -22,10 +23,10 @@ export function register(router, { db, sessions, limit }) {
   router.post('/api/v1/auth/login', async ctx => {
     limit(`login:${ctx.ip}`, 20, 15 * 60 * 1000);
     const { email, password } = await readJson(ctx);
-    const user = typeof email === 'string' ? db.prepare('SELECT * FROM users WHERE email = ?').get(email.trim().toLowerCase()) : null;
+    const user = typeof email === 'string' ? db.prepare(`SELECT u.*, ${SUPER_ADMIN_SELECT} FROM users u WHERE email = ?`).get(email.trim().toLowerCase()) : null;
     // Same message whether the e-mail or the password is wrong.
-    if (!user || typeof password !== 'string' || !(await verifyPassword(password, user.password_hash))) throw new HttpError(401, 'invalid_credentials', 'И-мэйл эсвэл нууц үг буруу байна');
-    sendJson(ctx.res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessions.start(user.id) });
+    if (!user || user.disabled_at || typeof password !== 'string' || password.length>200 || !(await verifyPassword(password, user.password_hash))) throw new HttpError(401, 'invalid_credentials', 'И-мэйл эсвэл нууц үг буруу байна');
+    sendJson(ctx.res, 200, { user: publicUser(user) }, { 'Set-Cookie': sessions.start(user.id,user.auth_version) });
   });
 
   router.post('/api/v1/auth/logout', ctx => {

@@ -1,3 +1,4 @@
+import { accessUser, SESSION_SELECT, rejectPublicPrivilegeFields } from '../server/services/user-access.mjs';
 import { securityHeaders } from './security.mjs';
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -36,17 +37,19 @@ export async function verifyPassword(password,stored) {
   return timingSafeEqual(await derive(password,salt,64,{N:+n,r:+r,p:+p}),expected);
 }
 export function credentials(x) {
+  rejectPublicPrivilegeFields(x,fail);
   if(typeof x.email!=='string' || x.email.length>200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.email.trim()) || typeof x.password!=='string' || x.password.length<8 || x.password.length>200 || (x.name!=null && (typeof x.name!=='string' || x.name.length>100))) fail(422,'validation_failed','Invalid account details');
   return {email:x.email.trim().toLowerCase(),password:x.password,name:(x.name || '').trim()};
 }
-export const publicUser=u=>u && ({id:u.id,email:u.email,name:u.name,role:u.role});
+export const publicUser=accessUser;
 export const guard=(user,...roles)=>{if(!user) fail(401,'unauthorized','Sign in required');if(roles.length && !roles.includes(user.role)) fail(403,'forbidden','Permission denied');};
 export async function session(db,req) {
  const raw=/(?:^|;\s*)ls_session=([^;]+)/.exec(req.headers.get('cookie') || '')?.[1];
- return raw ? first(db,'SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?',sha(raw),now()) : null;
+ return raw ? first(db,SESSION_SELECT,sha(raw),now()) : null;
 }
-export async function startSession(db,userId,req) {
- const t=token();await run(db,'INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)',sha(t),userId,now(),new Date(Date.now()+2592000000).toISOString());
+export async function startSession(db,userId,req,expectedVersion=0) {
+ const t=token();const result=await run(db,'INSERT INTO sessions(token_hash,user_id,created_at,expires_at,authenticated_at,user_auth_version) SELECT ?,id,?,?,?,auth_version FROM users WHERE id=? AND disabled_at IS NULL AND auth_version=?',sha(t),now(),new Date(Date.now()+2592000000).toISOString(),now(),userId,expectedVersion);
+ if(!result.meta.changes)fail(401,'authentication_changed','Credentials changed; sign in again');
  return `ls_session=${t}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${new URL(req.url).protocol==='https:'?'; Secure':''}`;
 }
 export const source=d=>d.is_test || d.kind==='simulator' ? 'simulated':'real';

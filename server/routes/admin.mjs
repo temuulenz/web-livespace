@@ -133,14 +133,6 @@ export function register(router, deps) {
     sendJson(ctx.res, 200, { applications: rows.map(r => ({ ...r, has_owner: !!r.has_owner, form: json(r.form, {}) })) });
   });
 
-  router.get('/api/v1/admin/users', ctx => {
-    admin(ctx);
-    const role = ['user', 'owner', 'admin'].includes(ctx.query.role) ? ctx.query.role : null;
-    const rows = db.prepare(`SELECT u.id, u.email, u.name, u.role, u.created_at, (SELECT GROUP_CONCAT(name, ', ') FROM cafes c WHERE c.owner_id = u.id) AS cafes
-      FROM users u ${role ? 'WHERE u.role = ?' : ''} ORDER BY u.created_at DESC`).all(...(role ? [role] : []));
-    sendJson(ctx.res, 200, { users: rows });
-  });
-
   /* ---------- devices ---------- */
   router.get('/api/v1/admin/devices', ctx => {
     admin(ctx);
