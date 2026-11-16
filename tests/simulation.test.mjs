@@ -160,21 +160,3 @@ for (const layout of ['minimal', 'artistic', 'legacy']) {
     sim.destroy();
   });
 }
-
-test('portrait rendering keeps real telemetry, original seating and unknown seat hit testing compatible', () => {
-  const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
-  let selected;
-  const sim = new FloorPlan(environment.wrap, realCafe(5), { portrait: true, onSeat: seat => { selected = seat; } });
-  advance(sim);
-  assert.equal(sim.population().seated, 5);
-  assert.match(sim.cv.style.transform, /rotate\(90deg\)/);
-  sim.cv.getBoundingClientRect = () => ({ left: 100, right: 620, top: 20, bottom: 820, width: 520, height: 800 });
-  const seat = sim.people[0].seat;
-  sim.click({ clientX: 620 - seat.y, clientY: 20 + seat.x });
-  assert.equal(selected.id, seat.id); assert.equal(selected.state, 'unknown'); assert.equal(selected.illustrative, true);
-  const people = [...sim.people]; sim.syncTelemetry(realCafe(5));
-  assert.deepEqual(sim.people, people);
-  assert.equal(sim.stats().unknown, sim.seats.length);
-  sim.setZoom(1.4); assert.match(sim.cv.style.transform, /rotate\(90deg\)/);
-  sim.destroy(); assert.equal(environment.frames.size, 0);
-});

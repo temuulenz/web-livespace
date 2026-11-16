@@ -15,7 +15,6 @@
     "test:browser": "node tests/browser.mjs",
     "test:visual": "node tests/browser.mjs --visual",
     "test:visitor-visual": "node tests/visitor-visual.mjs",
-    "test:login": "node --disable-warning=ExperimentalWarning tests/login-navigation.mjs",
     "test:e2e": "node --disable-warning=ExperimentalWarning tests/e2e.mjs",
     "cf:assets": "node scripts/cloudflare-assets.mjs",
     "cf:dev": "wrangler dev --local",

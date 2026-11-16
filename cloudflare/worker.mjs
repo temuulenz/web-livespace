@@ -3,7 +3,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { ingest } from './ingest.mjs';
 import { partner } from './partner.mjs';
 import { sanitizeLayout, ruleBasedProvider } from '../server/services/visualization.mjs';
-import { all, first, run, batch, json, error, databaseAvailabilityError, fail, body, credentials, hashPassword, verifyPassword, publicUser, guard, session, startSession, now, id, token, sha, parse, deviceAuth } from './core.mjs';
+import { all, first, run, batch, json, error, fail, body, credentials, hashPassword, verifyPassword, publicUser, guard, session, startSession, now, id, token, sha, parse, deviceAuth } from './core.mjs';
 import { cafeView as rawCafeView, liveUpdate, ownerView as rawOwnerView, deviceView as rawDeviceView } from './views.mjs';
 import { createSensorHistory } from './history.mjs';
 import { SENSOR_ID } from '../server/lib/telemetry-schema.mjs';
@@ -38,7 +38,7 @@ async function handle(req,env) {
  if(p==='/api/v1/ingest/measurements' && m==='POST')return ingest(req,db,limit);
  if(p==='/api/v1/health') {
   try {await first(db,'SELECT id FROM devices LIMIT 1');await first(db,'SELECT message_id FROM sensor_receipts LIMIT 1');await first(db,'SELECT photo_id FROM photo_bytes LIMIT 1');return json({ok:true,api:'1',time:now(),deployment:'cloudflare',database:'d1',sensorGateway:!!env.SENSORS,transport:'polling',schema:5});}
-  catch(e){const unavailable=databaseAvailabilityError(e);return json({ok:false,api:'1',deployment:'cloudflare',database:unavailable?'temporarily_unavailable':'unavailable_or_unmigrated',error:{code:unavailable?.code || 'service_unavailable',message:'Live services are temporarily unavailable. Please retry later.'}},503,{'Retry-After':unavailable?'3600':'60'});}
+  catch{return json({ok:false,api:'1',deployment:'cloudflare',database:'unavailable_or_unmigrated'},503);}
  }
  if(p==='/api/v1/config')return json({poll_interval_sec:Number(env.LS_POLL_INTERVAL_SEC || 10),stale_after_sec:900,sensor_stale_after_sec:staleAfterSec,sensor_expected_interval_sec:expectedIntervalSec,stream_enabled:false});
  if(p==='/api/v1/stream')return json({error:{code:'polling_required',message:'Use /api/v1/live polling'}},503,{'Retry-After':'60'});

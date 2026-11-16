@@ -1,4 +1,3 @@
-import { escapeHTML } from '../../framework/index.js';
 import { clamp } from '../dom.js';
 import { I } from '../icons.js';
 import { SS, WIFI, WIFI_S } from '../cafes.js';
@@ -31,6 +30,6 @@ const mSeat = c => `<span class="m" title="Сул суудал">${seatRow(c.occ)
 const mSound = l => `<span class="m" title="Дуу чимээ · ${SS[l]?.t || 'Хэмжилтгүй'}"><span class="sg">${ssGlyph(l)}</span><b>${SS[l]?.short || 'Хэмжилтгүй'}</b></span>`;
 const mWifi = l => `<span class="m" title="Wi-Fi · ${WIFI_S[l]}">${wifiSVG(l, 18)}<b>${WIFI[l]}</b></span>`;
 const TAGIC = { 'Сурах': I.book, 'Ажиллах': I.laptop, 'Найзуудтай': I.people, 'Тухтай': I.sofa };
-const tagPills = c => c.tags.map(t => `<span class="tagp2" data-tag="${escapeHTML(t)}">${TAGIC[t] || ''}${escapeHTML(t)}</span>`).join('');
+const tagPills = c => c.tags.map(t => `<span class="tagp2">${TAGIC[t] || ''}${t}</span>`).join('');
 
 export { ssGlyph, ssArt, wifiSVG, seatRow, mSeat, mSound, mWifi, tagPills };

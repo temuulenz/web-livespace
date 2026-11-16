@@ -12,7 +12,7 @@ import { pageTasks } from './js/lifecycle.js';
 import { countUp, animNum } from './js/animations.js';
 import { openModal, closeModal, toast } from './js/components/feedback.js';
 import { createRouter, configureErrors, mount, escapeHTML } from './framework/index.js';
-import { platform, initPlatform, retryPlatform } from './js/services/platform.js';
+import { platform, initPlatform } from './js/services/platform.js';
 import { dataMode, freshnessHTML, modeBadge, hasMeasurements, measuredSeats } from './js/live/freshness.js';
 import { sensorPanelHTML, noiseText } from './js/live/sensor-ui.js';
 import { LiveNoise } from './js/features/sensors/live-noise.js';
@@ -23,13 +23,11 @@ import { renderAccountButton, bindAccountPopover, AccountPage } from './js/featu
 import { partnerFormHTML, bindPartnerForm, pendingClaimHTML, openOwnerSignup } from './js/features/partner/partner-form.js';
 import { OwnerPage } from './js/features/owner-dashboard/owner-page.js';
 import { AdminPage } from './js/features/admin-dashboard/admin-page.js';
-import { mobileHomeHTML, bindMobileHome, deskRecHTML, bindDeskRec } from './js/features/home/mobile-home.js';
 
 const CAFES = getCafes();
 let cmpIds = [];
-let navDepth = 0;
 let sensorHistoryView = null, liveNoiseView = null;
-let selId = null, mapCtl = null, fp = null, homeMini = null, homeMobileOff = null, deskRecOff = null, cdCafe = null, pageComp = null;
+let selId = null, mapCtl = null, fp = null, homeMini = null, cdCafe = null, pageComp = null;
 // Cafés without live data yet are shown like closed ones, with an honest reason.
 const closedText = c => c.status_text || `${c.opens} нээгдэнэ`;
 const openTag = c => c.open ? 'Нээлттэй' : c.status_text ? 'Мэдээлэлгүй' : 'Хаалттай';
@@ -221,9 +219,6 @@ const lampSVG = (c, shape) => shape === 0 ? `<svg viewBox="0 0 110 60"><path d="
 function lamp(x, cord, c, shape, stat, cls = '') { return `<div class="lamp ${cls}" style="left:${x}"><div class="cord" style="height:${cord}px"></div>${lampSVG(c, shape)}<div class="cone"></div>${stat ? `<div class="stat" style="--st:${cord + 120}px">${stat}</div>` : ''}</div>` }
 function plantSVG(w, flip) { return `<svg width="${w}" viewBox="0 0 120 170" style="${flip ? 'transform:scaleX(-1)' : ''}"><path d="M60 110C55 70 60 30 62 0c10 30 12 70 0 110z" fill="#7A8A4E"/><path d="M60 110C40 80 15 70 0 72c20 10 40 25 58 40z" fill="#8A9A5B"/><path d="M62 110c18-30 40-42 58-42-18 12-36 28-56 44z" fill="#8A9A5B"/><path d="M28 120h64l-8 50H36z" fill="#B6771D"/></svg>` }
 
-// The four goals, shown as buttons under the desktop search.
-const HOME_PURP = [['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Хурдан Wi-Fi'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']];
-
 function renderHome() {
   const open = CAFES.filter(c => c.open), measured = open.filter(c => freePct(c) != null); const avg = measured.length ? Math.round(measured.reduce((s, c) => s + freePct(c), 0) / measured.length) : '—'; const good = open.filter(c => c.wifi >= 3).length;
   const stat = (n, l) => `<b class="num" data-count="${n}">${n}</b><span>${l}</span>`;
@@ -234,40 +229,30 @@ function renderHome() {
   ${lamp('78%', 130, '#FFCF71', 1, `<b class="num" data-count="${avg}" data-suf="%">${avg}%</b><span>дундаж сул суудал</span>`, 'l3')}${lamp('89%', 60, '#7B542F', 2, stat(good, 'кафед Wi-Fi сайн'), 'l4')}
   <div class="arch">
    <span class="hero-kick">${I.map}Газрын зурагтай кафе хайгч</span>
-   <h1>Та суух <em>кафе</em><br>хайж байна уу?</h1>
+   <h1>Өнөөдөр <em>хаана</em><br>суух вэ?</h1>
    <form class="hsearch" id="hs" role="search"><input id="hq" placeholder="Кафе хайх, жишээ нь «Кафе A»" aria-label="Кафе хайх" autocomplete="off" enterkeyhint="search"><button class="hs-go" aria-label="Хайх" title="Хайх">${I.search}</button></form>
-   <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${HOME_PURP.map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
+   <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${[['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Хурдан Wi-Fi'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']].map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
    <div class="hero-map ex-map" id="miniMap" aria-label="Газрын зургийн урьдчилсан харагдац">
     <a class="hm-open" href="#explore" aria-label="Газрын зураг нээх" title="Газрын зураг нээх">${I.map}</a>
    </div>
-   <div class="arch-panes" aria-hidden="true"></div>
   </div>
   <div class="shelf"></div>
   <div class="deco" style="left:5%">${plantSVG(120)}</div><div class="deco" style="left:15%">${plantSVG(70, 1)}</div>
-  <div class="deco deco-table" style="right:6%;bottom:0"><svg width="170" viewBox="0 0 170 180"><path d="M70 38h30v12a15 15 0 0 1-30 0z" fill="#FFF9EC" stroke="#3E2A17" stroke-width="4"/><path d="M100 41h5a6 6 0 0 1 0 12h-5" fill="none" stroke="#3E2A17" stroke-width="4"/><ellipse cx="85" cy="72" rx="80" ry="13" fill="#B6771D"/><rect x="79" y="78" width="12" height="80" fill="#B6771D"/><path d="M47 180a38 20 0 0 1 76 0z" fill="#B6771D"/></svg></div>
+  <div class="deco" style="right:6%;bottom:0"><svg width="170" viewBox="0 0 170 180"><path d="M60 30h50l-4 26H64z" fill="#fff" stroke="#3E2A17" stroke-width="5"/><path d="M110 36c14 0 14 16 0 16" stroke="#3E2A17" stroke-width="5" fill="none"/><ellipse cx="85" cy="70" rx="80" ry="12" fill="#7B542F"/><rect x="80" y="76" width="10" height="90" fill="#7B542F"/><ellipse cx="85" cy="172" rx="40" ry="8" fill="#7B542F"/></svg></div>
  </section>
- ${mobileHomeHTML({ cafes: CAFES })}
  <div class="wrap">
-  ${deskRecHTML()}
   <section class="sec"><div class="sec-h"><h2>Ойролцоох кафенууд</h2><p>Танд хамгийн ойр 6 кафе</p></div>
    <div class="cgrid">${[...CAFES].sort((a, b) => parseFloat(a.dist) * (a.dist.includes('км') ? 1000 : 1) - parseFloat(b.dist) * (b.dist.includes('км') ? 1000 : 1)).slice(0, 6).map(cafeCard).join('')}</div>
    <div style="text-align:center;margin-top:28px"><a class="btn btn-o" href="#cafes">Бүх кафе харах →</a></div></section>
-  <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Сонсох товчоор жишээ дууг нь сонсоорой.</p></div>
-   <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Сонсох</button></div>`).join('')}</div>
-   <div class="ss-dots" aria-hidden="true">${[1, 2, 3, 4, 5].map((l, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></section>
+  <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>«54 dB» гэхээс «цай буцлах чимээ шиг намуухан» гэвэл шууд ойлгомжтой. Сонсох товчоор жишээ дууг нь сонсоорой.</p></div>
+   <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Сонсох</button></div>`).join('')}</div></section>
   <div class="band"><div><h2>Кафе эзэмшигч үү?</h2><p>Кафегаа LiveSpace-д нэмж, илүү олон зочинд хүрээрэй.</p></div><a class="btn btn-y" href="#partner">Хамтран ажиллах →</a></div>
  </div>${footer()}</div>`;
   // The home map is only a preview of the illustration: the real map with its pins opens on #explore.
   homeMini = buildMap($('#miniMap'), { interactive: false, markers: false });
   $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.hsearch')) { Snd.ui('whoosh'); location.hash = 'explore' } });
   $$('[data-go-purpose]').forEach(b => b.onclick = () => { F.purpose.clear(); F.purpose.add(b.dataset.goPurpose); Snd.ui('pop'); location.hash = 'explore' });
-  const search = q => { F.q = q; const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
-  $('#hs').onsubmit = e => { e.preventDefault(); search($('#hq').value.trim()) };
-  homeMobileOff = bindMobileHome($('.mhome'), { cafes: CAFES, onSearch: search });
-  deskRecOff = bindDeskRec($('.drec'), { cafes: CAFES });
-  // Phones scroll the five noise cards sideways; the dots under them show which one is in view.
-  const ssRow = $('.ss-row'); let ssFrame;
-  ssRow.addEventListener('scroll', () => { if (ssFrame === undefined) ssFrame = pageTasks.frame(() => { ssFrame = undefined; const cards = $$('.ss-card', ssRow), x = ssRow.scrollLeft + 16; let k = 0; cards.forEach((c, i) => { if (Math.abs(c.offsetLeft - x) < Math.abs(cards[k].offsetLeft - x)) k = i }); if (ssRow.scrollLeft + ssRow.clientWidth >= ssRow.scrollWidth - 4) k = cards.length - 1; $$('.ss-dots i').forEach((d, i) => d.classList.toggle('on', i === k)) }) }, { passive: true });
+  $('#hs').onsubmit = e => { e.preventDefault(); F.q = $('#hq').value.trim(); const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
   countUp();
 }
 
@@ -308,13 +293,8 @@ function renderExplore() {
   h.addEventListener('click', () => { if (!sd || !sd.moved) setFull(!side.classList.contains('full')) });
   h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFull(!side.classList.contains('full')) } });
   h.addEventListener('pointerdown', e => { sd = { y: e.clientY, full: side.classList.contains('full'), moved: false, h: side.offsetHeight }; h.setPointerCapture(e.pointerId) });
-  h.addEventListener('pointermove', e => { if (!sd) return; const dy = e.clientY - sd.y; if (Math.abs(dy) > 6) sd.moved = true; if (!sd.moved) return; side.classList.add('drag'); const base = sd.full ? 0 : sd.h - (parseFloat(getComputedStyle(side).getPropertyValue('--peek')) || 236); side.style.transform = `translateY(${clamp(base + dy, 0, sd.h - 120)}px)` });
+  h.addEventListener('pointermove', e => { if (!sd) return; const dy = e.clientY - sd.y; if (Math.abs(dy) > 6) sd.moved = true; if (!sd.moved) return; side.classList.add('drag'); const base = sd.full ? 0 : sd.h - 236; side.style.transform = `translateY(${clamp(base + dy, 0, sd.h - 120)}px)` });
   h.addEventListener('pointerup', e => { if (!sd) return; side.classList.remove('drag'); side.style.transform = ''; if (sd.moved) { const dy = e.clientY - sd.y; setFull(sd.full ? dy < 80 : dy < -60) } pageTasks.timeout(() => sd = null, 0) });
-  // The list scrolls vertically; while the sheet is low, an upward swipe on it first opens it.
-  let ty = null;
-  side.addEventListener('touchstart', e => { ty = side.classList.contains('full') ? null : e.touches[0].clientY }, { passive: true });
-  side.addEventListener('touchmove', e => { if (ty != null && ty - e.touches[0].clientY > 14 && !e.target.closest('#shHandle')) { ty = null; setFull(true) } }, { passive: true });
-  list.addEventListener('wheel', e => { if (e.deltaY > 0 && !side.classList.contains('full') && isMobile()) setFull(true) }, { passive: true });
   $('#mFilter').onclick = () => { Snd.ui('whoosh'); openModal(`<div class="mdl-h"><h2>Шүүлтүүр</h2><button class="pv-x" data-close aria-label="Хаах" style="margin-left:auto">${I.x}</button></div><div style="display:flex;flex-direction:column;gap:18px">${filtersHTML(true)}</div><div style="display:flex;gap:10px;margin-top:22px"><button class="btn btn-g" data-reset>Цэвэрлэх</button><button class="btn btn-p" data-close style="flex:1" id="mfApply">Үр дүн харах</button></div>`) };
   if (selId) pageTasks.timeout(() => selectCafe(selId, 'list', true), 60);
 }
@@ -383,8 +363,6 @@ function renderCafes() {
 function updateCafes() { const res = CAFES.filter(matches).sort((a, b) => (b.open - a.open) || (freePct(b) - freePct(a))); $('#cgrid').innerHTML = res.length ? res.map(cafeCard).join('') : `<div class="empty" style="grid-column:1/-1">${emptyArt()}<b>Тохирох кафе олдсонгүй</b><br><button class="btn btn-o" data-reset>Шүүлтүүр цэвэрлэх</button></div>`; $('#cfCount').textContent = `${res.length} кафе олдлоо · сул суудлаар эрэмбэлсэн`; $('#exActive').innerHTML = activeHTML(res.length); $('#mfc').textContent = activeCount() ? '· ' + activeCount() : '' }
 
 /* ---------- cafe detail ---------- */
-// Phones: a small hand-drawn arrow curves down onto each goal tag (alternating sides).
-const tagArrow = i => `<svg class="cd-arrow" viewBox="0 0 40 34" aria-hidden="true" focusable="false"><path d="${i % 2 ? 'M8 2C20 6 27 16 22 30' : 'M32 2C20 6 13 16 18 30'}"/><path d="${i % 2 ? 'M15 24l7 7 5-8' : 'M12 23l6 8 7-7'}"/></svg>`;
 function renderCafe(id) {
   const c = byId(id); if (!c) { app.innerHTML = `<div class="wrap empty">${emptyArt()}<b>Кафе олдсонгүй</b><a class="btn btn-o" href="#explore">Газрын зураг руу буцах</a></div>`; return }
   selId = id; cdCafe = c;
@@ -398,11 +376,11 @@ function buildCafe(c) {
   const legend = `<div class="plan-legend"><span><i class="lg-seat"></i>Сул</span><span><i class="lg-seat o"></i>Хүнтэй</span><span><i class="lg-seat u">?</i>Мэдээлэлгүй</span></div>`;
   app.innerHTML = `<div class="page"><div class="wrap cd">
  <div class="cd-head roof2">
-  <svg class="roof-svg" viewBox="0 0 1000 210" preserveAspectRatio="none" aria-hidden="true"><g class="chim"><rect x="742" y="46" width="42" height="90" fill="#B6771D"/><rect x="736" y="38" width="54" height="12" rx="3" fill="#7B542F"/></g><path class="rf-tri" d="M90 207 500 10l410 197z" fill="#FFCF71"/><path class="rf-tri" d="M70 208 500 5l430 203" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/><path class="rf-trap" d="M40 207 170 26h660l130 181z" fill="#FFCF71"/><path class="rf-trap" d="M18 208 166 18h668l148 190" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/></svg>
-  <a class="ibtn back" href="#explore" data-cafe-back aria-label="Буцах" title="Буцах"><span class="back-ic">${I.arr}</span></a>
+  <svg class="roof-svg" viewBox="0 0 1000 210" preserveAspectRatio="none" aria-hidden="true"><g class="chim"><rect x="742" y="46" width="42" height="90" fill="#B6771D"/><rect x="736" y="38" width="54" height="12" rx="3" fill="#7B542F"/></g><path d="M90 207 500 10l410 197z" fill="#FFCF71"/><path d="M70 208 500 5l430 203" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/></svg>
+  <a class="ibtn back" href="#explore" aria-label="Газрын зураг руу буцах" title="Газрын зураг">${I.map}</a>
   <div class="cd-act">${favBtn(c.id)}${cmpBtn(c.id)}</div>
   <div class="cd-title"><h1>${c.name}</h1>${c.open ? `<p class="mood-line ${t}" id="moodLine">${mood(c)}</p>` : `<p class="mood-line">${c.note || ''}</p>`}
-   <div class="cd-pills">${openLamp(c)}<span class="tagp2 num">${I.clock}${c.hours}</span><span class="tagp2 num">${I.walk}${c.walk} мин</span><span class="cd-tags">${c.tags.map((t, i) => `<span class="cd-tag">${tagArrow(i)}${tagPills({ tags: [t] })}</span>`).join('')}</span><span id="cdMode">${modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</span></div></div>
+   <div class="cd-pills">${openLamp(c)}<span class="tagp2 num">${I.clock}${c.hours}</span><span class="tagp2 num">${I.walk}${c.walk} мин</span>${tagPills(c)}<span id="cdMode">${modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</span></div></div>
  </div>
  <section id="publicSensor" ${c.live?.sensor ? 'class="card"' : ''}>${sensorPanelHTML(c, false, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</section>
  ${c.open ? `<div class="cd-grid">
@@ -414,7 +392,6 @@ function buildCafe(c) {
     <div id="seatInfo"></div></div></div>
    <div id="viewTable" hidden>${tableHTML(c)}</div>
   </section>
-  <h2 class="cd-more-h">Дэлгэрэнгүй</h2>
   <div class="side-stack">
    <div class="cd-fresh" id="cdFresh" aria-live="polite">${freshnessHTML(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</div>
    <section class="card mcard seatcard"><h3>${I.seat} Сул суудал</h3><div class="sc-row"><div class="big-pct"><b class="num" id="freePct">${fp_ == null ? '—' : fp_ + '%'}</b><span id="crowdLab">${fp_ == null ? 'Суудал хэмжээгүй' : crowdCat(c.occ)[0]}</span></div><small class="muted num" id="freeSub"></small></div><div class="chairs" id="chairs" aria-hidden="true"></div></section>
@@ -434,14 +411,14 @@ function buildCafe(c) {
   if (!c.open) return;
   syncDetailNoise(c); renderWF(c.wifi, c);
   // floor plan
-  fp = new FloorPlan($('#planWrap'), { ...c, occ: c.occ ?? 40 }, { onStats: updSeats, onEvent: logEvent, onSeat: seatInfo, sound: c.sound, portrait: isMobile() });
+  fp = new FloorPlan($('#planWrap'), { ...c, occ: c.occ ?? 40 }, { onStats: updSeats, onEvent: logEvent, onSeat: seatInfo, sound: c.sound });
   syncDetailPlan(c);
   $$('[data-pz]').forEach(b => b.onclick = () => { Snd.ui('click'); fp.setZoom(b.dataset.pz === 'in' ? 1.4 : 1 / 1.4) });
   $('#addG').onclick = () => { if (!fp.arrive(true)) { Snd.ui('err'); toast('Сул сандал үлдсэнгүй') } else Snd.ui('click') };
   $('#remG').onclick = () => { if (!fp.depart(true)) { Snd.ui('err'); toast('Суусан зочин алга') } };
   // tabs
   const seg = $('#viewSeg'); const moveInd = () => { const b = $('[aria-selected="true"]', seg); const ind = $('.ind-s', seg); ind.style.width = b.offsetWidth + 'px'; ind.style.transform = `translateX(${b.offsetLeft - 4}px)` }; moveInd();
-  seg.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; Snd.ui('click'); $$('[data-view]', seg).forEach(x => x.setAttribute('aria-selected', x === b)); moveInd(); $('#viewPlan').hidden = b.dataset.view !== 'plan'; $('#viewTable').hidden = b.dataset.view !== 'table'; $('.plan-card .plan-legend').classList.toggle('off', b.dataset.view !== 'plan'); if (b.dataset.view === 'table') $('#viewTable').innerHTML = tableHTML(c, fp.stats()) });
+  seg.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; Snd.ui('click'); $$('[data-view]', seg).forEach(x => x.setAttribute('aria-selected', x === b)); moveInd(); $('#viewPlan').hidden = b.dataset.view !== 'plan'; $('#viewTable').hidden = b.dataset.view !== 'table'; if (b.dataset.view === 'table') $('#viewTable').innerHTML = tableHTML(c, fp.stats()) });
   $$('[data-ssl]').forEach(b => b.onclick = () => { Snd.ui('tick'); $$('[data-ssl]').forEach(x => x.classList.toggle('on', x === b)); renderSS(+b.dataset.ssl); fp.sound = +b.dataset.ssl });
   syncDetailNoise(c);
   initTE(c);
@@ -635,7 +612,7 @@ function renderStaff() {
 // the previous page's timers, frames, simulation, map, audio and listeners.
 const page = (Component, props) => () => { app.innerHTML = ''; pageComp = mount(Component, app, props) };
 function teardown() {
-  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } if (homeMobileOff) { homeMobileOff(); homeMobileOff = null } if (deskRecOff) { deskRecOff(); deskRecOff = null } refreshResults = () => { }; closeModal();
+  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
   if (pageComp) { pageComp.destroy(); pageComp = null } if (partnerCleanup) { partnerCleanup(); partnerCleanup = null } cdCafe = null;
 }
 const router = createRouter({
@@ -647,7 +624,7 @@ const router = createRouter({
     document.body.classList.toggle('on-explore', key === 'explore');
     if (key !== 'explore') $$('.pv').forEach(p => p.remove());
   },
-  afterEach(to) { navDepth++; if (to.name !== 'explore') window.scrollTo(0, 0); renderTray() },
+  afterEach(to) { if (to.name !== 'explore') window.scrollTo(0, 0); renderTray() },
   routes: [
     { path: '', name: 'home', enter: renderHome },
     { path: 'home', name: 'home', enter: renderHome },
@@ -663,9 +640,6 @@ const router = createRouter({
   ]
 });
 const route = () => router.resolve();
-// The café page's back arrow returns to wherever the visitor came from (map, list, home);
-// opened directly from a link, it goes to the map.
-document.addEventListener('click', e => { if (e.target.closest('[data-cafe-back]') && navDepth > 1) { e.preventDefault(); Snd.ui('click'); history.back() } });
 document.addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute('href') === '#pform') { e.preventDefault(); $('#pform').scrollIntoView({ behavior: Prefs.reduced ? 'auto' : 'smooth' }); return } if (a && !e.defaultPrevented) { Snd.ui('click') } });
 document.addEventListener('click', e => { if (e.target.closest('[data-owner-signup]')) { Snd.ui('whoosh'); openOwnerSignup() } });
 let lastMobile = isMobile(); window.addEventListener('resize', () => { const m = isMobile(); if (m !== lastMobile) { lastMobile = m; if ((location.hash || '').startsWith('#explore')) route() } });
@@ -677,25 +651,14 @@ configureErrors({ message: 'Энэ хэсгийг харуулахад алда�
 function refreshCafeViews(id) {
   const c = byId(id); if (!c) return;
   if (mapCtl) mapCtl.refresh(id);
-  homeMobileOff?.refresh?.(); deskRecOff?.refresh?.();
   const card = $(`[data-card="${id}"]`); if (card) { const t = document.createElement('div'); t.innerHTML = listCard(c, 0); const next = t.firstElementChild; next.style.animation = 'none'; next.classList.toggle('hov', card.classList.contains('hov')); card.replaceWith(next) }
   const article = $(`#cgrid [data-href="#cafe-${id}"]`); if (article) article.outerHTML = cafeCard(c);
   if (cdCafe && cdCafe.id === id) applyLiveToDetail(c);
-}
-function renderPlatformStatus() {
-  let banner = $('#platformStatus');
-  if (!banner) { banner = document.createElement('section'); banner.id = 'platformStatus'; banner.className = 'platform-status'; banner.setAttribute('role', 'status'); $('.hd').after(banner); }
-  banner.hidden = !platform.serviceUnavailable;
-  if (banner.hidden) return;
-  banner.innerHTML = '<p>Нэвтрэлт болон бодит өгөгдлийн үйлчилгээ түр боломжгүй байна. Жишээ өгөгдөл ДЕМО гэж тэмдэглэгдэнэ.</p><button class="btn btn-o" data-retry-platform>Дахин холбох</button>';
-  const button = $('[data-retry-platform]', banner); button.disabled = platform.reconnecting;
-  button.onclick = async () => { await retryPlatform(); if (!platform.serviceUnavailable) { renderAccountButton(); route(); } };
 }
 renderHeaderBits();
 await initPlatform();
 if (platform.online) {
   bindAccountPopover(); watchAuthCancel(); renderAccountButton();
-  platform.bus.on('platform:status', renderPlatformStatus); renderPlatformStatus();
   platform.bus.on('login:required', reason => openAuth({ reason }));
   platform.bus.on('cafe:updated', refreshCafeViews);
   window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#cafe-')) { sensorHistoryView?.destroy(); sensorHistoryView = null; } });
@@ -703,3 +666,4 @@ if (platform.online) {
   pullFavorites();
 }
 router.start();
+

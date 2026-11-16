@@ -336,35 +336,6 @@ try {
     assert.equal(await evaluate(`document.querySelector('[data-form="createManagedUser"] [name="password"]').value`),'');
   });
 
-  await check('merged mobile floor plan and recommendation widgets retain live telemetry and admin back navigation', async () => {
-    const admin=server.client();await admin.post('/api/v1/auth/login',ADMIN);
-    const registered=await admin.post('/api/v1/admin/devices',{id:'merge_mobile_phone',cafe_id:'A',kind:'sensor'});
-    const ws=new WebSocket(origin.replace('http','ws')+'/ws/sensors',{headers:{Authorization:'Bearer '+registered.data.token}});
-    try {
-      await new Promise((resolve,reject)=>{ws.on('error',reject);ws.on('message',raw=>{if(JSON.parse(raw).type==='sensor.ready')resolve();});});
-      const reading=(count,dbfs)=>ws.send(JSON.stringify({schemaVersion:1,type:'sensor.telemetry',messageId:'merge-mobile-'+Date.now(),deviceId:'merge_mobile_phone',locationId:'A',timestamp:new Date().toISOString(),occupancy:{observedPeople:count},noise:{dbfs,calibrated:false},device:{}}));
-      reading(5,-42);
-      await evaluate(`localStorage.setItem('ls_mhTour','true')`);
-      await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
-      await go('#cafe-A');
-      await waitFor(`window.__realPlan?.cafe.id === 'A' && window.__realPlan.portrait && window.__realPlan.population().active === 5 && document.querySelector('[data-live-dbfs]')?.textContent === '-42.0'`);
-      assert.equal(await evaluate(`document.querySelector('#addG').disabled && document.querySelector('#freePct').textContent === '—'`),true);
-      await evaluate(`(() => { const sim=window.__realPlan, seat=sim.seats[0], rect=sim.cv.getBoundingClientRect();sim.click({clientX:rect.right-seat.y/sim.H*rect.width,clientY:rect.top+seat.x/sim.W*rect.height}); })()`);
-      assert.match(await evaluate(`document.querySelector('#seatInfo').textContent`),/Мэдээлэлгүй/);
-      await go('#home');await waitFor(`!!document.querySelector('.mh-track .rc')`);
-      await click('[data-rec-sort="near"]');
-      reading(7,-28);
-      await waitFor(`document.querySelector('.mh-track [data-href="#cafe-A"]')?.textContent.includes('-28.0 dBFS') && document.querySelector('.mh-track [data-href="#cafe-A"] .rc-free b')?.textContent === '7'`);
-      assert.match(await evaluate(`document.querySelector('.mh-track [data-href="#cafe-A"]').textContent`),/REAL/);
-      assert.match(await evaluate(`document.querySelector('.drec-track [data-href="#cafe-A"]').textContent`),/-28.0 dBFS/);
-      assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`),true);
-    } finally {ws.close();await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});}
-    await go('#admin?tab=cafes');await waitFor(`!!document.querySelector('[data-open-cafe="A"]')`);
-    await click('[data-open-cafe="A"]');await waitFor(`!!document.querySelector('[data-back]')`);
-    const hash=await evaluate('location.hash');await click('[data-back]');
-    await waitFor(`!!document.querySelector('[data-open-cafe="A"]')`);assert.equal(await evaluate('location.hash'),hash);
-  });
-
   await check('framework DOM layer: patch keeps input, focus, preserved and keyed nodes; components clean up', async () => {
     const result = await evaluate(`(async () => {
       const { patch, Component, mount, html } = await import('/framework/index.js');

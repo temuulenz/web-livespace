@@ -13,8 +13,6 @@ const session = createSession({ api, onLoginRequired: reason => bus.emit('login:
 
 export const platform = {
   online: false,
-  serviceUnavailable: false,
-  reconnecting: false,
   api, session, bus,
   config: { poll_interval_sec: 60, stale_after_sec: 900 },
   liveStatus: 'stopped'
@@ -39,10 +37,7 @@ function startLive() {
   channel = createLiveChannel({
     streamUrl: platform.config.stream_enabled === false ? null : '/api/v1/stream',
     events: ['measurement', 'cafe', 'catalog', 'sensor.telemetry', 'sensor.status'],
-    poll: async () => {
-      try { return (await api.get('/live')).updates.map(u => ['measurement', u]); }
-      catch (error) { if (error.code === 'database_limit_reached') markUnavailable(); throw error; }
-    },
+    poll: async () => (await api.get('/live')).updates.map(u => ['measurement', u]),
     interval: platform.config.poll_interval_sec * 1000,
     onStatus: status => { platform.liveStatus = status; bus.emit('live:status', status); },
     onMessage(type, data) {
@@ -59,38 +54,17 @@ function startLive() {
 export async function initPlatform() {
   try {
     await api.get('/health', { timeout: 2500, retry: 0 });
-  } catch (error) {
+  } catch {
     session.store.set({ ready: true });
-    // A 503 is an existing backend outage, not evidence of a static demo host.
-    if (error.status >= 500 || error.status === 429) markUnavailable();
     return platform;
   }
   platform.online = true;
   document.documentElement.classList.add('ls-online');
-  const results = await Promise.allSettled([
+  await Promise.allSettled([
     api.get('/config').then(config => { platform.config = config; }),
     loadCatalogue(),
     session.load()
   ]);
-  if (results.some(result => result.status === 'rejected' && (result.reason.status >= 500 || result.reason.status === 429))) { markUnavailable(); return platform; }
-  platform.serviceUnavailable = false;
-  bus.emit('platform:status');
   startLive();
   return platform;
-}
-
-function markUnavailable() {
-  platform.online = true;
-  platform.serviceUnavailable = true;
-  document.documentElement.classList.add('ls-online');
-  channel?.stop();
-  platform.liveStatus = 'unavailable';
-  bus.emit('platform:status');
-}
-let recovery = null;
-export function retryPlatform() {
-  if (recovery) return recovery;
-  platform.reconnecting = true; bus.emit('platform:status'); channel?.stop();
-  recovery = initPlatform().finally(() => { recovery = null; platform.reconnecting = false; bus.emit('platform:status'); });
-  return recovery;
 }

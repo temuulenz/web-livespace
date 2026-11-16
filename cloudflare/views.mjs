@@ -1,4 +1,3 @@
-import { latestSensorReadingsSql } from '../server/lib/sensor-latest.mjs';
 import { all, first, parse, source } from './core.mjs';
 import { noiseLevel, wifiLevel, occupancyPercent, openState, ulaanbaatarMinutes, walkFrom } from '../js/live/levels.js';
 export function status(d,ts=null,staleAfterSec=30) {
@@ -12,7 +11,9 @@ export async function deviceView(db,d,staleAfterSec=30) {
  return {...safe,is_test:!!d.is_test,enabled:!!d.enabled,last_status:parse(d.last_status),status:s,online:s==='online'};
 }
 export async function snapshot(db,cafeId,dataSource,staleAfterSec=30) {
- const rows=await all(db,latestSensorReadingsSql,dataSource,cafeId,dataSource);
+ const rows=await all(db,`SELECT m.*,d.connection_status,d.enabled,d.revoked_at,d.last_seen_at FROM sensor_latest_readings m
+ JOIN devices d ON d.id=m.device_id AND d.cafe_id=m.cafe_id WHERE m.cafe_id=? AND m.data_source=? AND d.revoked_at IS NULL
+ AND m.data_source=CASE WHEN d.is_test=1 OR d.kind='simulator' THEN 'simulated' ELSE 'real' END ORDER BY m.ts DESC,m.id DESC`,cafeId,dataSource);
  if(!rows.length)return null;
  const people=rows.find(r=>r.observed_people!=null),noise=rows.find(r=>r.noise_dbfs!=null || r.noise_db!=null || r.noise_rms!=null);
  const states=rows.map(r=>status(r,r.ts,staleAfterSec));const stale=r=>!r || Date.now()-Date.parse(r.ts)>staleAfterSec*1000;
