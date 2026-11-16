@@ -434,7 +434,7 @@ function syncDetailPlan(c) {
   const note = $('[data-plan-reliability]');
   if (note) note.hidden = dataMode(c) === 'demo';
   if (note) note.textContent = fp.telemetryControlled
-    ? `${fp.observedPeople == null ? 'Хүний тоо тодорхойгүй · unknown occupancy.' : `Ажиглагдсан хүмүүс: ${fp.observedPeople}.`} Байрлал нь зөвхөн дүрслэл · illustrative positions, бодит байршил хянаагүй. Суудлын төлөв тодорхойгүй. Бүдгэрсэн дүрс нь гарч буй шилжилт.`
+    ? `${fp.observedPeople == null ? 'Хүний тоо тодорхойгүй · unknown occupancy.' : `Ажиглагдсан хүмүүс: ${fp.observedPeople}.`} Байрлал нь зөвхөн дүрслэл · illustrative positions, бодит байршил хянаагүй. Суудлын төлөв тодорхойгүй. Суух болон гарах хөдөлгөөн нь жишээ анимац; бодит сул суудал тогтоохгүй.`
     : dataMode(c) === 'demo' ? '' : 'Дүрслэл / simulation · SIMULATED: хүмүүс болон суудлын байрлал нь жишээ.';
 }
 function syncDetailNoise(c) {

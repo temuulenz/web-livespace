@@ -56,17 +56,23 @@ function realCafe(count, overrides = {}) {
   return { ...getCafes()[0], live: { mode: 'live', sensor: { dataSource: 'real', status: 'online', observedPeople: count, peopleTimestamp: new Date().toISOString(), peopleStale: false, ...overrides } } };
 }
 
-test('real telemetry synchronizes 0 → 5 → 2 → 0 without inferring seats or random visitors', () => {
+function advance(sim, seconds = 45) { for (let i = 0; i < seconds * 60; i++) sim.update(1 / 60, i * 1000 / 60); }
+
+test('real telemetry uses the original enter/order/sit/depart lifecycle for 0 → 1 → 5 → 2 → 0', () => {
   const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
   const sim = new FloorPlan(environment.wrap, realCafe(0), {});
-  for (const count of [0, 5, 2, 0]) {
+  for (const count of [0, 1, 5, 2, 0]) {
     sim.syncTelemetry(realCafe(count));
+    assert.equal(sim.population().active, count);
+    advance(sim);
     assert.equal(sim.people.length, count);
-    for (let i = 0; i < 600; i++) sim.update(1 / 60, i * 1000 / 60);
-    assert.equal(sim.people.length, count);
-    assert.equal(sim.observedPeople, count);
-    assert.ok(sim.people.every(p => Number.isFinite(p.x) && Number.isFinite(p.y) && !p.seat));
-    assert.ok(sim.seats.every(s => s.state === 'unknown' && !s.person && !s.res));
+    assert.ok(sim.people.every(p => p.state === 'seated' && p.seat && p.x === p.seat.x && p.y === p.seat.y));
+    const snapshot = sim.people.map(p => ({ p, x: p.x, y: p.y, state: p.state, seat: p.seat }));
+    sim.syncTelemetry(realCafe(count));
+    for (const saved of snapshot) { assert.ok(sim.people.includes(saved.p)); assert.equal(saved.p.x, saved.x); assert.equal(saved.p.y, saved.y); assert.equal(saved.p.seat, saved.seat); assert.equal(saved.p.state, saved.state); }
+    advance(sim, 15);
+    assert.equal(sim.people.length, count, 'no random departures or arrivals');
+    assert.ok(sim.seats.every(s => sim.seatView(s).state === 'unknown'));
     assert.equal(sim.stats().total, 0);
     assert.equal(sim.arrive(true), false); assert.equal(sim.depart(true), false);
     sim.setTarget(90, true); assert.equal(sim.target, count);
@@ -104,22 +110,53 @@ test('switching real and simulated modes restores autonomous simulation on the s
   sim.destroy();
 });
 
-test('real visitors enter and leave using paths; zero clears transitions and real mode draws no extra staff', () => {
+test('count changes during entry and departure do not double-spawn or strand chair reservations', () => {
   const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
   const sim = new FloorPlan(environment.wrap, realCafe(0), {});
   sim.syncTelemetry(realCafe(5));
-  assert.ok(sim.people.every(p => p.state === 'illustrativeEnter' && p.path.length));
-  const first = sim.people[0], originalY = first.y;
-  for (let i = 0; i < 30; i++) sim.update(1 / 60, i * 1000 / 60);
-  assert.notEqual(first.y, originalY);
+  assert.ok(sim.people.every(p => p.state === 'toOrder' && p.x === sim.door[0] && p.y === sim.door[1] + 4));
+  advance(sim, 1);
   sim.syncTelemetry(realCafe(2));
-  assert.equal(sim.people.length, 2); assert.equal(sim.departures.length, 3);
-  for (let i = 0; i < 90; i++) sim.update(1 / 60, i * 1000 / 60);
-  assert.equal(sim.departures.length, 0);
-  let rendered = 0; sim.person = () => rendered++; sim.draw(); assert.equal(rendered, 2);
-  sim.syncTelemetry(realCafe(0)); sim.draw(); assert.equal(rendered, 2);
-  assert.equal(sim.departures.length, 0);
-  sim.reduced = true; sim.syncTelemetry(realCafe(5)); assert.ok(sim.people.every(p => p.state === 'illustrative'));
-  sim.syncTelemetry(realCafe(2)); assert.equal(sim.departures.length, 0);
+  assert.equal(sim.population().active, 2); assert.equal(sim.population().departing, 3);
+  const survivors = sim.people.filter(p => p.state !== 'leaving');
+  sim.syncTelemetry(realCafe(2)); assert.equal(sim.population().active, 2);
+  sim.syncTelemetry(realCafe(5)); assert.equal(sim.population().active, 5);
+  assert.ok(survivors.every(p => sim.people.includes(p)));
+  advance(sim);
+  assert.equal(sim.people.length, 5); assert.equal(sim.population().seated, 5);
+  sim.syncTelemetry(realCafe(0));
+  assert.equal(sim.population().active, 0); assert.equal(sim.population().departing, 5);
+  assert.ok(sim.people.every(p => p.state === 'leaving' && p.path.at(-1)[0] === sim.door[0] && p.path.at(-1)[1] === sim.door[1] + 4));
+  advance(sim); assert.equal(sim.people.length, 0); assert.ok(sim.seats.every(s => !s.res && !s.person));
+  let rendered = 0; sim.person = () => rendered++; sim.draw(); assert.equal(rendered, 0, 'no extra staff');
   sim.destroy();
 });
+
+test('overflow uses reachable standing destinations and the same movement loop', () => {
+  const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
+  const sim = new FloorPlan(environment.wrap, realCafe(0), {});
+  const capacity = sim.countable();
+  sim.syncTelemetry(realCafe(capacity + 3));
+  assert.equal(sim.population().active, capacity + 3);
+  const overflow = sim.people.filter(p => p.seat?.kind === 'standing');
+  assert.equal(overflow.length, 3);
+  assert.ok(overflow.every(p => p.state === 'toSeat' && p.path.length > 1 && !sim.g[Math.floor(p.seat.y / 10) * sim.cols + Math.floor(p.seat.x / 10)]));
+  advance(sim, 90);
+  assert.equal(sim.population().standing, 3);
+  sim.syncTelemetry(realCafe(0)); advance(sim, 90);
+  assert.equal(sim.people.length, 0);
+  assert.equal(sim.stats().unknown, sim.seats.length);
+  sim.destroy();
+});
+
+for (const layout of ['minimal', 'artistic', 'legacy']) {
+  test(`real seating lifecycle preserves the ${layout} layout`, () => {
+    const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
+    const sim = new FloorPlan(environment.wrap, realCafe(5), { layout });
+    advance(sim);
+    assert.equal(sim.population().seated, 5);
+    assert.ok(sim.people.every(p => sim.seats.includes(p.seat)));
+    assert.equal(sim.stats().unknown, sim.seats.length);
+    sim.destroy();
+  });
+}

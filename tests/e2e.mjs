@@ -221,9 +221,9 @@ try {
       await new Promise((resolve, reject) => { ws.on('error', reject); ws.on('message', raw => { if (JSON.parse(raw).type === 'sensor.ready') resolve(); }); });
       for (const count of [0, 5, 2, 0]) {
         ws.send(JSON.stringify({ schemaVersion: 1, type: 'sensor.telemetry', messageId: `canvas_${count}_${Date.now()}`, deviceId: 'real_canvas', locationId: 'B', timestamp: new Date().toISOString(), occupancy: { observedPeople: count }, noise: { calibrated: false }, device: {} }));
-        await waitFor(`window.__realPlan?.telemetryControlled && window.__realPlan.observedPeople === ${count} && window.__realPlan.people.length === ${count}`);
+        await waitFor(`window.__realPlan?.telemetryControlled && window.__realPlan.observedPeople === ${count} && window.__realPlan.population().active === ${count}`);
         await evaluate(`window.__realCanvas ||= document.querySelector('#planWrap canvas')`);
-        assert.equal(await evaluate(`window.__realCanvas === document.querySelector('#planWrap canvas') && window.__realPlan.seats.every(s => s.state === 'unknown') && document.querySelector('#addG').disabled`), true);
+        assert.equal(await evaluate(`window.__realCanvas === document.querySelector('#planWrap canvas') && window.__realPlan.seats.every(s => window.__realPlan.seatView(s).state === 'unknown') && document.querySelector('#addG').disabled`), true);
         assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /illustrative/);
       }
       const sendNoise = (dbfs, calibrated = false) => {
@@ -231,7 +231,7 @@ try {
         ws.send(JSON.stringify(frame)); return frame;
       };
       sendNoise(-62);
-      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-62.0' && window.__realPlan.people.length === 2`);
+      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-62.0' && window.__realPlan.population().active === 2`);
       const originalFrame = sendNoise(-24, true);
       await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-24.0' && !!document.querySelector('[data-live-spl]')`);
       assert.match(await evaluate(`document.querySelector('[data-live-spl]').textContent`), /55.0 dB SPL/);
@@ -241,16 +241,16 @@ try {
       ws.send(JSON.stringify({ ...originalFrame, messageId: `old_${Date.now()}`, timestamp: new Date(Date.now() - 60000).toISOString(), occupancy: { observedPeople: 99 }, noise: { dbfs: -95, calibrated: false } }));
       await delay(300);
       assert.equal(await evaluate(`document.querySelector('[data-live-dbfs]').textContent`), '-24.0');
-      assert.equal(await evaluate(`window.__realPlan.people.length`), 2);
+      assert.equal(await evaluate(`window.__realPlan.population().active`), 2);
       sendNoise(null);
-      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '—' && window.__realPlan.people.length === 2`);
+      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '—' && window.__realPlan.population().active === 2`);
       assert.match(await evaluate(`document.querySelector('[data-noise-category]').textContent`), /unknown/);
       assert.equal(await evaluate(`document.querySelector('[data-noise-time]').textContent`), '—');
       await evaluate(`import('/js/services/platform.js').then(({ platform }) => { platform.config.sensor_stale_after_sec = .01; })`);
       await waitFor(`window.__realPlan.observedPeople === null && document.querySelector('#publicSensor [data-sensor-status]')?.dataset.sensorStatus === 'stale'`);
       await evaluate(`import('/js/services/platform.js').then(({ platform }) => { platform.config.sensor_stale_after_sec = 30; })`);
       sendNoise(-33);
-      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-33.0' && window.__realPlan.people.length === 2`);
+      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-33.0' && window.__realPlan.population().active === 2`);
       assert.equal(await evaluate(`window.__realCanvas === document.querySelector('#planWrap canvas')`), true);
       await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
       assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true);
