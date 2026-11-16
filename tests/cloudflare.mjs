@@ -9,6 +9,7 @@ import { unstable_dev } from 'wrangler';
 import WebSocket from 'ws';
 import { runSimulator, simulatorOptions } from '../scripts/sensor-simulator.mjs';
 import { startBrowser, delay } from './support/browser.mjs';
+import { verifyLoginClicks, verifyOutageRecovery } from './support/login-clicks.mjs';
 import { hashPassword } from '../cloudflare/core.mjs';
 const dir=await mkdtemp(join(tmpdir(),'livespace-cf-'));
 const cli=(...args)=>execFileSync(process.execPath,['node_modules/wrangler/bin/wrangler.js',...args,'--persist-to',dir],{stdio:'pipe',env:{...process.env,WRANGLER_SEND_METRICS:'false'}}).toString();
@@ -32,6 +33,9 @@ try {
  await check('health, static allow-list and seeded catalog',async()=>{assert.equal((await api('/health')).data.ok,true);assert.equal((await api('/cafes')).data.cafes.length,12);assert.equal((await fetch(origin+'/server/lib/auth.mjs')).status,404);const page=await fetch(origin+'/');assert.equal(page.status,200);assert.match(page.headers.get('content-security-policy') || '',/default-src 'self'/);});
  await check('auth rejects anonymous admin and cross-origin writes',async()=>{assert.equal((await api('/admin/devices')).res.status,401);assert.equal((await fetch(origin+'/api/v1/auth/login',{method:'POST',headers:{Origin:'https://evil.invalid','Content-Type':'application/json'},body:'{}'})).status,403);});
  await check('unchanged scrypt password login and session',async()=>{const {res,data}=await api('/auth/login','POST',{email:'admin@test.mn',password:'test-password-123'});assert.equal(res.status,200,JSON.stringify(data));cookie=res.headers.get('set-cookie').split(';')[0];assert.equal((await api('/auth/me')).data.user.role,'admin');});
+ if(process.env.BROWSER_PATH)await check('physical browser login, registration, logout and account navigation with unchanged CSP',async()=>{
+  const browser=await startBrowser();try{const options={origin,credentials:{email:'admin@test.mn',password:'test-password-123'}};await verifyOutageRecovery(browser,options);await verifyLoginClicks(browser,options);}finally{await browser.close();}
+ });
  await check('Super Admin ID binding, administrator restrictions, recent auth and session revocation',async()=>{
   const regularCookie=cookie;
   const rootSql=join(dir,'root.sql');

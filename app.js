@@ -12,7 +12,7 @@ import { pageTasks } from './js/lifecycle.js';
 import { countUp, animNum } from './js/animations.js';
 import { openModal, closeModal, toast } from './js/components/feedback.js';
 import { createRouter, configureErrors, mount, escapeHTML } from './framework/index.js';
-import { platform, initPlatform } from './js/services/platform.js';
+import { platform, initPlatform, retryPlatform } from './js/services/platform.js';
 import { dataMode, freshnessHTML, modeBadge, hasMeasurements, measuredSeats } from './js/live/freshness.js';
 import { sensorPanelHTML, noiseText } from './js/live/sensor-ui.js';
 import { LiveNoise } from './js/features/sensors/live-noise.js';
@@ -682,10 +682,20 @@ function refreshCafeViews(id) {
   const article = $(`#cgrid [data-href="#cafe-${id}"]`); if (article) article.outerHTML = cafeCard(c);
   if (cdCafe && cdCafe.id === id) applyLiveToDetail(c);
 }
+function renderPlatformStatus() {
+  let banner = $('#platformStatus');
+  if (!banner) { banner = document.createElement('section'); banner.id = 'platformStatus'; banner.className = 'platform-status'; banner.setAttribute('role', 'status'); $('.hd').after(banner); }
+  banner.hidden = !platform.serviceUnavailable;
+  if (banner.hidden) return;
+  banner.innerHTML = '<p>Нэвтрэлт болон бодит өгөгдлийн үйлчилгээ түр боломжгүй байна. Жишээ өгөгдөл ДЕМО гэж тэмдэглэгдэнэ.</p><button class="btn btn-o" data-retry-platform>Дахин холбох</button>';
+  const button = $('[data-retry-platform]', banner); button.disabled = platform.reconnecting;
+  button.onclick = async () => { await retryPlatform(); if (!platform.serviceUnavailable) { renderAccountButton(); route(); } };
+}
 renderHeaderBits();
 await initPlatform();
 if (platform.online) {
   bindAccountPopover(); watchAuthCancel(); renderAccountButton();
+  platform.bus.on('platform:status', renderPlatformStatus); renderPlatformStatus();
   platform.bus.on('login:required', reason => openAuth({ reason }));
   platform.bus.on('cafe:updated', refreshCafeViews);
   window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#cafe-')) { sensorHistoryView?.destroy(); sensorHistoryView = null; } });

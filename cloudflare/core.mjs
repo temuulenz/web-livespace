@@ -10,7 +10,11 @@ export const parse = (x, fallback = null) => { try { return x == null ? fallback
 export class APIError extends Error { constructor(status, code, message, details) { super(message); Object.assign(this,{status,code,details}); } }
 export const fail = (status,code,message,details) => { throw new APIError(status,code,message,details); };
 export const json = (body, status=200, headers={}) => Response.json(body,{status,headers:{'Cache-Control':'no-store',...securityHeaders,...headers}});
-export const error = e => json({error:{code:e.code || 'internal',message:e.status ? e.message : 'Internal server error',...(e.details ? {details:e.details}: {})}},e.status || 500);
+export function databaseAvailabilityError(e) {
+ if(/(?:exceeded.{0,80}(?:daily row (?:read|write) limit|D1)|daily row (?:read|write) limit)/i.test(String(e?.message || e))) return new APIError(503,'database_limit_reached','Live services are temporarily unavailable. Please retry later.');
+ return null;
+}
+export const error = input => {const e=databaseAvailabilityError(input) || input;return json({error:{code:e.code || 'internal',message:e.status ? e.message : 'Internal server error',...(e.details ? {details:e.details}: {})}},e.status || 500,e.code==='database_limit_reached'?{'Retry-After':'3600'}:{});};
 export const first = (db,sql,...args) => db.prepare(sql).bind(...args).first();
 export const all = async (db,sql,...args) => (await db.prepare(sql).bind(...args).all()).results;
 export const run = (db,sql,...args) => db.prepare(sql).bind(...args).run();

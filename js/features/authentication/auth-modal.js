@@ -55,6 +55,7 @@ class AuthForm extends Component {
       <button class="chip" role="tab" data-auth-mode="login" aria-pressed="${login}" aria-selected="${login}">Нэвтрэх</button>
       <button class="chip" role="tab" data-auth-mode="register" aria-pressed="${!login}" aria-selected="${!login}">Шинээр бүртгүүлэх</button>
     </div>
+    ${platform.serviceUnavailable ? html`<p class="auth-msg" role="status">Нэвтрэх үйлчилгээ түр боломжгүй байна. Таны бүртгэл устсан эсвэл нууц үг буруу гэсэн үг биш.</p>` : ''}
     <form class="form auth-form" novalidate data-key="${mode}">
       ${login ? '' : field(errors, { name: 'name', label: 'Нэр (заавал биш)', autocomplete: 'name' })}
       ${field(errors, { name: 'email', label: 'И-мэйл', type: 'email', autocomplete: 'email', placeholder: 'name@example.com' })}

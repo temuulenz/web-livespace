@@ -1,3 +1,4 @@
+import { latestSensorReadingsSql } from '../lib/sensor-latest.mjs';
 // Read projections over the existing measurements/devices; no duplicate state store.
 export function deviceStatus(db, config, device) {
   if (device.revoked_at || device.enabled === 0) return 'disabled';
@@ -13,11 +14,7 @@ export function deviceStatus(db, config, device) {
 }
 
 export function sensorSnapshot(db, config, cafeId, source) {
-  const rows = db.prepare(`SELECT m.*, d.connection_status, d.enabled, d.revoked_at, d.last_seen_at, d.id AS registered_id
-    FROM sensor_latest_readings m JOIN devices d ON d.id = m.device_id AND d.cafe_id = m.cafe_id
-    WHERE m.cafe_id = ? AND m.data_source = ? AND d.revoked_at IS NULL
-      AND m.data_source = CASE WHEN d.is_test = 1 OR d.kind = 'simulator' THEN 'simulated' ELSE 'real' END
-    ORDER BY m.ts DESC, m.id DESC`).all(cafeId, source);
+  const rows = db.prepare(latestSensorReadingsSql).all(source, cafeId, source);
   if (!rows.length) return null;
   const people = rows.find(r => r.observed_people != null);
   const noise = rows.find(r => r.noise_dbfs != null || r.noise_db != null || r.noise_rms != null);

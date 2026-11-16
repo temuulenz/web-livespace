@@ -224,7 +224,8 @@
   .mh-dots i.on { width: 20px; background: var(--brown) }
 
   /* tour: a spotlight that glides from one part of the page to the next */
-  .tour { position: fixed; inset: 0; z-index: 95 }
+  /* Below the header (50), account popovers (70), and authentication modal (80). */
+  .tour { position: fixed; inset: 0; z-index: 45 }
   .tour-spot { position: fixed; border-radius: 22px; box-shadow: 0 0 0 200vmax rgba(36, 24, 12, .64); opacity: 0; transition: left .5s cubic-bezier(.3, 1.15, .4, 1), top .5s cubic-bezier(.3, 1.15, .4, 1), width .5s cubic-bezier(.3, 1.15, .4, 1), height .5s cubic-bezier(.3, 1.15, .4, 1), opacity .35s }
   .tour-spot::after { content: ""; position: absolute; inset: -5px; border: 2.5px solid var(--amberL); border-radius: 26px; animation: tourRing 1.7s ease-out infinite }
   .tour.in .tour-spot { opacity: 1 }
@@ -1476,3 +1477,6 @@
 
 /* Source and freshness labels on both recommendation carousels. */
 .rc-source{display:block;font-size:10px;line-height:1.4;color:#fff;margin-top:6px}.rc-source .badge{font-size:9px}
+
+.platform-status{padding:12px 20px;background:var(--sand);border-bottom:1px solid var(--line);font-size:13px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.platform-status p{margin:0;flex:1;min-width:200px}
+.platform-status[hidden],#accBtn[hidden]{display:none}

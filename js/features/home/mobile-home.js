@@ -251,7 +251,10 @@ export function bindMobileHome(root, { cafes, onSearch }) {
 
   // 4. The tour: on the first visit (phones only), and again from the "?" button.
   let tour = null;
-  const startTour = () => { if (tour) tour.end(false); tour = createTour(root, () => { tour = null }) };
+  const startTour = () => {
+    if ($('#modal [role=dialog]') || ['#accPop', '#favPop', '#sndPop'].some(selector => $(selector)?.hidden === false)) return;
+    if (tour) tour.end(false); tour = createTour(root, () => { tour = null });
+  };
   on($('[data-tour]', root), 'click', () => { Snd.ui('pop'); startTour() });
   if (isMobile() && !store.get('mhTour', false)) pageTasks.timeout(startTour, 1100);
 
@@ -305,6 +308,7 @@ function createTour(root, onDone) {
     if (ended) return; ended = true;
     store.set('mhTour', true);
     removeEventListener('scroll', queue); removeEventListener('resize', onResize); removeEventListener('keydown', onKey);
+    document.removeEventListener('pointerdown', onAccountInteraction, true); document.removeEventListener('click', onAccountInteraction, true);
     if (frame !== undefined) pageTasks.cancelFrame(frame);
     if (finished && !Prefs.reduced) { burst(bub); Snd.ui('chime') }
     el.classList.add('out');
@@ -312,9 +316,11 @@ function createTour(root, onDone) {
     onDone();
   };
   const onResize = () => { if (!isMobile()) end(false); else queue() };
-  const onKey = e => { if (e.key === 'Escape') end(false); if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); next.click() } };
+  const onAccountInteraction = e => { if (e.target.closest?.('#accBtn,#accPop,#favBtn,#favPop,#sndBtn,#sndPop,#modal,[data-gate-login],[data-fav-login]')) end(false); };
+  const onKey = e => { if (e.target.closest?.('#accBtn,#accPop,#modal')) { end(false); return; } if (e.key === 'Escape') end(false); if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); next.click() } };
   next.onclick = () => i < STEPS.length - 1 ? go(i + 1) : end(true);
   $('.tour-skip', el).onclick = () => end(false);
+  document.addEventListener('pointerdown', onAccountInteraction, true); document.addEventListener('click', onAccountInteraction, true);
   addEventListener('scroll', queue, { passive: true }); addEventListener('resize', onResize); addEventListener('keydown', onKey);
   pageTasks.frame(() => { if (!ended) el.classList.add('in'); });
   go(0);
