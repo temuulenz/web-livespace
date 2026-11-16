@@ -91,12 +91,13 @@ export class OwnerPage extends Component {
   syncPlan() {
     const cafe = this.current(), wrap = this.$('[data-own-plan]');
     const key = cafe && wrap ? `${cafe.id}:${JSON.stringify(cafe.visualization.layout)}` : null;
-    if (key === this.planKey) return;
+    if (key === this.planKey) { this.fp?.syncTelemetry(cafe, platform.config.sensor_stale_after_sec ?? 30); return; }
     this.fp?.destroy(); this.fp = null; this.planKey = key;
     if (!key) return;
     wrap.innerHTML = '';
     const occ = cafe.live.free_pct != null ? 100 - cafe.live.free_pct : 40;
-    this.fp = new FloorPlan(wrap, { id: cafe.id, name: cafe.name, occ }, { layout: cafe.visualization.layout, sound: cafe.live.noise_level || 2 });
+    this.fp = new FloorPlan(wrap, { ...cafe, occ }, { layout: cafe.visualization.layout, sound: cafe.live.noise_level || 2 });
+    this.fp.syncTelemetry(cafe, platform.config.sensor_stale_after_sec ?? 30);
   }
   render() {
     const user = platform.session.user;

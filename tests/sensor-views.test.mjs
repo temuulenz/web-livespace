@@ -53,6 +53,6 @@ test('sensor presentation preserves units, unavailable values and source/status 
   assert.equal(noiseText({ dbfs: -42, calibrated: false, estimatedDbSpl: null }), '-42.0 dBFS');
   assert.equal(noiseText({ dbfs: -42, calibrated: true, estimatedDbSpl: 55 }), '55.0 dB SPL');
   const rendered = String(sensorPanelHTML({ live: { sensor: { dataSource: 'simulated', status: 'offline', timestamp: new Date().toISOString(), observedPeople: 0, confidence: null, noise: { dbfs: null, calibrated: false }, peopleStale: false, noiseStale: true, deviceCount: 1 } } }));
-  assert.match(rendered, /SIMULATED/); assert.match(rendered, /data-observed-people>0</); assert.match(rendered, /offline/);
+  assert.match(rendered, /SIMULATED/); assert.match(rendered, /data-observed-people>—</); assert.match(rendered, /offline/);
   assert.ok(!rendered.includes('null')); assert.ok(!rendered.includes('undefined'));
 });

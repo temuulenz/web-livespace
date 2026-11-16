@@ -93,6 +93,8 @@ A café's visualization is `{ status, layout: { preset, overrides }, notes, gene
 
 ## Live data
 
+The public and owner floor plans follow the latest valid real `live.sensor.observedPeople` count. Zero removes every visitor; offline, stale or unavailable counts show unknown occupancy. Visitor positions are illustrative walks, never tracked positions or seat measurements: every seat remains unknown in this mode. Real mode disables autonomous and manual visitor generation; demo and simulated modes retain the existing simulation. The existing SSE measurement summary and polling projection update the same Canvas without rebuilding it. The shared browser projection also drives the microphone panel and expires noise independently. See [live visualization behavior, threshold configuration and tests](LIVE_VISUALIZATION.md).
+
 See [SENSOR_API.md](SENSOR_API.md) for the legacy HTTP format, SSE/polling and demo/live/test/outdated/missing labels. Android/OkHttp and the virtual device use [SENSOR_PROTOCOL.md](SENSOR_PROTOCOL.md). Public `sensor.telemetry` and `sensor.status` events omit credentials and private diagnostics. Existing `measurement` events stay compatible; people counts and uncalibrated dBFS do not become seat or SPL readings.
 
 ## Configuration (environment variables)

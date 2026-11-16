@@ -2,6 +2,7 @@
 // Guest → favourite → login window → saved; partner application → owner account →
 // owner dashboard; admin workflow → device → live JSON measurement → café page updates.
 import assert from 'node:assert/strict';
+import WebSocket from 'ws';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { delay, root, startBrowser } from './support/browser.mjs';
@@ -187,7 +188,7 @@ try {
     assert.equal((await post(reading(4, 24, 71, 30))).status, 202);
     await waitFor(`document.querySelector('#freePct').textContent === '14%'`, 200);
     assert.equal(await evaluate(`window.__cv === document.querySelector('canvas')`), true, 'the visualization was not rebuilt');
-    assert.match(await evaluate(`document.querySelector('#ssBox').innerText`), /шуугиантай/);
+    assert.match(await evaluate(`document.querySelector('#ssBox').innerText`), /71.0 dB SPL/);
     await shot('cafe-live-after');
   });
 
@@ -201,6 +202,61 @@ try {
     await waitFor(`!!document.querySelector('.own-tiles') && !!document.querySelector('.own-plan canvas')`, 200);
     assert.match(await evaluate(`document.querySelector('.own-live').innerText`), /ШУУД/);
     await shot('owner-dashboard-active');
+  });
+
+  await check('real camera counts drive the existing canvas through 0 → 5 → 2 → 0 and offline', async () => {
+    const admin = server.client(); await admin.post('/api/v1/auth/login', ADMIN);
+    await admin.patch('/api/v1/admin/cafes/B', { data_mode: 'live', hours: '00:00–23:59' });
+    const registered = await admin.post('/api/v1/admin/devices', { id: 'real_canvas', cafe_id: 'B', kind: 'sensor' });
+    // Observe the existing instance without adding a production debugging global.
+    await evaluate(`(async () => {
+      const { FloorPlan } = await import('/js/simulation/floor-plan.js');
+      const original = FloorPlan.prototype.syncTelemetry;
+      FloorPlan.prototype.syncTelemetry = function(...args) { window.__realPlan = this; return original.apply(this, args); };
+    })()`);
+    await go('#cafe-B');
+    await evaluate(`window.__realCanvas = null`);
+    const ws = new WebSocket(origin.replace('http', 'ws') + '/ws/sensors', { headers: { Authorization: 'Bearer ' + registered.data.token } });
+    try {
+      await new Promise((resolve, reject) => { ws.on('error', reject); ws.on('message', raw => { if (JSON.parse(raw).type === 'sensor.ready') resolve(); }); });
+      for (const count of [0, 5, 2, 0]) {
+        ws.send(JSON.stringify({ schemaVersion: 1, type: 'sensor.telemetry', messageId: `canvas_${count}_${Date.now()}`, deviceId: 'real_canvas', locationId: 'B', timestamp: new Date().toISOString(), occupancy: { observedPeople: count }, noise: { calibrated: false }, device: {} }));
+        await waitFor(`window.__realPlan?.telemetryControlled && window.__realPlan.observedPeople === ${count} && window.__realPlan.people.length === ${count}`);
+        await evaluate(`window.__realCanvas ||= document.querySelector('#planWrap canvas')`);
+        assert.equal(await evaluate(`window.__realCanvas === document.querySelector('#planWrap canvas') && window.__realPlan.seats.every(s => s.state === 'unknown') && document.querySelector('#addG').disabled`), true);
+        assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /illustrative/);
+      }
+      const sendNoise = (dbfs, calibrated = false) => {
+        const frame = { schemaVersion: 1, type: 'sensor.telemetry', messageId: `noise_${Date.now()}`, deviceId: 'real_canvas', locationId: 'B', timestamp: new Date().toISOString(), occupancy: { observedPeople: 2 }, noise: { dbfs, calibrated, estimatedDbSpl: calibrated ? 55 : null }, device: {} };
+        ws.send(JSON.stringify(frame)); return frame;
+      };
+      sendNoise(-62);
+      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-62.0' && window.__realPlan.people.length === 2`);
+      const originalFrame = sendNoise(-24, true);
+      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-24.0' && !!document.querySelector('[data-live-spl]')`);
+      assert.match(await evaluate(`document.querySelector('[data-live-spl]').textContent`), /55.0 dB SPL/);
+      assert.equal(await evaluate(`document.querySelector('[data-noise-chart]').dataset.samples`), '2');
+      await shot('cafe-real-noise');
+      // Valid old outbox upload must remain historical; its receipt time is newer.
+      ws.send(JSON.stringify({ ...originalFrame, messageId: `old_${Date.now()}`, timestamp: new Date(Date.now() - 60000).toISOString(), occupancy: { observedPeople: 99 }, noise: { dbfs: -95, calibrated: false } }));
+      await delay(300);
+      assert.equal(await evaluate(`document.querySelector('[data-live-dbfs]').textContent`), '-24.0');
+      assert.equal(await evaluate(`window.__realPlan.people.length`), 2);
+      sendNoise(null);
+      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '—' && window.__realPlan.people.length === 2`);
+      assert.match(await evaluate(`document.querySelector('[data-noise-category]').textContent`), /unknown/);
+      assert.equal(await evaluate(`document.querySelector('[data-noise-time]').textContent`), '—');
+      await evaluate(`import('/js/services/platform.js').then(({ platform }) => { platform.config.sensor_stale_after_sec = .01; })`);
+      await waitFor(`window.__realPlan.observedPeople === null && document.querySelector('#publicSensor [data-sensor-status]')?.dataset.sensorStatus === 'stale'`);
+      await evaluate(`import('/js/services/platform.js').then(({ platform }) => { platform.config.sensor_stale_after_sec = 30; })`);
+      sendNoise(-33);
+      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-33.0' && window.__realPlan.people.length === 2`);
+      assert.equal(await evaluate(`window.__realCanvas === document.querySelector('#planWrap canvas')`), true);
+      await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true);
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    } finally { ws.close(); }
+    await waitFor(`window.__realPlan?.observedPeople === null && document.querySelector('[data-plan-reliability]').textContent.includes('unknown occupancy')`);
   });
 
   await check('virtual sensor → WebSocket → SQLite → existing SSE framework → browser', async () => {

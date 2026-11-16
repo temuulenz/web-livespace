@@ -99,12 +99,25 @@ try {
    const browser=await startBrowser();
    try {
     await browser.send('Page.navigate',{url:origin+'/#cafe-A'});
-    let ready=false;for(let i=0;i<200;i++){await delay(50);ready=await browser.evaluate(`document.documentElement?.classList.contains('ls-online') && document.querySelector('#publicSensor [data-observed-people]')?.textContent === '12' && !!document.querySelector('canvas')`);if(ready)break;}assert.ok(ready,'Cloudflare frontend did not render sensor count');
+    let ready=false;for(let i=0;i<200;i++){await delay(50);ready=await browser.evaluate(`document.documentElement?.classList.contains('ls-online') && document.querySelector('#publicSensor [data-observed-people]')?.textContent === '—' && !!document.querySelector('canvas')`);if(ready)break;}assert.ok(ready,'Cloudflare frontend did not show unknown offline occupancy');
     await browser.evaluate(`window.__cloudflareCanvas = document.querySelector('canvas'); true`);
     const config=await browser.evaluate(`import('/js/services/platform.js').then(m=>({status:m.platform.liveStatus,stream:m.platform.config.stream_enabled}))`);assert.deepEqual(config,{status:'polling',stream:false});
     const frame2={...frame,deviceId:'CF-CLI',messageId:'poll-update',timestamp:new Date().toISOString(),occupancy:{observedPeople:17}};
     const live=socket(device.data.token);await live.next();live.ws.send(JSON.stringify(frame2));assert.equal((await live.next()).status,'accepted');
-    let updated=false;for(let i=0;i<260;i++){await delay(50);updated=await browser.evaluate(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '17'`);if(updated)break;}assert.ok(updated,'Polling failed to update browser');assert.equal(await browser.evaluate(`window.__cloudflareCanvas === document.querySelector('canvas')`),true);live.ws.close();
+    let updated=false;for(let i=0;i<260;i++){await delay(50);updated=await browser.evaluate(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '17'`);if(updated)break;}assert.ok(updated,'Polling failed to update browser');assert.equal(await browser.evaluate(`window.__cloudflareCanvas === document.querySelector('canvas')`),true);
+    assert.equal(await browser.evaluate(`document.querySelector('[data-live-dbfs]').textContent`),'-40.0');live.ws.close();
+    const realDevice=await api('/admin/devices','POST',{id:'CF-PUBLIC-REAL',cafe_id:'A',kind:'sensor'});
+    const real=socket(realDevice.data.token);await real.next();
+    try {
+     for(const count of [0,5,2,0]) {
+      real.ws.send(JSON.stringify({...frame,deviceId:'CF-PUBLIC-REAL',messageId:'real-poll-'+count+'-'+Date.now(),timestamp:new Date().toISOString(),occupancy:{observedPeople:count},noise:{dbfs:count===5?-25:-48,calibrated:false}}));
+      assert.equal((await real.next()).status,'accepted');
+      let synced=false;for(let i=0;i<260;i++){await delay(50);synced=await browser.evaluate(`document.querySelector('[data-plan-reliability]')?.textContent.includes('Ажиглагдсан хүмүүс: ${count}.') && document.querySelector('#publicSensor [data-observed-people]')?.textContent === '${count}'`);if(synced)break;}
+      assert.ok(synced,'Real count did not reach Cloudflare polling visualization');
+      assert.equal(await browser.evaluate(`document.querySelector('#addG').disabled && window.__cloudflareCanvas === document.querySelector('canvas')`),true);
+      assert.equal(await browser.evaluate(`document.querySelector('[data-live-dbfs]').textContent`),count===5?'-25.0':'-48.0');
+     }
+    } finally {real.ws.close();}
    } finally {await browser.close();}
   }
  });

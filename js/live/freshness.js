@@ -1,5 +1,6 @@
 // How old and how trustworthy a café's numbers are, in words the visitor understands.
 // Demo, real, test and missing data are never mixed or shown without a label.
+import { sensorState } from './sensor-state.js';
 import { clockTime, ageSeconds } from '../../framework/index.js';
 
 // Without a backend every value is the bundled demo data.
@@ -14,22 +15,23 @@ export function ageText(iso) {
   return `${Math.round(s / 86400)} өдрийн өмнө`;
 }
 
-export function modeBadge(c) {
+export function modeBadge(c, options = {}) {
   const mode = dataMode(c);
   if (mode === 'demo') return '<span class="badge b-demo">ДЕМО</span>';
   if (mode === 'none') return '<span class="badge b-stale">МЭДЭЭЛЭЛГҮЙ</span>';
-  if (c.live.stale) return '<span class="badge b-stale">ХУУЧИРСАН</span>';
+  if (c.live.stale || (c.live.sensor && sensorState(c, options)?.status !== 'online')) return '<span class="badge b-stale">ХУУЧИРСАН</span>';
   return mode === 'test' ? '<span class="badge b-typ">ТУРШИЛТ · SIMULATED</span>' : '<span class="badge b-live">ШУУД · REAL</span>';
 }
 
-export function freshnessHTML(c) {
+export function freshnessHTML(c, options = {}) {
   const mode = dataMode(c);
-  if (mode === 'demo') return `${modeBadge(c)}<span>Жишээ өгөгдөл</span><small>Энэ кафед мэдрэгч хараахан суугаагүй. Тоонууд нь бодит хэмжилт биш.</small>`;
-  if (mode === 'none') return `${modeBadge(c)}<span>Бодит хэмжилт хараахан ирээгүй</span>`;
-  const at = c.live.updated_at;
+  if (mode === 'demo') return `${modeBadge(c, options)}<span>Жишээ өгөгдөл</span><small>Энэ кафед мэдрэгч хараахан суугаагүй. Тоонууд нь бодит хэмжилт биш.</small>`;
+  if (mode === 'none') return `${modeBadge(c, options)}<span>Бодит хэмжилт хараахан ирээгүй</span>`;
+  const sensor = sensorState(c, options);
+  const at = sensor?.timestamp || c.live.updated_at;
   const source = mode === 'test' ? 'Туршилтын төхөөрөмж' : 'Мэдрэгч';
-  if (c.live.stale) return `${modeBadge(c)}<span>Сүүлийн хэмжилт ${clockTime(at)}</span><small>${source} · ${ageText(at)}. Одоогийн байдал өөр байж болно.</small>`;
-  return `${modeBadge(c)}<span>${clockTime(at)}-д шинэчлэгдсэн</span><small>${source} · ${ageText(at)}</small>`;
+  if (c.live.stale || (sensor && sensor.status !== 'online')) return `${modeBadge(c, options)}<span>Сүүлийн хэмжилт ${clockTime(at)}</span><small>${source} · ${ageText(at)}. Одоогийн байдал өөр байж болно.</small>`;
+  return `${modeBadge(c, options)}<span>${clockTime(at)}-д шинэчлэгдсэн</span><small>${source} · ${ageText(at)}</small>`;
 }
 
 // Seat statistics in the shape FloorPlan.stats() uses, from a real measurement.

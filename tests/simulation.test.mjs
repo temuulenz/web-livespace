@@ -51,3 +51,75 @@ test('draw avoids filtered people arrays and staff object copies', () => {
   assert.equal(copies, 0);
   sim.destroy();
 });
+
+function realCafe(count, overrides = {}) {
+  return { ...getCafes()[0], live: { mode: 'live', sensor: { dataSource: 'real', status: 'online', observedPeople: count, peopleTimestamp: new Date().toISOString(), peopleStale: false, ...overrides } } };
+}
+
+test('real telemetry synchronizes 0 → 5 → 2 → 0 without inferring seats or random visitors', () => {
+  const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
+  const sim = new FloorPlan(environment.wrap, realCafe(0), {});
+  for (const count of [0, 5, 2, 0]) {
+    sim.syncTelemetry(realCafe(count));
+    assert.equal(sim.people.length, count);
+    for (let i = 0; i < 600; i++) sim.update(1 / 60, i * 1000 / 60);
+    assert.equal(sim.people.length, count);
+    assert.equal(sim.observedPeople, count);
+    assert.ok(sim.people.every(p => Number.isFinite(p.x) && Number.isFinite(p.y) && !p.seat));
+    assert.ok(sim.seats.every(s => s.state === 'unknown' && !s.person && !s.res));
+    assert.equal(sim.stats().total, 0);
+    assert.equal(sim.arrive(true), false); assert.equal(sim.depart(true), false);
+    sim.setTarget(90, true); assert.equal(sim.target, count);
+  }
+  sim.destroy();
+});
+
+test('offline, stale, missing and invalid counts are unknown, including local expiry', () => {
+  const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
+  const sim = new FloorPlan(environment.wrap, realCafe(5), {});
+  for (const overrides of [{ status: 'offline' }, { status: 'stale' }, { peopleStale: true }, { observedPeople: null }, { observedPeople: -1 }, { observedPeople: '0' }, { peopleTimestamp: 'invalid' }, { peopleTimestamp: new Date(Date.now() - 31000).toISOString() }]) {
+    sim.syncTelemetry(realCafe(5, overrides));
+    assert.equal(sim.observedPeople, null); assert.equal(sim.people.length, 0); assert.equal(sim.target, null);
+  }
+  sim.syncTelemetry(realCafe(5));
+  sim.telemetrySensor.peopleTimestamp = new Date(Date.now() - 31000).toISOString();
+  sim.update(.016, 16);
+  assert.equal(sim.observedPeople, null); assert.equal(sim.people.length, 0);
+  sim.destroy();
+});
+
+test('switching real and simulated modes restores autonomous simulation on the same canvas', () => {
+  const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
+  const sim = new FloorPlan(environment.wrap, realCafe(5), {}), canvas = sim.cv;
+  const simulated = { ...getCafes()[0], occ: 50, live: { mode: 'test', sensor: { dataSource: 'simulated' } } };
+  sim.syncTelemetry(simulated);
+  assert.equal(sim.telemetryControlled, false);
+  assert.ok(sim.seats.some(s => s.state === 'free'));
+  assert.equal(sim.arrive(true), true);
+  sim.syncTelemetry(realCafe(0));
+  assert.equal(sim.people.length, 0); assert.equal(sim.telemetryControlled, true);
+  sim.syncTelemetry(simulated); sim.update(1, 1000);
+  assert.ok(sim.people.length > 0);
+  assert.equal(sim.cv, canvas);
+  sim.destroy();
+});
+
+test('real visitors enter and leave using paths; zero clears transitions and real mode draws no extra staff', () => {
+  const environment = simulationEnvironment(); Object.assign(globalThis, environment.globals);
+  const sim = new FloorPlan(environment.wrap, realCafe(0), {});
+  sim.syncTelemetry(realCafe(5));
+  assert.ok(sim.people.every(p => p.state === 'illustrativeEnter' && p.path.length));
+  const first = sim.people[0], originalY = first.y;
+  for (let i = 0; i < 30; i++) sim.update(1 / 60, i * 1000 / 60);
+  assert.notEqual(first.y, originalY);
+  sim.syncTelemetry(realCafe(2));
+  assert.equal(sim.people.length, 2); assert.equal(sim.departures.length, 3);
+  for (let i = 0; i < 90; i++) sim.update(1 / 60, i * 1000 / 60);
+  assert.equal(sim.departures.length, 0);
+  let rendered = 0; sim.person = () => rendered++; sim.draw(); assert.equal(rendered, 2);
+  sim.syncTelemetry(realCafe(0)); sim.draw(); assert.equal(rendered, 2);
+  assert.equal(sim.departures.length, 0);
+  sim.reduced = true; sim.syncTelemetry(realCafe(5)); assert.ok(sim.people.every(p => p.state === 'illustrative'));
+  sim.syncTelemetry(realCafe(2)); assert.equal(sim.departures.length, 0);
+  sim.destroy();
+});

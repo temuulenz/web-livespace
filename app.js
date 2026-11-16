@@ -15,6 +15,8 @@ import { createRouter, configureErrors, mount, escapeHTML } from './framework/in
 import { platform, initPlatform } from './js/services/platform.js';
 import { dataMode, freshnessHTML, modeBadge, hasMeasurements, measuredSeats } from './js/live/freshness.js';
 import { sensorPanelHTML, noiseText } from './js/live/sensor-ui.js';
+import { LiveNoise } from './js/features/sensors/live-noise.js';
+import { isRealMode } from './js/live/sensor-state.js';
 import { SensorHistory } from './js/features/sensors/sensor-history.js';
 import { openAuth, watchAuthCancel } from './js/features/authentication/auth-modal.js';
 import { renderAccountButton, bindAccountPopover, AccountPage } from './js/features/account/account.js';
@@ -24,7 +26,7 @@ import { AdminPage } from './js/features/admin-dashboard/admin-page.js';
 
 const CAFES = getCafes();
 let cmpIds = [];
-let sensorHistoryView = null;
+let sensorHistoryView = null, liveNoiseView = null;
 let selId = null, mapCtl = null, fp = null, homeMini = null, cdCafe = null, pageComp = null;
 // Cafés without live data yet are shown like closed ones, with an honest reason.
 const closedText = c => c.status_text || `${c.opens} нээгдэнэ`;
@@ -369,6 +371,7 @@ function renderCafe(id) {
 }
 function buildCafe(c) {
   sensorHistoryView?.destroy(); sensorHistoryView = null;
+  liveNoiseView?.destroy(); liveNoiseView = null;
   const t = tone(c), fp_ = freePct(c);
   const legend = `<div class="plan-legend"><span><i class="lg-seat"></i>Сул</span><span><i class="lg-seat o"></i>Хүнтэй</span><span><i class="lg-seat u">?</i>Мэдээлэлгүй</span></div>`;
   app.innerHTML = `<div class="page"><div class="wrap cd">
@@ -377,20 +380,20 @@ function buildCafe(c) {
   <a class="ibtn back" href="#explore" aria-label="Газрын зураг руу буцах" title="Газрын зураг">${I.map}</a>
   <div class="cd-act">${favBtn(c.id)}${cmpBtn(c.id)}</div>
   <div class="cd-title"><h1>${c.name}</h1>${c.open ? `<p class="mood-line ${t}" id="moodLine">${mood(c)}</p>` : `<p class="mood-line">${c.note || ''}</p>`}
-   <div class="cd-pills">${openLamp(c)}<span class="tagp2 num">${I.clock}${c.hours}</span><span class="tagp2 num">${I.walk}${c.walk} мин</span>${tagPills(c)}<span id="cdMode">${modeBadge(c)}</span></div></div>
+   <div class="cd-pills">${openLamp(c)}<span class="tagp2 num">${I.clock}${c.hours}</span><span class="tagp2 num">${I.walk}${c.walk} мин</span>${tagPills(c)}<span id="cdMode">${modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</span></div></div>
  </div>
- <section id="publicSensor" ${c.live?.sensor ? 'class="card"' : ''}>${sensorPanelHTML(c)}</section>
+ <section id="publicSensor" ${c.live?.sensor ? 'class="card"' : ''}>${sensorPanelHTML(c, false, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</section>
  ${c.open ? `<div class="cd-grid">
   <section class="card plan-card" aria-label="Кафены зураглал">
    <div class="card-h"><h2>Кафе дотор</h2>${legend}<div class="r"><div class="seg" role="tablist" id="viewSeg"><span class="ind-s"></span><button role="tab" aria-selected="true" data-view="plan">Зураглал</button><button role="tab" aria-selected="false" data-view="table">Хүснэгт</button></div></div></div>
-   ${dataMode(c) !== 'demo' ? '<p class="muted" data-plan-reliability>Дүрслэл / simulation: хүмүүс болон суудлын байрлал нь жишээ. Камерын хүний тооноос суудал тогтоохгүй.</p>' : ''}
+   <p class="muted" data-plan-reliability></p>
    <div id="viewPlan"><div class="plan-outer"><div class="plan-wrap" id="planWrap"></div>
     <div class="plan-tools"><button data-pz="in" aria-label="Томруулах" title="Томруулах">${I.plus}</button><button data-pz="out" aria-label="Жижигрүүлэх" title="Жижигрүүлэх">${I.minus}</button><span class="pt-sep"></span><button id="addG" aria-label="Зочин орж ирэх" title="Зочин орж ирэх">${I.guestIn}</button><button id="remG" aria-label="Зочин гарах" title="Зочин гарах">${I.guestOut}</button></div>
     <div id="seatInfo"></div></div></div>
    <div id="viewTable" hidden>${tableHTML(c)}</div>
   </section>
   <div class="side-stack">
-   <div class="cd-fresh" id="cdFresh" aria-live="polite">${freshnessHTML(c)}</div>
+   <div class="cd-fresh" id="cdFresh" aria-live="polite">${freshnessHTML(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</div>
    <section class="card mcard seatcard"><h3>${I.seat} Сул суудал</h3><div class="sc-row"><div class="big-pct"><b class="num" id="freePct">${fp_ == null ? '—' : fp_ + '%'}</b><span id="crowdLab">${fp_ == null ? 'Суудал хэмжээгүй' : crowdCat(c.occ)[0]}</span></div><small class="muted num" id="freeSub"></small></div><div class="chairs" id="chairs" aria-hidden="true"></div></section>
    <section class="card mcard"><h3>${ssGlyph(2)} Дуу чимээ</h3><div id="ssBox"></div>
     <div class="ss-scale" role="group" aria-label="Дууны түвшнийг жишээгээр солих">${[1, 2, 3, 4, 5].map(l => `<button data-ssl="${l}" aria-label="${SS[l].t}" title="${SS[l].t}" class="${l === c.sound ? 'on' : ''}">${ssGlyph(l)}</button>`).join('')}</div></section>
@@ -406,9 +409,10 @@ function buildCafe(c) {
  </div>${footer()}</div>`;
   if ($('#publicSensorHistory')) sensorHistoryView = mount(SensorHistory, $('#publicSensorHistory'), { cafeId: c.id, source: c.live?.sensor?.dataSource || 'real', role: 'public' });
   if (!c.open) return;
-  renderSS(c.sound); renderWF(c.wifi, c);
+  syncDetailNoise(c); renderWF(c.wifi, c);
   // floor plan
   fp = new FloorPlan($('#planWrap'), { ...c, occ: c.occ ?? 40 }, { onStats: updSeats, onEvent: logEvent, onSeat: seatInfo, sound: c.sound });
+  syncDetailPlan(c);
   $$('[data-pz]').forEach(b => b.onclick = () => { Snd.ui('click'); fp.setZoom(b.dataset.pz === 'in' ? 1.4 : 1 / 1.4) });
   $('#addG').onclick = () => { if (!fp.arrive(true)) { Snd.ui('err'); toast('Сул сандал үлдсэнгүй') } else Snd.ui('click') };
   $('#remG').onclick = () => { if (!fp.depart(true)) { Snd.ui('err'); toast('Суусан зочин алга') } };
@@ -416,26 +420,62 @@ function buildCafe(c) {
   const seg = $('#viewSeg'); const moveInd = () => { const b = $('[aria-selected="true"]', seg); const ind = $('.ind-s', seg); ind.style.width = b.offsetWidth + 'px'; ind.style.transform = `translateX(${b.offsetLeft - 4}px)` }; moveInd();
   seg.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; Snd.ui('click'); $$('[data-view]', seg).forEach(x => x.setAttribute('aria-selected', x === b)); moveInd(); $('#viewPlan').hidden = b.dataset.view !== 'plan'; $('#viewTable').hidden = b.dataset.view !== 'table'; if (b.dataset.view === 'table') $('#viewTable').innerHTML = tableHTML(c, fp.stats()) });
   $$('[data-ssl]').forEach(b => b.onclick = () => { Snd.ui('tick'); $$('[data-ssl]').forEach(x => x.classList.toggle('on', x === b)); renderSS(+b.dataset.ssl); fp.sound = +b.dataset.ssl });
-  if (dataMode(c) !== 'demo') $$('[data-ssl]').forEach(b => { b.disabled = true; });
+  syncDetailNoise(c);
   initTE(c);
   tickFreshness();
 }
+function syncDetailPlan(c) {
+  if (!fp) return;
+  const wasControlled = fp.telemetryControlled;
+  fp.syncTelemetry(c, platform.config.sensor_stale_after_sec ?? 30);
+  if (wasControlled !== fp.telemetryControlled) seatInfo(null);
+  const table = $('#viewTable'); if (table && !table.hidden) table.innerHTML = tableHTML(c, fp.stats());
+  for (const id of ['addG', 'remG']) { const button = $('#' + id); if (button) button.disabled = fp.telemetryControlled; }
+  const note = $('[data-plan-reliability]');
+  if (note) note.hidden = dataMode(c) === 'demo';
+  if (note) note.textContent = fp.telemetryControlled
+    ? `${fp.observedPeople == null ? 'Хүний тоо тодорхойгүй · unknown occupancy.' : `Ажиглагдсан хүмүүс: ${fp.observedPeople}.`} Байрлал нь зөвхөн дүрслэл · illustrative positions, бодит байршил хянаагүй. Суудлын төлөв тодорхойгүй. Бүдгэрсэн дүрс нь гарч буй шилжилт.`
+    : dataMode(c) === 'demo' ? '' : 'Дүрслэл / simulation · SIMULATED: хүмүүс болон суудлын байрлал нь жишээ.';
+}
+function syncDetailNoise(c) {
+  const root = $('#ssBox'); if (!root) return;
+  const telemetry = isRealMode(c) || !!c.live?.sensor;
+  if (telemetry) {
+    const props = { cafe: c, staleAfterSec: platform.config.sensor_stale_after_sec ?? 30, thresholds: platform.config.noise_dbfs_thresholds };
+    if (liveNoiseView?.el === root) liveNoiseView.setProps(props);
+    else { liveNoiseView?.destroy(); root.innerHTML = ''; liveNoiseView = mount(LiveNoise, root, props); }
+    if (fp && isRealMode(c)) fp.sound = 0;
+  } else { liveNoiseView?.destroy(); liveNoiseView = null; renderSS(c.sound); }
+  const scale = $('.ss-scale'); if (scale) scale.hidden = telemetry;
+  $$('[data-ssl]').forEach(button => { button.disabled = telemetry; });
+}
 // Keep "N min ago" honest while the page is open.
-function tickFreshness() { pageTasks.timeout(() => { const el = $('#cdFresh'); if (el && cdCafe && hasMeasurements(cdCafe)) el.innerHTML = freshnessHTML(cdCafe); tickFreshness() }, 30000) }
+function tickFreshness() {
+  pageTasks.timeout(() => {
+    if (cdCafe) {
+      syncDetailPlan(cdCafe); if (dataMode(cdCafe) !== 'demo') syncDetailNoise(cdCafe);
+      const sensor = $('#publicSensor'); if (sensor) sensor.innerHTML = sensorPanelHTML(cdCafe, false, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
+      const badge = $('#cdMode'); if (badge) badge.innerHTML = modeBadge(cdCafe, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
+      const fresh = $('#cdFresh'); if (fresh && hasMeasurements(cdCafe)) fresh.innerHTML = freshnessHTML(cdCafe, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
+    }
+    tickFreshness();
+  }, 1000);
+}
 // A new measurement for the open café: update indicators in place, never rebuild the simulation.
 function applyLiveToDetail(c) {
   // Initial polling may finish before the scheduled detail render. That render
   // reads the updated cafe; building here would create a second Canvas shortly after.
   if ($('#app .skel')) return;
   sensorHistoryView?.setProps({ source: c.live?.sensor?.dataSource || 'real' });
-  const sensor = $('#publicSensor'); if (sensor) { sensor.innerHTML = sensorPanelHTML(c); sensor.className = c.live?.sensor ? 'card' : ''; }
+  const sensor = $('#publicSensor'); if (sensor) { sensor.innerHTML = sensorPanelHTML(c, false, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 }); sensor.className = c.live?.sensor ? 'card' : ''; }
   if (!$('#planWrap') && c.open && hasMeasurements(c)) { buildCafe(c); return; }
   if (!$('#cdFresh')) return;
-  $('#cdFresh').innerHTML = freshnessHTML(c); $('#cdMode').innerHTML = modeBadge(c);
+  $('#cdFresh').innerHTML = freshnessHTML(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 }); $('#cdMode').innerHTML = modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
   const ml = $('#moodLine'); if (ml && c.open) ml.textContent = mood(c);
+  syncDetailPlan(c); syncDetailNoise(c);
   if (!c.open || !hasMeasurements(c)) return;
-  const m = measuredSeats(c); if (m) updSeats(m);
-  if (c.sound) { renderSS(c.sound); $$('[data-ssl]').forEach(x => x.classList.toggle('on', +x.dataset.ssl === c.sound)); if (fp) fp.sound = c.sound }
+  if (fp) updSeats(measuredSeats(c) || fp.stats());
+  if (!c.live?.sensor && !isRealMode(c) && fp) fp.sound = c.sound;
   if (c.wifi) renderWF(c.wifi, c);
   if (fp && c.occ != null) fp.setTarget(c.occ, false);
 }
@@ -443,7 +483,7 @@ function renderSS(l) { if (!l) { $('#ssBox').innerHTML = '<p class="muted">SPL �
 function renderWF(l, c) { $('#wfBox').innerHTML = `<div class="wfbig">${wifiSVG(l, 52)}<div><b>${WIFI[l]}${c.mbps ? ` <span class="num mb">${c.mbps} Mbps</span>` : ''}</b><small>${WIFI_S[l]}</small></div></div>` }
 function updSeats(s) {
   const measured = cdCafe && measuredSeats(cdCafe); if (measured) s = measured;
-  if (cdCafe && hasMeasurements(cdCafe) && !measured) { const el = $('#freePct'); if (el) { el.textContent = '—'; $('#crowdLab').textContent = 'Суудал хэмжээгүй'; $('#freeSub').textContent = 'Хүний тооноос сул суудал тооцохгүй'; $('#chairs').innerHTML = ''; } return; }
+  if (cdCafe && dataMode(cdCafe) !== 'demo' && !measured) { const el = $('#freePct'); if (el) { el.textContent = '—'; $('#crowdLab').textContent = 'Суудал хэмжээгүй'; $('#freeSub').textContent = 'Хүний тооноос сул суудал тооцохгүй'; $('#chairs').innerHTML = ''; } return; }
   const pct = Math.round(s.free / s.total * 100); const el = $('#freePct'); if (!el) return;
   animNum(el, pct, '%'); $('#crowdLab').textContent = crowdCat(100 - pct)[0];
   $('#freeSub').textContent = `${s.total}-оос ${s.free} сул${s.unknown ? ` · ${s.unknown} мэдээлэлгүй` : ''}${measured ? ' · мэдрэгч' : ''}`;
@@ -457,7 +497,7 @@ function seatInfo(s) {
   $('[data-sixclose]', box).onclick = () => { box.innerHTML = '' }
 }
 function tableHTML(c, s) {
-  if (hasMeasurements(c) && !measuredSeats(c)) return `<p class="muted">Суудлын хэмжилтгүй. Сандлын байрлал бол дүрслэл.</p>${sensorPanelHTML(c)}`;
+  if (dataMode(c) !== 'demo' && !measuredSeats(c)) return `<p class="muted">Суудлын хэмжилтгүй. Сандлын байрлал бол дүрслэл.</p>${sensorPanelHTML(c)}`;
   if (hasMeasurements(c)) s = measuredSeats(c);
   const pct = s ? Math.round(s.free / s.total * 100) : freePct(c); return `<table class="tbl"><tr><th>Үзүүлэлт</th><th>Одоо</th><th></th></tr>
  <tr><td>Сул суудал</td><td class="num"><b>${pct}%</b> · ${crowdCat(100 - pct)[0]} (${s ? s.total : TOTAL_SEATS}-оос ${s ? s.free : Math.round(pct * TOTAL_SEATS / 100)})</td><td>${seatRow(100 - pct)}</td></tr>
@@ -474,7 +514,7 @@ function initTE(c) {
   const upd = (user) => {
     const h = +sl.value, v = prof[h - 8]; const snd = clamp(c.sound + Math.round((v - c.occ) / 25), 1, 5);
     $$('.pb', $('#prBars')).forEach(b => b.classList.toggle('sel', +b.dataset.h === h));
-    const bd = dataMode(c) !== 'demo' ? (h === nh ? modeBadge(c) : '<span class="badge b-demo">ЖИШЭЭ</span>') : h === nh ? '<span class="badge b-demo">ОДОО</span>' : h < nh ? '<span class="badge b-typ">ДУНДАЖ</span>' : '<span class="badge b-fc">ТААМАГ</span>';
+    const bd = dataMode(c) !== 'demo' ? (h === nh ? modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 }) : '<span class="badge b-demo">ЖИШЭЭ</span>') : h === nh ? '<span class="badge b-demo">ОДОО</span>' : h < nh ? '<span class="badge b-typ">ДУНДАЖ</span>' : '<span class="badge b-fc">ТААМАГ</span>';
     $('#prOut').innerHTML = `<b class="num">${hh(h)}</b>${bd}<span class="m">${seatRow(v)}<b class="num">~${100 - v}%</b></span><span class="m" title="${SS[snd].t}"><span class="sg">${ssGlyph(snd)}</span><b>${SS[snd].short}</b></span>${h !== nh ? `<button class="btn btn-g" id="teNow">Одоо</button>` : ''}`;
     const tn = $('#teNow'); if (tn) tn.onclick = () => { sl.value = nh; upd(true) };
     if (user && h !== lastH) { Snd.ui('tick'); lastH = h; fp && fp.setTarget(100 - v, h !== nh) }
@@ -572,7 +612,7 @@ function renderStaff() {
 // the previous page's timers, frames, simulation, map, audio and listeners.
 const page = (Component, props) => () => { app.innerHTML = ''; pageComp = mount(Component, app, props) };
 function teardown() {
-  pageTasks.clear(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
+  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
   if (pageComp) { pageComp.destroy(); pageComp = null } if (partnerCleanup) { partnerCleanup(); partnerCleanup = null } cdCafe = null;
 }
 const router = createRouter({

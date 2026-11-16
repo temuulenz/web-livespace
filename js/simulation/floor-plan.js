@@ -2,6 +2,7 @@ import { clamp, rng, isMobile } from '../dom.js';
 import { Prefs } from '../state.js';
 import { Snd } from '../audio.js';
 import { resolveLayout } from './layouts.js';
+import { isRealMode, sensorState } from '../live/sensor-state.js';
 
 /* ================= FLOOR PLAN (canvas, top-down) ================= */
 const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' }, chair: { d: 'Ганц сандал.', q: 'Дунд зэргийн чимээтэй.' }, round: { d: 'Дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, lounge: { d: 'Буйдан — зөөлөн, тухтай суудал.', q: 'Тухтай бүс.' } };
@@ -37,7 +38,9 @@ class FloorPlan {
     this.staff = [this.barista()];
     if (this.L.kitchen) this.staff.push({ x: 690, y: 330, pts: [[690, 335], [748, 335], [745, 450], [660, 450]], i: 0, wait: 0, shirt: '#FFFFFF', hair: '#1F1A17', skin: '#D9A57B', chef: true });
     // The layout editor (o.editor) draws the interior without guests or an animation loop.
-    const occ = o.editor ? 0 : Math.round(cafe.occ * this.countable() / 100); this.target = occ; const free = this.seats.filter(s => s.state === 'free'); for (let i = 0; i < occ && free.length; i++) { const s = free.splice(Math.floor(this.r() * free.length), 1)[0]; const p = this.newPerson(); p.state = 'seated'; p.seat = s; p.x = s.x; p.y = s.y; p.ang = s.ang; s.state = 'occ'; s.person = p; this.people.push(p) }
+    this.telemetryControlled = !o.editor && isRealMode(cafe);
+    const occ = o.editor || this.telemetryControlled ? 0 : Math.round(cafe.occ * this.countable() / 100); this.target = occ; const free = this.seats.filter(s => s.state === 'free'); for (let i = 0; i < occ && free.length; i++) { const s = free.splice(Math.floor(this.r() * free.length), 1)[0]; const p = this.newPerson(); p.state = 'seated'; p.seat = s; p.x = s.x; p.y = s.y; p.ang = s.ang; s.state = 'occ'; s.person = p; this.people.push(p) }
+    if (this.telemetryControlled) this.syncTelemetry(cafe);
     this.resize(); this.ro = new ResizeObserver(() => { if (!this.alive) return; cancelAnimationFrame(this.rz); this.rz = requestAnimationFrame(() => this.resize()) }); this.ro.observe(wrap);
     this.events = new AbortController();
     if (o.editor) { this.alive = true; this.visible = false; this.draw(); return }
@@ -56,6 +59,53 @@ class FloorPlan {
   barista() { const dx = this.cdx, dy = this.cdy; return { x: 690 + dx, y: 105 + dy, pts: [[650 + dx, 105 + dy], [720 + dx, 105 + dy], [745 + dx, 150 + dy], [690 + dx, 150 + dy]], i: 0, wait: 0, shirt: '#7B542F', hair: '#3E2A17', skin: '#F2C9A0', barista: true } }
   // Editor: show a changed layout immediately (seats, obstacles and background are rebuilt).
   setLayout(L) { this.L = L; this.sel = null; this.layout(); this.buildGrid(); this.staff = [this.barista()]; this.bg = this.drawStatic(this.k); this.draw() }
+  // Camera counts control visitors only; positions are illustrative and seats stay unknown.
+  syncTelemetry(cafe, staleAfterSec = 30) {
+    if (this.o.editor) return;
+    const controlled = isRealMode(cafe);
+    const changed = controlled !== this.telemetryControlled;
+    this.cafe = cafe;
+    if (!controlled && !changed) return;
+    this.telemetryControlled = controlled;
+    if (changed) {
+      this.people = []; this.departures = []; this.bubbles = []; this.fx = []; this.sel = null;
+      this.layout(); this.buildGrid();
+    }
+    if (!controlled) { this.setTarget(cafe.occ ?? 40, true); this.emit(); return; }
+    const sensor = cafe.live?.sensor;
+    this.telemetrySensor = sensor;
+    this.telemetryStaleAfterSec = staleAfterSec;
+    const state = sensorState(cafe, { staleAfterSec });
+    this.observedPeople = state?.observedPeople ?? null;
+    const count = this.observedPeople, valid = count != null;
+    this.target = this.observedPeople;
+    for (const seat of this.seats) { seat.state = 'unknown'; seat.person = null; seat.res = false; seat.flash = 0; }
+    // Current visitors always match the count; departing silhouettes are short, fading
+    // transition effects, not additional current observations. Zero/unknown clears all.
+    this.departures ||= [];
+    if (!valid || count === 0) { this.people = []; this.departures = []; }
+    else if (this.people.length > count) {
+      const removed = this.people.splice(count);
+      if (!this.reduced) for (const p of removed) {
+        p.path = this.path(p.x, p.y, this.door[0], this.door[1] + 4);
+        p.state = 'illustrativeExit'; p.exitTime = 0; this.departures.push(p);
+      }
+    }
+    while (this.people.length < (valid ? count : 0)) {
+      const p = this.newPerson();
+      const cells = this.g;
+      let i = Math.floor(this.r() * cells.length);
+      for (let n = 0; n < cells.length && cells[i]; n++) i = (i + 1) % cells.length;
+      const destination = [i % this.cols * 10 + 5, (i / this.cols | 0) * 10 + 5];
+      p.x = this.reduced ? destination[0] : this.door[0];
+      p.y = this.reduced ? destination[1] : this.door[1] + 4;
+      p.path = this.reduced ? [] : this.path(p.x, p.y, ...destination);
+      p.state = this.reduced ? 'illustrative' : 'illustrativeEnter'; this.people.push(p);
+    }
+    this.bubbles = []; this.fx = [];
+    this.emit();
+    if (this.sel) this.o.onSeat?.(this.sel);
+  }
   countable() { let count = 0; for (const seat of this.seats) if (seat.state !== 'unknown') count++; return count }
   stats() {
     let free = 0;
@@ -108,6 +158,7 @@ class FloorPlan {
   }
   newPerson() { const r = this.r; const P = ['#7B542F', '#B6771D', '#5E3F22', '#C08A4A', '#9C6B36', '#3E2A17', '#A8774A', '#D9B07A']; return { x: 0, y: 0, ang: 0, path: [], state: '', shirt: P[Math.floor(r() * P.length)], hair: ['#3E2A17', '#1F1A17', '#8A5A2B', '#C9A26B', '#2B2B2B'][Math.floor(r() * 5)], skin: ['#F2C9A0', '#E3B48B', '#C99167', '#A8744F'][Math.floor(r() * 4)], item: r() < .5 ? 'laptop' : r() < .6 ? 'book' : 'cup', spd: 52 + r() * 18, t: r() * 10, wait: 0, user: false, alpha: 1 } }
   arrive(user) {
+    if (this.telemetryControlled) return false;
     const free = this.seats.filter(s => s.state === 'free' && !s.res); if (!free.length) return false; let pool = free; if (this.sound <= 2) { const q = free.filter(s => s.zone === 'bar' || s.zone === 'long'); if (q.length && this.r() < .7) pool = q }
     const s = pool[Math.floor(this.r() * pool.length)]; s.res = true; const p = this.newPerson(); p.user = user; p.seat = s; p.x = this.door[0]; p.y = this.door[1] + 4; p.ang = -Math.PI / 2;
     const q = this.people.filter(x => x.state === 'toOrder' || x.state === 'order').length; p.orderPt = [this.order[0], this.order[1] + q * 24];
@@ -119,12 +170,13 @@ class FloorPlan {
     if (p.user) Snd.ui('sit'); this.o.onEvent && this.o.onEvent(`${s.label}-д зочин суулаа`, 'in'); this.emit(); if (this.sel === s) this.o.onSeat && this.o.onSeat(s)
   }
   depart(user) {
+    if (this.telemetryControlled) return false;
     const sat = this.people.filter(p => p.state === 'seated'); if (!sat.length) return false; const p = sat[Math.floor(this.r() * sat.length)]; const s = p.seat; s.state = 'free'; s.person = null; s.flash = 1; this.fx.push({ x: s.x, y: s.y, t: 0, c: '#C08A4A' });
     if (user) Snd.ui('leave'); this.o.onEvent && this.o.onEvent(`${s.label} суллаа`, 'out'); this.emit(); if (this.sel === s) this.o.onSeat && this.o.onSeat(s);
     if (this.reduced) { this.people = this.people.filter(x => x !== p); return true }
     p.state = 'leaving'; p.path = this.path(p.x, p.y, this.door[0], this.door[1] + 4); p.seat = null; return true
   }
-  setTarget(pct, fast) { this.target = Math.round(pct * this.countable() / 100); this.busyUntil = fast ? performance.now() + 20000 : 0; this.nextEv = fast ? 150 : 800 }
+  setTarget(pct, fast) { if (this.telemetryControlled) return; this.target = Math.round(pct * this.countable() / 100); this.busyUntil = fast ? performance.now() + 20000 : 0; this.nextEv = fast ? 150 : 800 }
   setZoom(f) { this.zoom = clamp(this.zoom * f, 1, 2.6); this.resize(true) }
   resize(force) {
     const w = Math.floor(this.wrap.getBoundingClientRect().width); if (!w) return; const cssW = Math.min(2400, Math.round(w * this.zoom)); if (!force && cssW === this.cssW) return; this.cssW = cssW; const cssH = Math.round(cssW * this.H / this.W); const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -142,13 +194,32 @@ class FloorPlan {
   frame(now) { if (!this.alive) return; this.raf = 0; const dt = Math.min(.05, (now - this.last) / 1000); this.last = now; if (!document.hidden) { this.update(dt, now); this.draw() } if (this.visible) this.raf = requestAnimationFrame(this.onFrame) }
   update(dt, now) {
     this.t += dt; const red = this.reduced;
-    this.nextEv -= dt * 1000; if (this.nextEv <= 0) {
+    if (this.telemetryControlled && this.observedPeople != null && Date.now() - Date.parse(this.telemetrySensor?.peopleTimestamp ?? this.telemetrySensor?.timestamp) > this.telemetryStaleAfterSec * 1000) this.syncTelemetry(this.cafe, this.telemetryStaleAfterSec);
+    if (!this.telemetryControlled) this.nextEv -= dt * 1000; if (!this.telemetryControlled && this.nextEv <= 0) {
       const occ = this.seats.filter(s => s.state === 'occ' || s.res).length;
       if (occ < this.target) this.arrive(false); else if (occ > this.target) this.depart(false); else if (this.r() < .4 && !this.busyUntil) { this.depart(false); this.nextEv = 1800; }
       const fast = this.busyUntil && now < this.busyUntil && occ !== this.target; this.nextEv = fast ? (red ? 60 : 420) : 3200 + this.r() * 2800; if (this.busyUntil && occ === this.target) this.busyUntil = 0
     }
+    if (this.telemetryControlled && this.departures?.length) {
+      for (const p of this.departures) { p.t += dt; p.exitTime += dt; this.walkIllustration(p, dt * 5); p.alpha = Math.max(0, 1 - p.exitTime / 1.2); }
+      this.departures = this.reduced ? [] : this.departures.filter(p => p.alpha > 0 && p.path.length);
+    }
     for (const p of this.people) {
       p.t += dt;
+      if (p.state === 'illustrativeEnter') {
+        if (red) { const end = p.path.at(-1); if (end) [p.x, p.y] = end; p.path = []; }
+        else this.walkIllustration(p, dt);
+        if (!p.path.length) p.state = 'illustrative';
+      }
+      if (p.state === 'illustrative' && !red) {
+        if (!p.path.length) {
+          const cell = Math.floor(p.y / 10) * this.cols + Math.floor(p.x / 10);
+          const choices = [cell - this.cols, cell + this.cols, cell - 1, cell + 1].filter(i => i >= 0 && i < this.g.length && !this.g[i] && Math.abs(i % this.cols - cell % this.cols) <= 1);
+          if (choices.length) { const i = choices[Math.floor(this.r() * choices.length)]; p.path = [[i % this.cols * 10 + 5, (i / this.cols | 0) * 10 + 5]]; }
+        }
+        const to = p.path[0];
+        if (to) { const dx = to[0] - p.x, dy = to[1] - p.y, d = Math.hypot(dx, dy), step = Math.min(d, p.spd * dt); p.ang = Math.atan2(dy, dx); if (d) { p.x += dx / d * step; p.y += dy / d * step; } if (step === d) p.path.shift(); }
+      }
       if (p.state === 'toOrder' || p.state === 'toSeat' || p.state === 'leaving') {
         if (red) { if (p.state === 'leaving') p.alpha = 0; else if (p.state === 'toOrder') { p.state = 'order'; p.wait = .2 } else this.sit(p); continue }
         const tg = p.path[0]; if (!tg) { continue } const dx = tg[0] - p.x, dy = tg[1] - p.y, d = Math.hypot(dx, dy), st = p.spd * dt;
@@ -165,6 +236,13 @@ class FloorPlan {
     this.nextBub -= dt * 1000; if (this.nextBub <= 0 && this.sound >= 3 && !red) { const sat = this.people.filter(p => p.state === 'seated'); if (sat.length) { const p = sat[Math.floor(this.r() * sat.length)]; this.bubbles.push({ p, t: 0, big: this.sound >= 4 }) } this.nextBub = [0, 0, 0, 1600, 800, 450][this.sound] + this.r() * 500 }
     this.bubbles.forEach(b => b.t += dt); this.bubbles = this.bubbles.filter(b => b.t < 2.2 && b.p.state === 'seated');
     this.fx.forEach(f => f.t += dt); this.fx = this.fx.filter(f => f.t < .8); this.seats.forEach(s => s.flash = Math.max(0, s.flash - dt * 1.5))
+  }
+  walkIllustration(p, dt) {
+    const to = p.path[0]; if (!to) return;
+    const dx = to[0] - p.x, dy = to[1] - p.y, d = Math.hypot(dx, dy), step = Math.min(d, p.spd * dt);
+    p.ang = Math.atan2(dy, dx);
+    if (d) { p.x += dx / d * step; p.y += dy / d * step; }
+    if (step === d) p.path.shift();
   }
   rr(x, X, y, w, h, r) { x.beginPath(); x.roundRect ? x.roundRect(X, y, w, h, r) : x.rect(X, y, w, h) }
   // The original drawing (legacy layout, with the kitchen) is kept exactly; templates use drawThemed.
@@ -322,7 +400,7 @@ class FloorPlan {
     return c
   }
   person(x, p, px, py, ang, walking, time = p.t) {
-    const s = walking ? Math.sin(time * 11) * 3.6 : 0; x.save(); x.translate(px, py); x.rotate(ang + Math.PI / 2); x.globalAlpha = p.alpha ?? 1;
+    const s = walking ? Math.sin(time * 11) * 3.6 : 0; x.save(); x.translate(px, py); x.rotate(ang + Math.PI / 2); x.globalAlpha = p.state === 'illustrativeExit' ? p.alpha * .45 : p.alpha ?? 1;
     x.fillStyle = 'rgba(62,42,23,.18)'; x.beginPath(); x.ellipse(1, 3, 10, 7, 0, 0, 7); x.fill();
     if (walking) { x.fillStyle = '#3E2A17'; x.beginPath(); x.ellipse(-4, -3 + s, 2.6, 4, 0, 0, 7); x.fill(); x.beginPath(); x.ellipse(4, -3 - s, 2.6, 4, 0, 0, 7); x.fill() }
     x.fillStyle = p.skin; x.beginPath(); x.arc(-9.5, walking ? -s * .6 : -3, 2.6, 0, 7); x.fill(); x.beginPath(); x.arc(9.5, walking ? s * .6 : -3, 2.6, 0, 7); x.fill();
@@ -346,8 +424,11 @@ class FloorPlan {
     // seated people & items
     // Keep the original layer order without allocating filtered arrays every frame.
     for (const p of this.people) if (p.state === 'seated') { this.item(x, p); this.person(x, p, p.x, p.y, p.ang, false) }
-    for (const s of this.staff) this.person(x, s, s.x, s.y, s.ang || Math.PI / 2, !this.reduced && s.wait <= 0, t);
-    for (const p of this.people) if (p.state !== 'seated') this.person(x, p, p.x, p.y, p.ang, p.state !== 'order');
+    if (!this.telemetryControlled) for (const s of this.staff) this.person(x, s, s.x, s.y, s.ang || Math.PI / 2, !this.reduced && s.wait <= 0, t);
+    for (const p of this.people) if (p.state !== 'seated') this.person(x, p, p.x, p.y, p.ang, p.state !== 'order' && (!this.telemetryControlled || !this.reduced));
+    if (this.telemetryControlled) for (const p of this.departures || []) {
+      this.person(x, p, p.x, p.y, p.ang, true);
+    }
     // order bubble
     for (const p of this.people) if (p.state === 'order') this.bub(x, p.x, p.y - 20, 1, 'cup');
     this.bubbles.forEach(b => { const k = b.t < .25 ? b.t / .25 : b.t > 1.8 ? (2.2 - b.t) / .4 : 1; this.bub(x, b.p.x + (b.big ? 6 : 0), b.p.y - 18, k, 'dots') });

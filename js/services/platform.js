@@ -22,7 +22,7 @@ export const platform = {
 function applyLive(update) {
   const cafe = getCafes().find(c => c.id === update.id);
   if (!cafe) return;
-  Object.assign(cafe, update);
+  upsertCafe(update);
   bus.emit('cafe:updated', cafe.id);
 }
 

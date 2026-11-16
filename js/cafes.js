@@ -1,3 +1,4 @@
+import { mergeLive } from './live/sensor-state.js';
 /* ================= data ================= */
 const SS = [{ k: 0, t: 'Хэмжилтгүй', s: 'Дууны даралтын хэмжилт байхгүй', short: 'Хэмжилтгүй' },
   { k: 1, t: 'Номын сан шиг нам гүм', s: 'Хуудас эргүүлэх чимээ л сонсогдоно', short: 'Нам гүм' },
@@ -33,7 +34,10 @@ const TOTAL_SEATS = 20;
 // Merge a server record into the shared list; existing cafés keep their identity.
 function upsertCafe(record) {
   const existing = cafeIndex.get(record.id);
-  if (existing) return Object.assign(existing, record);
+  if (existing) {
+    const live = record.live ? mergeLive(existing.live, record.live, { reset: record.live.mode === 'demo' || existing.live?.mode === 'demo' }) : existing.live;
+    return Object.assign(existing, record, ...(live ? [{ live }] : []));
+  }
   const cafe = { ...record };
   CAFES.push(cafe); cafeIndex.set(cafe.id, cafe);
   return cafe;
