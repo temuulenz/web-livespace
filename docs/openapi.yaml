@@ -1,0 +1,4264 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LiveSpace Phase 11A\u201311C backend API",
+    "version": "11C",
+    "description": "Implemented menus, inventory and ratings/reviews. Phase 11D\u201311H absent. JSON syntax is valid YAML 1.2. See feature documents for full role, data, cache and realtime semantics."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8080",
+      "description": "Local only; deployment not authorized"
+    }
+  ],
+  "paths": {
+    "/api/v1/cafes/{cafe}/menu": {
+      "get": {
+        "summary": "Published menu snapshot and stable QR API URL",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Menu"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/categories": {
+      "get": {
+        "summary": "List categories",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "published",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Category"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Category",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Category"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/categories/{id}": {
+      "get": {
+        "summary": "Get Category",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Category"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Versioned edit Category",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Category"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete unused category / archive product / deactivate variant",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Category: {deleted:true}. Product/variant: updated raw entity object."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/categories/bulk": {
+      "post": {
+        "summary": "Atomic publish, hide or reorder up to ten entities",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000000
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "description": {
+                          "type": "string",
+                          "maxLength": 2000
+                        },
+                        "display_order": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000
+                        },
+                        "published": {
+                          "type": "boolean"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/products": {
+      "get": {
+        "summary": "List products",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "published",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Product"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Product",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/products/{id}": {
+      "get": {
+        "summary": "Get Product",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Versioned edit Product",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete unused category / archive product / deactivate variant",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Category: {deleted:true}. Product/variant: updated raw entity object."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/products/bulk": {
+      "post": {
+        "summary": "Atomic publish, hide or reorder up to ten entities",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000000
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "category_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "description": {
+                          "type": "string",
+                          "maxLength": 2000
+                        },
+                        "base_price": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000
+                        },
+                        "discounted_price": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000,
+                          "nullable": true
+                        },
+                        "featured": {
+                          "type": "boolean"
+                        },
+                        "published": {
+                          "type": "boolean"
+                        },
+                        "archived": {
+                          "type": "boolean"
+                        },
+                        "display_order": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/variants": {
+      "get": {
+        "summary": "List variants",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Variant"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Variant",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Variant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VariantCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/variants/{id}": {
+      "get": {
+        "summary": "Get Variant",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Variant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Versioned edit Variant",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Variant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VariantPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete unused category / archive product / deactivate variant",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Category: {deleted:true}. Product/variant: updated raw entity object."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/variants/bulk": {
+      "post": {
+        "summary": "Atomic publish, hide or reorder up to ten entities",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000000
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "product_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "price": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000
+                        },
+                        "discounted_price": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000,
+                          "nullable": true
+                        },
+                        "active": {
+                          "type": "boolean"
+                        },
+                        "display_order": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000000
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/import/preview": {
+      "post": {
+        "summary": "Validate CSV preview",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Preview: {preview_id,products,published:false,requires_confirmation:true}; confirm: {imported,duplicate}."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "csv"
+                ],
+                "properties": {
+                  "csv": {
+                    "type": "string",
+                    "description": "12000 bytes maximum, 1\u201320 rows. Header category_id,name,description,base_price,discounted_price."
+                  },
+                  "preview_id": {
+                    "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/import/confirm": {
+      "post": {
+        "summary": "Explicit idempotent CSV confirmation",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Preview: {preview_id,products,published:false,requires_confirmation:true}; confirm: {imported,duplicate}."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "csv",
+                  "preview_id",
+                  "confirm"
+                ],
+                "properties": {
+                  "csv": {
+                    "type": "string",
+                    "description": "12000 bytes maximum, 1\u201320 rows. Header category_id,name,description,base_price,discounted_price."
+                  },
+                  "preview_id": {
+                    "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/menu/products/{id}/image": {
+      "get": {
+        "summary": "Authorized raster image; conditional ETag",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG, PNG or WebP; ETag; private, no-cache; nosniff. Authorization/publication checked before conditional response.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Unchanged image, no body."
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/menu/products/{id}/image": {
+      "get": {
+        "summary": "Authorized raster image; conditional ETag",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG, PNG or WebP; ETag; private, no-cache; nosniff. Authorization/publication checked before conditional response.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Unchanged image, no body."
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace image",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "image"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "image": {
+                    "type": "string",
+                    "description": "Base64 data URL. Structurally validated raster <=1 MiB; JSON <=1,450,000 bytes."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Detach image safely",
+        "description": "Implemented checkpoint contract. Owner access requires actual cafe ownership, including admin accounts. Same-origin cookie writes; 120 requests/minute per client IP per runtime. See MENU_MANAGEMENT.md for complete constraints, errors and cache semantics. No realtime menu events.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. JSON uses Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 malformed JSON; 401 auth; 403 role/origin; 404 hidden/cross-tenant; 409 version, reference, capacity or preview conflict; 413 body; 415 type; 422 validation; 429 rate; 503 storage unavailable. Unexpected errors return sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/inventory": {
+      "get": {
+        "summary": "Owner inventory list",
+        "description": "Complete contract, response examples, permissions, validation, cache and realtime semantics: INVENTORY_MANAGEMENT.md. No-store; 120 requests/IP/minute per runtime. Ownership is mandatory, including admin accounts.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "low_stock",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "sold_out",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. List/movements: {items,pagination}; mutation: {items,duplicate}; public snapshot: {cafe_id,revision,items,pagination,semantics}. See INVENTORY_MANAGEMENT.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503, sanitized 500; see prose contract.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/inventory/mutations": {
+      "post": {
+        "summary": "Atomic idempotent inventory mutation",
+        "description": "Complete contract, response examples, permissions, validation, cache and realtime semantics: INVENTORY_MANAGEMENT.md. No-store; 120 requests/IP/minute per runtime. Ownership is mandatory, including admin accounts.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. List/movements: {items,pagination}; mutation: {items,duplicate}; public snapshot: {cafe_id,revision,items,pagination,semantics}. See INVENTORY_MANAGEMENT.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503, sanitized 500; see prose contract.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryMutation"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/inventory/movements": {
+      "get": {
+        "summary": "Private inventory movement history",
+        "description": "Complete contract, response examples, permissions, validation, cache and realtime semantics: INVENTORY_MANAGEMENT.md. No-store; 120 requests/IP/minute per runtime. Ownership is mandatory, including admin accounts.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. List/movements: {items,pagination}; mutation: {items,duplicate}; public snapshot: {cafe_id,revision,items,pagination,semantics}. See INVENTORY_MANAGEMENT.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503, sanitized 500; see prose contract.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/inventory": {
+      "get": {
+        "summary": "Public inventory recovery snapshot",
+        "description": "Complete contract, response examples, permissions, validation, cache and realtime semantics: INVENTORY_MANAGEMENT.md. No-store; 120 requests/IP/minute per runtime. Ownership is mandatory, including admin accounts.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. List/movements: {items,pagination}; mutation: {items,duplicate}; public snapshot: {cafe_id,revision,items,pagination,semantics}. See INVENTORY_MANAGEMENT.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503, sanitized 500; see prose contract.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/inventory/stream": {
+      "get": {
+        "summary": "Node cafe-scoped inventory SSE (Cloudflare uses browser room)",
+        "description": "Complete contract, response examples, permissions, validation, cache and realtime semantics: INVENTORY_MANAGEMENT.md. No-store; 120 requests/IP/minute per runtime. Ownership is mandatory, including admin accounts.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Node EventSource stream: inventory.snapshot then cafe-filtered inventory.changed. Cloudflare: use /ws/browser/{cafe}.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503, sanitized 500; see prose contract.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/reviews": {
+      "get": {
+        "summary": "Public cafe reviews",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "newest",
+                "rating_high",
+                "rating_low"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicReview"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create one registered-author review",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "review": {
+                      "$ref": "#/components/schemas/PrivateReview"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/ratings": {
+      "get": {
+        "summary": "Public incremental rating summary",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RatingSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/reviews": {
+      "get": {
+        "summary": "Owner cafe reviews including moderation status",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "newest",
+                "rating_high",
+                "rating_low"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicReview"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/ratings": {
+      "get": {
+        "summary": "Owner rating summary",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RatingSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/cafes/{cafe}/review": {
+      "get": {
+        "summary": "Current author review",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "review": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/PrivateReview"
+                        }
+                      ],
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/reviews/{review}": {
+      "patch": {
+        "summary": "Author-only versioned review edit",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "review",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "review": {
+                      "$ref": "#/components/schemas/PrivateReview"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Author-only review soft deletion",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "review",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/reviews/{review}/reports": {
+      "post": {
+        "summary": "Report a review without changing visibility",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "review",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reported": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/reviews/{review}/reply": {
+      "put": {
+        "summary": "Create or edit official cafe owner reply",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "review",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reply": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "text"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete official cafe owner reply",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "review",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reply": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/reviews/moderation": {
+      "get": {
+        "summary": "Admin review moderation queue",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PrivateReview"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/review-reports": {
+      "get": {
+        "summary": "Admin private review reports",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/cafes/{cafe}/reviews/{review}/moderation": {
+      "post": {
+        "summary": "Admin hide or restore with immutable reason audit",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "review",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "review": {
+                      "$ref": "#/components/schemas/PrivateReview"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "action",
+                  "reason"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "hide",
+                      "restore"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Admin moderation audit history",
+        "description": "Complete role/tenant/author requirements, request/response semantics, validation and errors: RATINGS_AND_REVIEWS.md. JSON <=16 KiB, 120 requests/IP/minute per runtime, no-store. Owner role alone cannot alter customer reviews. No visit verification or review realtime event.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "review",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; see full response fields in RATINGS_AND_REVIEWS.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409/413/415/422/429/503; unexpected storage failures sanitized 500.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "ls_session"
+      }
+    },
+    "schemas": {
+      "CategoryCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "published": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CategoryPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "Category": {
+        "type": "object",
+        "description": "Database flags are returned as integers 0 or 1. All timestamps UTC. See MENU_MANAGEMENT.md.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cafe_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "published": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          }
+        }
+      },
+      "ProductCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "base_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "discounted_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "nullable": true
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          }
+        },
+        "required": [
+          "category_id",
+          "name",
+          "base_price"
+        ]
+      },
+      "ProductPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "base_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "discounted_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "nullable": true
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "Product": {
+        "type": "object",
+        "description": "Database flags are returned as integers 0 or 1. All timestamps UTC. See MENU_MANAGEMENT.md.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cafe_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "category_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "base_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "discounted_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "nullable": true
+          },
+          "featured": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "published": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "archived": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "image_ref": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "VariantCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "discounted_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          }
+        },
+        "required": [
+          "product_id",
+          "name",
+          "price"
+        ]
+      },
+      "VariantPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "discounted_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "Variant": {
+        "type": "object",
+        "description": "Database flags are returned as integers 0 or 1. All timestamps UTC. See MENU_MANAGEMENT.md.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cafe_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "discounted_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "nullable": true
+          },
+          "active": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Menu": {
+        "type": "object",
+        "properties": {
+          "cafe_id": {
+            "type": "string"
+          },
+          "menu_url": {
+            "type": "string"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Product"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "variants": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Variant"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        }
+      },
+      "InventoryMutation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "idempotency_key",
+          "updates"
+        ],
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,80}$"
+          },
+          "updates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "product_id",
+                "version",
+                "reason"
+              ],
+              "properties": {
+                "product_id": {
+                  "type": "string"
+                },
+                "variant_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "availability",
+                    "quantity"
+                  ]
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "delta": {
+                  "type": "integer",
+                  "minimum": -1000000000,
+                  "maximum": 1000000000
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "available",
+                    "sold_out",
+                    "temporarily_unavailable"
+                  ]
+                },
+                "low_stock_threshold": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "show_quantity": {
+                  "type": "boolean"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "restock",
+                    "manual_adjustment",
+                    "correction",
+                    "waste"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReviewCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taste",
+          "service",
+          "comfort",
+          "value",
+          "study"
+        ],
+        "properties": {
+          "taste": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "service": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comfort": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "study": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      },
+      "ReviewPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "taste": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "service": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comfort": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "study": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "PublicReview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cafe_id": {
+            "type": "string"
+          },
+          "taste": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "service": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comfort": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "study": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "overall_rating": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "author_name": {
+            "type": "string"
+          },
+          "verification": {
+            "type": "string",
+            "enum": [
+              "unverified"
+            ]
+          },
+          "reply": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "RatingSummary": {
+        "type": "object",
+        "properties": {
+          "cafe_id": {
+            "type": "string"
+          },
+          "review_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "overall_average": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "criterion_averages": {
+            "type": "object",
+            "properties": {
+              "taste": {
+                "type": "number",
+                "nullable": true
+              },
+              "service": {
+                "type": "number",
+                "nullable": true
+              },
+              "comfort": {
+                "type": "number",
+                "nullable": true
+              },
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "study": {
+                "type": "number",
+                "nullable": true
+              }
+            }
+          },
+          "rating_sums": {
+            "type": "object",
+            "properties": {
+              "taste": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "service": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "comfort": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "study": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "distributions": {
+            "type": "object",
+            "properties": {
+              "taste": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "stars": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "service": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "stars": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "comfort": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "stars": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "value": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "stars": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "study": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "stars": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "overall": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "stars": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PrivateReview": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "cafe_id": {
+                "type": "string"
+              },
+              "taste": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "service": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "comfort": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "study": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "overall_rating": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "comment": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "author_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "visible",
+                  "hidden"
+                ]
+              },
+              "moderation_reason": {
+                "type": "string"
+              },
+              "deleted_at": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "source": "disposable local workerd D1 meta (includes index and trigger work); local R2",
+  "measurements": {
+    "product_create": {
+      "statements": 5,
+      "rows_read": 4,
+      "rows_written": 9
+    },
+    "cold_menu_30_products": {
+      "statements": 5,
+      "rows_read": 95,
+      "rows_written": 0
+    },
+    "warm_menu_30_products": {
+      "statements": 1,
+      "rows_read": 1,
+      "rows_written": 0
+    },
+    "product_update": {
+      "statements": 6,
+      "rows_read": 5,
+      "rows_written": 4
+    },
+    "r2_image_upload_and_attach": {
+      "statements": 10,
+      "rows_read": 10,
+      "rows_written": 15
+    }
+  },
+  "plans": {
+    "public_join": [
+      {
+        "id": 7,
+        "parent": 0,
+        "notused": 60,
+        "detail": "SEARCH p USING INDEX menu_items_order (cafe_id=? AND archived=? AND published=?)"
+      },
+      {
+        "id": 16,
+        "parent": 0,
+        "notused": 47,
+        "detail": "SEARCH c USING INDEX sqlite_autoindex_menu_categories_2 (id=? AND cafe_id=?)"
+      }
+    ],
+    "image_lookup": [
+      {
+        "id": 3,
+        "parent": 0,
+        "notused": 39,
+        "detail": "SEARCH menu_images USING INDEX sqlite_autoindex_menu_images_2 (cafe_id=? AND sha256=?)"
+      }
+    ]
+  },
+  "checks": {
+    "version_race": true,
+    "batch_rollback": true,
+    "r2_ambiguous_put_recovery": true,
+    "r2_no_blob": true,
+    "tenant_isolation": true
+  },
+  "provider_billing": false
+}

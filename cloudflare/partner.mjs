@@ -1,3 +1,5 @@
+import { createMediaStorage, mediaResponse } from './media.mjs';
+import { decodeImage } from '../shared/image-validation.mjs';
 import { APIError as HttpError, all, first, run, batch, json, fail, body, now, id, token, sha, credentials, publicUser, guard, startSession } from './core.mjs';
 import { parseHours, projectToMap } from '../js/live/levels.js';
 const DISTRICTS = ['Сүхбаатар', 'Чингэлтэй', 'Баянгол', 'Хан-Уул', 'Баянзүрх', 'Сонгинохайрхан'];
@@ -33,23 +35,11 @@ function validateApplication(input) {
   return { form, photos };
 }
 
-const TYPES = {
-  'image/jpeg': { ext: 'jpg', magic: b => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF },
-  'image/png': { ext: 'png', magic: b => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) },
-  'image/webp': { ext: 'webp', magic: b => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP' }
-};
-
-export function decodePhoto(dataUrl, maxBytes) {
-  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(typeof dataUrl === 'string' ? dataUrl : '');
-  if (!match) throw new HttpError(422, 'invalid_photo', 'Зураг JPEG, PNG эсвэл WebP байх ёстой');
-  const buffer = Buffer.from(match[2], 'base64');
-  if (buffer.length > maxBytes) throw new HttpError(413, 'photo_too_large', `Зураг бүр ${Math.round(maxBytes / 1024 / 1024)} MB-аас ихгүй байна`);
-  // Trust the bytes, not the declared type.
-  if (!TYPES[match[1]].magic(buffer)) throw new HttpError(422, 'invalid_photo', 'Зургийн файл гэмтсэн эсвэл төрөл таарахгүй байна');
-  return { mime: match[1], ext: TYPES[match[1]].ext, buffer };
+export function decodePhoto(dataUrl,maxBytes) {
+ try{return decodeImage(dataUrl,maxBytes);}catch(e){throw new HttpError(e.message==='image_size'?413:422,e.message==='image_size'?'photo_too_large':'invalid_photo','Invalid or oversized JPEG, PNG or WebP image');}
 }
 
-export async function partner(req,db,user,createUser,limit) {
+export async function partner(req,db,user,createUser,limit,env={DB:db}) {
  const p=new URL(req.url).pathname;
  if(p==='/api/v1/applications' && req.method==='POST') {
   limit(`apply:${req.headers.get('cf-connecting-ip')}`,5,3600000);
@@ -63,7 +53,9 @@ export async function partner(req,db,user,createUser,limit) {
    ["INSERT INTO status_history(cafe_id,to_status,note,at) VALUES(?,'submitted','Хүсэлт илгээгдсэн',?)",cafeId,t]
   ];
   for(const [i,photo]of decoded.entries()) {
-   const photoId=id('pho');entries.push(['INSERT INTO application_photos(id,application_id,file,mime,size,position,created_at) VALUES(?,?,?,?,?,?,?)',photoId,applicationId,photoId,photo.mime,photo.buffer.length,i,t],['INSERT INTO photo_bytes(photo_id,bytes) VALUES(?,?)',photoId,photo.buffer]);
+   const photoId=id('pho'),staged=await createMediaStorage(env).stage(cafeId,photoId,photo);entries.push(['INSERT INTO application_photos(id,application_id,file,mime,size,position,created_at) VALUES(?,?,?,?,?,?,?)',photoId,applicationId,photoId,photo.mime,photo.buffer.length,i,t]);
+   if(staged)entries.push(['INSERT INTO media_objects(photo_id,cafe_id,object_key,sha256,created_at) VALUES(?,?,?,?,?)',photoId,cafeId,staged.key,staged.hash,t],['DELETE FROM media_staging WHERE object_key=?',staged.key]);
+   else entries.push(['INSERT INTO photo_bytes(photo_id,bytes) VALUES(?,?)',photoId,photo.buffer]);
   }
   if(user?.role==='user')entries.push(["UPDATE users SET role='owner' WHERE id=?",user.id]);
   await batch(db,entries);return json({application_id:applicationId,cafe_id:cafeId,claim_token:user?null:claimToken,status:'submitted'},201);
@@ -85,9 +77,9 @@ export async function partner(req,db,user,createUser,limit) {
  }
  if(p.startsWith('/api/v1/files/photos/') && req.method==='GET') {
   guard(user,'owner','admin','user');const photoId=decodeURIComponent(p.split('/').at(-1));
-  const photo=await first(db,'SELECT p.mime,b.bytes,a.owner_id FROM application_photos p JOIN photo_bytes b ON b.photo_id=p.id JOIN applications a ON a.id=p.application_id WHERE p.id=?',photoId);
+  const photo=await first(db,'SELECT p.id,p.mime,a.owner_id,m.object_key,m.visibility FROM application_photos p JOIN applications a ON a.id=p.application_id LEFT JOIN media_objects m ON m.photo_id=p.id WHERE p.id=?',photoId);
   if(!photo || (user.role!=='admin' && photo.owner_id!==user.id))fail(404,'not_found','Photo not found');
-  return new Response(new Uint8Array(photo.bytes),{headers:{'Content-Type':photo.mime,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'}});
+  return mediaResponse(req,{...photo,visibility:'private'},await createMediaStorage({...env,LS_R2_MEDIA_ENABLED:'0'}).read(photo));
  }
  return null;
 }

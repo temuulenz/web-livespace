@@ -15,16 +15,21 @@
 // tab is hidden and runs once immediately when it becomes visible again.
 
 export function createLiveChannel({ streamUrl, poll, interval = 60000, events = ['message'], onMessage, onStatus, EventSourceImpl = globalThis.EventSource, doc = globalThis.document, maxBackoff = 60000 } = {}) {
-  let source = null, pollTimer = null, retryTimer = null, failures = 0, status = 'stopped', running = false;
+  let source = null, pollTimer = null, retryTimer = null, failures = 0, status = 'stopped', running = false, polling = false, retryAfter = 0;
 
   const setStatus = next => { if (next !== status) { status = next; onStatus?.(next); } };
 
   async function pollOnce() {
-    if (!poll || !running) return;
+    if (!poll || !running || doc?.hidden || polling || Date.now()<retryAfter) return;
+    polling = true;
     try {
       const batch = await poll();
+      if(!running)return;
+      retryAfter=0;setStatus('polling');
       for (const [type, data] of batch || []) onMessage?.(type, data);
-    } catch { /* keep the last known values; freshness labels show the age */ }
+    } catch (error) {
+      if(error.status===503){retryAfter=Date.now()+900000;setStatus('unavailable');}
+    } finally {polling=false;}
   }
 
   function startPolling() {

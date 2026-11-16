@@ -1,3 +1,5 @@
+import * as reviewRoutes from './routes/reviews.mjs';
+import * as inventoryRoutes from './routes/inventory.mjs';
 // Assembles the LiveSpace backend: API routes + the static website, one process.
 import { createServer } from 'node:http';
 import { createRouter, createStaticHandler, parseCookies, sendError, sendJson, SECURITY_HEADERS, HttpError } from './lib/http.mjs';
@@ -10,6 +12,7 @@ import { createCustomizer } from './services/visualization.mjs';
 import { createSensorService } from './services/sensors.mjs';
 import { createSensorGateway } from './lib/sensor-gateway.mjs';
 import { seedDemoCafes, ensureAdmin } from './seed.mjs';
+import * as menuRoutes from './routes/menu.mjs';
 import * as publicRoutes from './routes/public.mjs';
 import * as authRoutes from './routes/auth.mjs';
 import * as partnerRoutes from './routes/partner.mjs';
@@ -35,7 +38,7 @@ export async function createApp(config) {
   };
 
   const api = createRouter();
-  for (const routes of [publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
+  for (const routes of [reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
   const serveStatic = createStaticHandler(config.staticDir);
 
   async function handle(req, res) {

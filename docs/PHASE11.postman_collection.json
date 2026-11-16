@@ -1,0 +1,732 @@
+{
+  "info": {
+    "name": "LiveSpace Phase 11A local checkpoint",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Local menu integration only. Use existing login to establish cookie. Never point demonstrations at production."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8080"
+    },
+    {
+      "key": "cafe",
+      "value": "REPLACE_WITH_OWNED_CAFE_ID"
+    },
+    {
+      "key": "id",
+      "value": "REPLACE_WITH_ENTITY_ID"
+    },
+    {
+      "key": "email",
+      "value": "LOCAL_FIXTURE_EMAIL"
+    },
+    {
+      "key": "password",
+      "value": "LOCAL_FIXTURE_PASSWORD"
+    },
+    {
+      "key": "review",
+      "value": "REPLACE_WITH_REVIEW_ID"
+    }
+  ],
+  "item": [
+    {
+      "name": "Existing cookie login (local fixture)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{email}}\", \"password\": \"{{password}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Published menu snapshot and stable QR API URL /api/v1/cafes/{cafe}/menu",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/menu",
+        "description": "Published menu snapshot and stable QR API URL. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "List categories /api/v1/owner/cafes/{cafe}/menu/categories",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/categories",
+        "description": "List categories. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Create Category /api/v1/owner/cafes/{cafe}/menu/categories",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/categories",
+        "description": "Create Category. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Local demonstration category\",\n  \"published\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Get Category /api/v1/owner/cafes/{cafe}/menu/categories/{id}",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/categories/{{id}}",
+        "description": "Get Category. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Versioned edit Category /api/v1/owner/cafes/{cafe}/menu/categories/{id}",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/categories/{{id}}",
+        "description": "Versioned edit Category. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1,\n  \"name\": \"Edited local fixture\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Delete unused category / archive product / deactivate variant /api/v1/owner/cafes/{cafe}/menu/categories/{id}",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/categories/{{id}}",
+        "description": "Delete unused category / archive product / deactivate variant. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Atomic publish, hide or reorder up to ten entities /api/v1/owner/cafes/{cafe}/menu/categories/bulk",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/categories/bulk",
+        "description": "Atomic publish, hide or reorder up to ten entities. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"id\": \"{{id}}\",\n      \"version\": 1,\n      \"display_order\": 0\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "List products /api/v1/owner/cafes/{cafe}/menu/products",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products",
+        "description": "List products. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Create Product /api/v1/owner/cafes/{cafe}/menu/products",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products",
+        "description": "Create Product. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category_id\": \"REPLACE_CATEGORY_ID\",\n  \"name\": \"Local demonstration item\",\n  \"base_price\": 5000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Get Product /api/v1/owner/cafes/{cafe}/menu/products/{id}",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products/{{id}}",
+        "description": "Get Product. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Versioned edit Product /api/v1/owner/cafes/{cafe}/menu/products/{id}",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products/{{id}}",
+        "description": "Versioned edit Product. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1,\n  \"name\": \"Edited local fixture\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Delete unused category / archive product / deactivate variant /api/v1/owner/cafes/{cafe}/menu/products/{id}",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products/{{id}}",
+        "description": "Delete unused category / archive product / deactivate variant. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Atomic publish, hide or reorder up to ten entities /api/v1/owner/cafes/{cafe}/menu/products/bulk",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products/bulk",
+        "description": "Atomic publish, hide or reorder up to ten entities. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"id\": \"{{id}}\",\n      \"version\": 1,\n      \"display_order\": 0\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "List variants /api/v1/owner/cafes/{cafe}/menu/variants",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/variants",
+        "description": "List variants. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Create Variant /api/v1/owner/cafes/{cafe}/menu/variants",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/variants",
+        "description": "Create Variant. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"product_id\": \"REPLACE_PRODUCT_ID\",\n  \"name\": \"Local demonstration variant\",\n  \"price\": 6000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Get Variant /api/v1/owner/cafes/{cafe}/menu/variants/{id}",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/variants/{{id}}",
+        "description": "Get Variant. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Versioned edit Variant /api/v1/owner/cafes/{cafe}/menu/variants/{id}",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/variants/{{id}}",
+        "description": "Versioned edit Variant. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1,\n  \"name\": \"Edited local fixture\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Delete unused category / archive product / deactivate variant /api/v1/owner/cafes/{cafe}/menu/variants/{id}",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/variants/{{id}}",
+        "description": "Delete unused category / archive product / deactivate variant. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Atomic publish, hide or reorder up to ten entities /api/v1/owner/cafes/{cafe}/menu/variants/bulk",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/variants/bulk",
+        "description": "Atomic publish, hide or reorder up to ten entities. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"id\": \"{{id}}\",\n      \"version\": 1,\n      \"display_order\": 0\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Validate CSV preview /api/v1/owner/cafes/{cafe}/menu/import/preview",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/import/preview",
+        "description": "Validate CSV preview. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"csv\": \"category_id,name,description,base_price,discounted_price\\nREPLACE_CATEGORY_ID,Demo item,Isolated demonstration,5000,\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Explicit idempotent CSV confirmation /api/v1/owner/cafes/{cafe}/menu/import/confirm",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/import/confirm",
+        "description": "Explicit idempotent CSV confirmation. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"csv\": \"REPLACE_WITH_IDENTICAL_PREVIEW_CSV\",\n  \"preview_id\": \"REPLACE_WITH_PREVIEW_ID\",\n  \"confirm\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Authorized raster image; conditional ETag /api/v1/cafes/{cafe}/menu/products/{id}/image",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/menu/products/{{id}}/image",
+        "description": "Authorized raster image; conditional ETag. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Authorized raster image; conditional ETag /api/v1/owner/cafes/{cafe}/menu/products/{id}/image",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products/{{id}}/image",
+        "description": "Authorized raster image; conditional ETag. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version."
+      }
+    },
+    {
+      "name": "Replace image /api/v1/owner/cafes/{cafe}/menu/products/{id}/image",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products/{{id}}/image",
+        "description": "Replace image. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1,\n  \"image\": \"data:image/jpeg;base64,REPLACE_WITH_VALID_LOCAL_IMAGE\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Detach image safely /api/v1/owner/cafes/{cafe}/menu/products/{id}/image",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/menu/products/{{id}}/image",
+        "description": "Detach image safely. See docs/MENU_MANAGEMENT.md. Supply actual owned fixture IDs and current version.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Owner inventory list",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/inventory",
+        "description": "Owner inventory list; see INVENTORY_MANAGEMENT.md"
+      }
+    },
+    {
+      "name": "Atomic idempotent inventory mutation",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/inventory/mutations",
+        "description": "Atomic idempotent inventory mutation; see INVENTORY_MANAGEMENT.md",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idempotency_key\": \"REPLACE_WITH_REQUEST_UUID\",\n  \"updates\": [\n    {\n      \"product_id\": \"REPLACE_PRODUCT_ID\",\n      \"version\": 0,\n      \"mode\": \"quantity\",\n      \"quantity\": 10,\n      \"reason\": \"restock\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Private inventory movement history",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/inventory/movements",
+        "description": "Private inventory movement history; see INVENTORY_MANAGEMENT.md"
+      }
+    },
+    {
+      "name": "Public inventory recovery snapshot",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/inventory",
+        "description": "Public inventory recovery snapshot; see INVENTORY_MANAGEMENT.md"
+      }
+    },
+    {
+      "name": "Node cafe-scoped inventory SSE (Cloudflare uses browser room)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/inventory/stream",
+        "description": "Node cafe-scoped inventory SSE (Cloudflare uses browser room); see INVENTORY_MANAGEMENT.md"
+      }
+    },
+    {
+      "name": "Public cafe reviews",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/reviews",
+        "description": "Public cafe reviews; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    },
+    {
+      "name": "Public incremental rating summary",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/ratings",
+        "description": "Public incremental rating summary; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    },
+    {
+      "name": "Owner cafe reviews including moderation status",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/reviews",
+        "description": "Owner cafe reviews including moderation status; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    },
+    {
+      "name": "Owner rating summary",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/ratings",
+        "description": "Owner rating summary; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    },
+    {
+      "name": "Current author review",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/me/cafes/{{cafe}}/review",
+        "description": "Current author review; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    },
+    {
+      "name": "Create one registered-author review",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/reviews",
+        "description": "Create one registered-author review; RATINGS_AND_REVIEWS.md; local fixtures only.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"taste\": 4,\n  \"service\": 4,\n  \"comfort\": 4,\n  \"value\": 4,\n  \"study\": 4\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Author-only versioned review edit",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/reviews/{{review}}",
+        "description": "Author-only versioned review edit; RATINGS_AND_REVIEWS.md; local fixtures only.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1,\n  \"comment\": \"Local edit\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Author-only review soft deletion",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/reviews/{{review}}",
+        "description": "Author-only review soft deletion; RATINGS_AND_REVIEWS.md; local fixtures only.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Report a review without changing visibility",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/reviews/{{review}}/reports",
+        "description": "Report a review without changing visibility; RATINGS_AND_REVIEWS.md; local fixtures only.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"Local report fixture\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Create or edit official cafe owner reply",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/reviews/{{review}}/reply",
+        "description": "Create or edit official cafe owner reply; RATINGS_AND_REVIEWS.md; local fixtures only.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 0,\n  \"text\": \"Local owner reply\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Delete official cafe owner reply",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/reviews/{{review}}/reply",
+        "description": "Delete official cafe owner reply; RATINGS_AND_REVIEWS.md; local fixtures only.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Admin review moderation queue",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/reviews/moderation",
+        "description": "Admin review moderation queue; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    },
+    {
+      "name": "Admin private review reports",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/review-reports",
+        "description": "Admin private review reports; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    },
+    {
+      "name": "Admin hide or restore with immutable reason audit",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/cafes/{{cafe}}/reviews/{{review}}/moderation",
+        "description": "Admin hide or restore with immutable reason audit; RATINGS_AND_REVIEWS.md; local fixtures only.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1,\n  \"action\": \"hide\",\n  \"reason\": \"Local moderation fixture\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Admin moderation audit history",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/cafes/{{cafe}}/reviews/{{review}}/moderation",
+        "description": "Admin moderation audit history; RATINGS_AND_REVIEWS.md; local fixtures only."
+      }
+    }
+  ]
+}

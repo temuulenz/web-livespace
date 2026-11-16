@@ -4,13 +4,80 @@
   "account_id": "9e5256db4932b2064ca5982039f4e121",
   "main": "cloudflare/worker.mjs",
   "compatibility_date": "2026-11-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
-  "assets": { "directory": ".cloudflare-assets", "binding": "ASSETS", "run_worker_first": ["/api/*", "/ws/*"] },
-  "build": { "command": "node scripts/cloudflare-assets.mjs" },
-  "d1_databases": [{ "binding": "DB", "database_name": "livespace", "database_id": "40e181a5-4058-4f82-bdf2-e26c79392056", "migrations_dir": "cloudflare/migrations" }],
-  "durable_objects": { "bindings": [{ "name": "SENSORS", "class_name": "SensorGateway" }, { "name": "BACKEND", "class_name": "AppBackend" }] },
-  "migrations": [{ "tag": "sensor-v1", "new_sqlite_classes": ["SensorGateway", "AppBackend"] }],
-  "vars": { "LS_POLL_INTERVAL_SEC": "10", "LS_SENSOR_EXPECTED_INTERVAL_SEC": "15", "LS_SENSOR_STALE_AFTER_SEC": "30" },
-  "observability": { "enabled": false }
+  "assets": {
+    "directory": ".cloudflare-assets",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/ws/*"
+    ]
+  },
+  "build": {
+    "command": "node scripts/cloudflare-assets.mjs"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "livespace",
+      "database_id": "40e181a5-4058-4f82-bdf2-e26c79392056",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SENSORS",
+        "class_name": "SensorGateway"
+      },
+      {
+        "name": "BACKEND",
+        "class_name": "AppBackend"
+      },
+      {
+        "name": "BROWSER_ROOMS",
+        "class_name": "BrowserRoom"
+      },
+      {
+        "name": "ANALYTICS",
+        "class_name": "AnalyticsAggregator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "sensor-v1",
+      "new_sqlite_classes": [
+        "SensorGateway",
+        "AppBackend"
+      ]
+    },
+    {
+      "tag": "browser-rooms-v1",
+      "new_sqlite_classes": [
+        "BrowserRoom"
+      ]
+    },
+    {
+      "tag": "analytics-v1",
+      "new_sqlite_classes": [
+        "AnalyticsAggregator"
+      ]
+    }
+  ],
+  "vars": {
+    "LS_POLL_INTERVAL_SEC": "10",
+    "LS_SENSOR_EXPECTED_INTERVAL_SEC": "15",
+    "LS_SENSOR_STALE_AFTER_SEC": "30",
+    "LS_BROWSER_REALTIME_ENABLED": "1",
+    "LS_R2_MEDIA_ENABLED": "0",
+    "LS_KV_PUBLIC_ENABLED": "0",
+    "LS_ANALYTICS_ENABLED": "0"
+  },
+  "observability": {
+    "enabled": false
+  }
 }

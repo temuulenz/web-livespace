@@ -48,7 +48,7 @@ export class AdminPage extends Component {
       this._sensorRefresh = true;
       this.timeout(() => { this._sensorRefresh = false; if (!document.hidden) this.load(); }, 150);
     }));
-    this.interval(() => { if (!document.hidden && (this.state.cafe || ['devices', 'measurements'].includes(this.state.tab))) this.load(); }, 5000);
+    this.interval(() => { if (!document.hidden && (this.state.cafe || this.state.tab === 'devices')) this.load(); }, 30000);
     this.interval(() => { if (this.state.auto && !document.hidden && this.state.tab === 'measurements' && !this.state.cafe) this.load(); }, 15000);
     this.load();
   }
@@ -70,7 +70,9 @@ export class AdminPage extends Component {
   }
 
   async load() {
-    if (!platform.session.hasRole('admin')) return;
+    if (!platform.session.hasRole('admin') || Date.now()<(this.retryAfter || 0)) return;
+    if(this.loadingRequest){this.reloadPending=true;return;}
+    this.loadingRequest=true;
     const api = platform.api, { tab, filter } = this.state;
     this.setState({ loading: true, error: null });
     try {
@@ -86,7 +88,7 @@ export class AdminPage extends Component {
       }
       this.setState({ data, loading: false });
       if (this.state.cafe) await this.openCafe(this.state.cafe.id, true);
-    } catch (error) { this.setState({ loading: false, error: error.message }); }
+    } catch (error) { if(error.status===503)this.retryAfter=Date.now()+900000;this.setState({ loading: false, error: error.message }); } finally {this.loadingRequest=false;if(this.reloadPending){this.reloadPending=false;if(this.mounted)this.load();}}
   }
 
   async openCafe(id, quiet) {
