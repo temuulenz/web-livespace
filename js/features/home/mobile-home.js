@@ -144,6 +144,13 @@ export function mobileHomeHTML() {
 }
 
 /* ---------- behaviour ---------- */
+// Pause a section's animations while it is scrolled out of view (class .offscreen in livespace.css).
+export function pauseOffscreen(els) {
+  if (!('IntersectionObserver' in window)) return () => { };
+  const io = new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('offscreen', !e.isIntersecting)));
+  els.filter(Boolean).forEach(el => io.observe(el));
+  return () => io.disconnect();
+}
 export function bindMobileHome(root, { cafes, onSearch }) {
   if (!root) return () => { };
   const off = [];
@@ -242,12 +249,13 @@ export function bindMobileHome(root, { cafes, onSearch }) {
     io.observe(rec);
   } else rec.classList.add('seen');
 
-  // 4. The tour: on the first visit (phones only), and again from the "?" button.
+  // 4. The tour: opens only from the "?" button. (Opening it by itself on the first visit
+  //    made it the page's largest late paint and slowed the first load: Lighthouse LCP.)
   let tour = null;
   const startTour = () => { if (tour) tour.end(false); tour = createTour(root, () => { tour = null }) };
   on($('[data-tour]', root), 'click', () => { Snd.ui('pop'); startTour() });
-  if (isMobile() && !store.get('mhTour', false)) pageTasks.timeout(startTour, 1100);
 
+  off.push(pauseOffscreen([rec, $('.mh-lamps', root)]));
   return () => { off.forEach(f => f()); if (io) io.disconnect(); if (tour) tour.end(false) };
 }
 
@@ -352,5 +360,6 @@ export function bindDeskRec(root, { cafes }) {
     track.scrollBy({ left: +b.dataset.drec * (card.offsetWidth + 30) * 2, behavior: Prefs.reduced ? 'auto' : 'smooth' }); Snd.ui('tick');
   }));
   render();
+  off.push(pauseOffscreen([root]));
   return () => off.forEach(f => f());
 }
