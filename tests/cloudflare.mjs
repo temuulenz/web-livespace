@@ -123,6 +123,16 @@ try {
   cookie=regularCookie;
  });
  await check('registration, RBAC and favorites',async()=>{const x=await api('/auth/register','POST',{email:'user@test.mn',password:'test-password-123'});assert.equal(x.res.status,201);const adminCookie=cookie;cookie=x.res.headers.get('set-cookie').split(';')[0];assert.equal((await api('/admin/devices')).res.status,403);assert.deepEqual((await api('/me/favorites/A','PUT')).data.favorites,['A']);cookie=adminCookie;});
+ await check('admin assigns and removes a cafe owner through the shared D1 policy',async()=>{
+  const made=await api('/admin/users','POST',{email:'cf-owner@test.mn',password:'cf-owner-password-123',role:'owner'});assert.equal(made.res.status,201,JSON.stringify(made.data));
+  assert.equal((await api('/admin/cafes/H/owner','PUT',{email:'user@test.mn'})).data.error.code,'owner_role_required');
+  assert.equal((await api('/admin/cafes/H/owner','PUT',{email:'cf-owner@test.mn',extra:1})).res.status,422);
+  const set=await api('/admin/cafes/H/owner','PUT',{email:'CF-OWNER@test.mn'});assert.equal(set.res.status,200,JSON.stringify(set.data));assert.equal(set.data.owner.email,'cf-owner@test.mn');
+  assert.equal((await api('/admin/cafes/H')).data.cafe.owner.email,'cf-owner@test.mn');
+  assert.deepEqual((await api('/admin/cafes/H/owner','PUT',{email:null})).data,{owner:null,changed:true});
+  assert.equal((await api('/admin/cafes/H')).data.cafe.owner,null);
+  const audit=(await api('/admin/audit')).res.status;assert.ok([200,403].includes(audit));
+ });
  await check('configure cafe and register simulated device',async()=>{assert.equal((await api('/admin/cafes/A','PATCH',{data_mode:'live',hours:'00:00–23:59'})).res.status,200);});
  const registered=await api('/admin/devices','POST',{id:'CF-SIM',cafe_id:'A',kind:'simulator',is_test:false});assert.equal(registered.res.status,201,JSON.stringify(registered.data));const t=registered.data.token;
  let s=socket(t);assert.equal((await s.next()).dataSource,'simulated');

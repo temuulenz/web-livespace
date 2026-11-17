@@ -1360,3 +1360,433 @@
   .going-foot .btn{flex:1;justify-content:center}
   .going-total{flex-basis:100%}
 }
+
+
+/* ===== UI/UX from the oyundari branch (commits b6e67b1, 50e6f2f), restored frontend-only ===== */
+    /* home «Ойролцоох кафенууд»: the study, work and friends tags without the yellow fill */
+    .cgrid .tagp2:is([data-tag="Сурах"], [data-tag="Ажиллах"], [data-tag="Найзуудтай"]) {
+      background: transparent
+    }
+
+    /* ---------- home on phones (js/features/home/mobile-home.js) ----------
+       four hanging lamps · title · search · recommendation carousel (five cafés, each
+       under its own rooftop) that fits the first screen · one-at-a-time tour */
+.mhome, .ss-dots { display: none }
+
+/* noise cards on phones: no scrollbar, dots like the recommendation carousel instead */
+@media (max-width:820px) {
+  .ss-row { scrollbar-width: none; scroll-padding-inline: 16px }
+  .ss-row .ss-card { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always }
+  .ss-row::-webkit-scrollbar { display: none }
+  .ss-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px }
+  .ss-dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--line2); transition: width .3s, background .3s }
+  .ss-dots i.on { width: 20px; background: var(--brown) }
+}
+
+@media (max-width:820px) {
+  .hero { display: none }
+  /* --bh: card height, so lamps, title, search and the whole carousel fit the first screen */
+  .mhome { --bh: clamp(200px, calc(100svh - var(--hd) - var(--tab) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 292px), 420px); display: block; position: relative; padding: 0 16px 6px; overflow-x: clip; background: radial-gradient(130% 50% at 50% 0, #FFEFD2 0, rgba(251, 247, 240, 0) 72%) }
+
+  /* hanging lamps with their cones of light, as on the desktop hero */
+  .mh-lamps { position: relative; z-index: 1; height: 56px; margin: 0 -16px; pointer-events: none }
+  .ml { position: absolute; top: 0; width: 54px; margin-left: -27px; display: flex; flex-direction: column; align-items: center; transform-origin: 50% 0; pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; animation: chSway var(--dur) ease-in-out var(--del) infinite alternate }
+  .ml.ring { animation: chRing 1.5s cubic-bezier(.3, .7, .4, 1) }
+  .ml-cord { width: 1.5px; height: var(--cord); background: var(--brown) }
+  .ml svg { position: relative; z-index: 1; display: block; width: 54px; height: auto; margin-top: -1px }
+  .ml .ml-bulb { animation: rfWin 2.4s ease-in-out infinite alternate }
+  .ml-cone { width: 150px; height: 150px; margin-top: -4px; clip-path: polygon(41% 0, 59% 0, 88% 100%, 12% 100%); background: linear-gradient(rgba(255, 207, 113, .5), rgba(255, 224, 160, 0)); pointer-events: none; animation: glow 4s ease-in-out var(--del) infinite }
+  .ml.ring .ml-cone { animation: chFlash 1.2s ease-out }
+
+  .mh-title { position: relative; z-index: 3; margin: 0; text-align: center; font-family: var(--f-disp); font-weight: 700; font-size: clamp(21px, 6.3vw, 26px); line-height: 1.25; letter-spacing: -.01em; color: var(--ink); animation: mhIn .7s cubic-bezier(.2, .9, .3, 1) backwards }
+  .mh-title em { font-style: normal; color: var(--orange2); background: linear-gradient(transparent 62%, rgba(255, 207, 113, .65) 0) no-repeat 0 0 / 0 100%; animation: mhMark .7s .6s ease-out forwards }
+
+  /* search */
+  .mh-search { position: relative; z-index: 3; display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 4px 4px 4px 14px; border: 1.5px solid var(--line2); border-radius: 17px; background: var(--paper); box-shadow: 0 12px 26px -16px rgba(123, 84, 47, .55); transition: border-color .2s, box-shadow .2s; animation: mhIn .7s .12s cubic-bezier(.2, .9, .3, 1) backwards }
+  .mh-search:focus-within { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255, 157, 0, .16), 0 12px 26px -16px rgba(123, 84, 47, .55) }
+  .mh-s-ic { display: grid; color: var(--ink3) }
+  .mh-s-ic svg { width: 20px; height: 20px }
+  .mh-search input { flex: 1; min-width: 0; height: 40px; border: 0; outline: 0; background: transparent; font: inherit; font-size: 15px; color: var(--ink) }
+  .mh-search input::placeholder { color: var(--ink3) }
+  .mh-go { flex: none; height: 40px; padding: 0 16px; border: 0; border-radius: 13px; background: var(--brown); color: #fff; font-weight: 800; font-size: 14px; transition: transform .15s, background .2s }
+  .mh-go:active { transform: scale(.95); background: var(--brown2) }
+
+  .mh-h { margin: 0; font-family: var(--f-disp); font-size: 17px; font-weight: 700; color: var(--ink) }
+
+  /* recommendations */
+  .mh-rec { position: relative; z-index: 3; margin-top: 12px; animation: mhIn .7s .24s cubic-bezier(.2, .9, .3, 1) backwards }
+  .mh-rec-h { display: flex; align-items: center; gap: 8px }
+  .mh-help { display: grid; place-items: center; width: 24px; height: 24px; margin-right: auto; padding: 0; border: 1.5px solid var(--line2); border-radius: 50%; background: var(--paper); color: var(--brown); font-size: 13px; font-weight: 800; line-height: 1 }
+  .mh-help:active { transform: scale(.9) }
+  .mh-rec-h a { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 800; color: var(--brown) }
+  .mh-rec-h a svg { width: 14px; height: 14px }
+  .mh-chips { display: flex; gap: 8px; margin: 8px -16px 0; padding: 2px 16px 4px; overflow-x: auto; scrollbar-width: none }
+  .mh-chips::-webkit-scrollbar { display: none }
+  .mh-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 1.5px solid var(--line2); border-radius: 999px; background: var(--paper); color: var(--ink2); font-size: 13px; font-weight: 800; transition: background .2s, color .2s, border-color .2s, transform .15s }
+  .mh-chip svg { width: 15px; height: 15px }
+  .mh-chip .wf { color: currentColor !important }
+  .mh-chip[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: #fff }
+  .mh-chip:active { transform: scale(.94) }
+
+  .mh-track { display: flex; margin: 0 -16px; padding: 2px 0 16px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; outline: 0 }
+  .mh-track::-webkit-scrollbar { display: none }
+  .mh-empty { margin: 0 auto; color: var(--ink3) }
+  .rc { flex: 0 0 min(72vw, 300px); margin: 0 max(-5vw, -22px); scroll-snap-align: center; position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent }
+  .mh-rec:not(.seen) .rc { opacity: 0 }
+  .mh-rec.seen .rc { animation: rcDeal .75s calc(var(--n) * 90ms) cubic-bezier(.2, 1.25, .4, 1) backwards }
+  .rc-card { position: relative; transform: translateY(var(--y, 0)) scale(var(--s, 1)); transform-origin: 50% 70%; will-change: transform }
+  .rc-roof { position: relative; z-index: 2; margin: 0 -9px -8px; filter: drop-shadow(0 4px 3px rgba(62, 42, 23, .28)) }
+  .rc-roof svg { display: block; width: 100%; height: auto; overflow: visible; transform-origin: 50% 0 }
+  .rc.on .rc-roof svg { animation: rfPop .7s cubic-bezier(.3, 1.6, .5, 1) }
+  .rf-lantern { transform-box: fill-box; transform-origin: 50% 0; animation: chSway 2.6s ease-in-out infinite alternate }
+  .rf-smoke circle { animation: rfSmoke 2.6s ease-out infinite }
+  .rf-smoke circle + circle { animation-delay: -1.3s }
+  .rf-win { animation: rfWin 3s ease-in-out infinite alternate }
+  .mhome .rc-body { height: var(--bh); border-radius: 6px 6px 26px 26px }
+  .rc-card::after { content: ""; position: absolute; inset: 0; z-index: 4; border-radius: 6px 6px 26px 26px; background: var(--cream); opacity: calc(var(--dim, 0) * .9); pointer-events: none }
+  .mh-dots { display: flex; justify-content: center; gap: 6px; margin-top: -6px }
+  @media (max-height:700px) { .rc-kick { display: none } .rc-info h3 { font-size: 22px; margin-bottom: 6px } }
+  .mh-dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--line2); transition: width .3s, background .3s }
+  .mh-dots i.on { width: 20px; background: var(--brown) }
+
+  /* tour: a spotlight that glides from one part of the page to the next */
+  .tour { position: fixed; inset: 0; z-index: 95 }
+  .tour-spot { position: fixed; border-radius: 22px; box-shadow: 0 0 0 200vmax rgba(36, 24, 12, .64); opacity: 0; transition: left .5s cubic-bezier(.3, 1.15, .4, 1), top .5s cubic-bezier(.3, 1.15, .4, 1), width .5s cubic-bezier(.3, 1.15, .4, 1), height .5s cubic-bezier(.3, 1.15, .4, 1), opacity .35s }
+  .tour-spot::after { content: ""; position: absolute; inset: -5px; border: 2.5px solid var(--amberL); border-radius: 26px; animation: tourRing 1.7s ease-out infinite }
+  .tour.in .tour-spot { opacity: 1 }
+  .tour-b { position: fixed; width: min(330px, calc(100vw - 24px)); padding: 16px 16px 12px; border-radius: 20px; background: var(--paper); box-shadow: 0 26px 50px -18px rgba(0, 0, 0, .6); opacity: 0; transform: translateY(14px) scale(.92); transition: top .5s cubic-bezier(.3, 1.15, .4, 1), left .5s cubic-bezier(.3, 1.15, .4, 1), transform .4s cubic-bezier(.3, 1.5, .5, 1), opacity .25s }
+  .tour.in .tour-b { opacity: 1; transform: none }
+  .tour.out .tour-b { opacity: 0; transform: scale(.9) }
+  .tour.out .tour-spot { opacity: 0 }
+  .tour-arrow { position: absolute; top: -7px; left: calc(var(--ax, 50%) - 8px); width: 16px; height: 16px; border-radius: 3px; background: var(--paper); transform: rotate(45deg); transition: left .5s cubic-bezier(.3, 1.15, .4, 1) }
+  .tour-b.up .tour-arrow { top: auto; bottom: -7px }
+  .tour-c { display: flex; gap: 12px }
+  .tour-c.swap { animation: tourSwap .45s cubic-bezier(.2, .9, .3, 1) }
+  .tour-ic { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--sand); color: var(--brown) }
+  .tour-c.swap .tour-ic { animation: tourIc .6s .1s cubic-bezier(.3, 1.7, .5, 1) backwards }
+  .tour-ic svg { width: 22px; height: 22px }
+  .tour-c small { font-size: 11px; font-weight: 800; letter-spacing: .04em; color: var(--orange2) }
+  .tour-c b { display: block; margin: 1px 0 3px; font-size: 16px; font-weight: 800; color: var(--ink) }
+  .tour-c p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink2) }
+  .tour-f { display: flex; align-items: center; gap: 6px; margin-top: 14px }
+  .tour-dots { display: flex; gap: 5px; margin-right: auto }
+  .tour-dots i { width: 7px; height: 7px; border-radius: 4px; background: var(--line2); transition: width .35s, background .35s }
+  .tour-dots i.on { width: 16px; background: var(--orange) }
+  .tour-skip { padding: 8px 10px; border: 0; background: none; color: var(--ink3); font-size: 13px; font-weight: 800 }
+  .tour-next { height: 40px; padding: 0 18px; border: 0; border-radius: 12px; background: var(--brown); color: #fff; font-size: 14px; font-weight: 800 }
+  .tour-next:active { transform: scale(.95) }
+  .tour-burst { position: fixed; z-index: 96; width: 0; height: 0; pointer-events: none }
+  .tour-burst i { position: absolute; left: -4px; top: -6px; width: 9px; height: 13px; border-radius: 50%; background: var(--brown); animation: tourBean .9s cubic-bezier(.2, .8, .3, 1) forwards }
+  .tour-burst i:nth-child(3n) { background: var(--orange) }
+  .tour-burst i:nth-child(3n+1) { background: var(--amberL) }
+}
+
+/* café cards (phone carousel and desktop «Танд санал болгох» share the same card) */
+.rc-body { position: relative; height: 360px; border-radius: 22px; overflow: hidden; background: var(--sand) }
+.rc-body::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(42, 28, 15, 0) 34%, rgba(42, 28, 15, .6) 54%, rgba(42, 28, 15, .94) 100%); pointer-events: none }
+.rc-scene { position: absolute; inset: 0; width: 100%; height: 100% }
+.rc .sc-steam { animation: scSteam 2.4s ease-in-out infinite }
+.rc .sc-glow { animation: glow 3s ease-in-out infinite }
+.rc .sc-bub { animation: scBub 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: 0 100% }
+.rc .sc-screen, .rc .sc-stars { animation: rfWin 2s ease-in-out infinite alternate }
+.rc-open { position: absolute; z-index: 2; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(255, 249, 236, .92); color: var(--ink); font-size: 11px; font-weight: 800 }
+/* open = the same lamp as on the café cards, switched on and glowing; it flickers on
+   each time its card comes to the middle */
+.rc-open { padding-left: 4px }
+.rc-open .olamp { width: 24px; height: 24px; margin: -4px -2px -4px 0 }
+.rc-open .olamp svg { width: 12px; height: 15px }
+.rc-open .olamp.on::before { inset: -5px; background: radial-gradient(circle at 50% 60%, rgba(255, 178, 26, .95) 0, rgba(255, 207, 113, .55) 38%, rgba(255, 207, 113, 0) 70%) }
+.rc.on .rc-open .olamp.on svg, .rc.on .rc-open .olamp.on::before { animation: lampOn 1s ease-out both }
+.rc.on .rc-open .olamp.on::before { animation: lampOn 1s ease-out both, olampGlow 2.6s 1s ease-in-out infinite }
+.heart.rc-heart { position: absolute; z-index: 3; top: 10px; right: 10px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .88); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 4px 10px -4px rgba(62, 42, 23, .4) }
+.heart.rc-heart svg { width: 19px; height: 19px }
+.rc-info { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 14px; color: #fff }
+.rc-kick { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; opacity: .92 }
+.rc-kick svg { width: 13px; height: 13px; flex: none }
+.rc-info h3 { margin: 2px 0 8px; font-family: var(--f-disp); font-size: 25px; font-weight: 700; letter-spacing: -.01em; color: #fff }
+.rc-stats { display: flex; gap: 4px; overflow: hidden }
+.rc-stats span { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid rgba(255, 255, 255, .22); border-radius: 999px; background: rgba(255, 255, 255, .15); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-size: 11px; font-weight: 700; white-space: nowrap }
+.rc-stats svg { width: 14px; height: 14px; flex: none }
+.rc-stats .wf { color: #fff !important }
+.rc-free b { color: var(--amberL) }
+.rc-more { display: flex; align-items: center; justify-content: flex-end; height: 46px; margin-top: 12px; padding: 0 5px; border: 1px solid rgba(255, 255, 255, .3); border-radius: 999px; background: rgba(255, 255, 255, .18); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px) }
+.rc-more i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #fff; color: var(--ink); transition: transform .25s cubic-bezier(.3, 1.6, .5, 1) }
+.rc-more i svg { width: 16px; height: 16px }
+.rc.on .rc-more i { animation: rcNudge 2.4s 1s ease-in-out infinite }
+.rc-more:active i { transform: translateX(4px) scale(.94) }
+
+@keyframes chSway { from { transform: rotate(-3deg) } to { transform: rotate(3deg) } }
+@keyframes chRing { 0% { transform: rotate(0) } 14% { transform: rotate(18deg) } 32% { transform: rotate(-13deg) } 50% { transform: rotate(8deg) } 68% { transform: rotate(-4deg) } 84% { transform: rotate(2deg) } 100% { transform: rotate(0) } }
+@keyframes chFlash { 0% { opacity: 1; transform: scale(1) } 25% { opacity: 1; transform: scale(1.5) } 100% { opacity: .8; transform: scale(1) } }
+@keyframes mhIn { from { opacity: 0; transform: translateY(14px) } }
+@keyframes mhMark { to { background-size: 100% 100% } }
+@keyframes rcDeal { from { opacity: 0; transform: translateX(60px) rotate(6deg) } }
+@keyframes rfPop { 0% { transform: scaleY(.6) } 60% { transform: scaleY(1.1) } 100% { transform: scaleY(1) } }
+@keyframes rfSmoke { 0% { opacity: 0; transform: translateY(6px) scale(.6) } 30% { opacity: .9 } 100% { opacity: 0; transform: translateY(-12px) scale(1.4) } }
+@keyframes rfWin { from { opacity: .75 } to { opacity: 1 } }
+@keyframes scSteam { 0%, 100% { opacity: .2; transform: translateY(2px) } 50% { opacity: .9; transform: translateY(-3px) } }
+@keyframes scBub { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.08) rotate(-2deg) } }
+@keyframes arrowBob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(4px) } }
+@keyframes arrowDraw { to { stroke-dashoffset: 0 } }
+@keyframes lampOn { 0% { opacity: .2; filter: grayscale(1) } 18% { opacity: 1; filter: none } 28% { opacity: .35 } 42%, 100% { opacity: 1; filter: none } }
+@keyframes rcLive { 70% { box-shadow: 0 0 0 7px rgba(255, 157, 0, 0) } 100% { box-shadow: 0 0 0 0 rgba(255, 157, 0, 0) } }
+@keyframes rcNudge { 0%, 70%, 100% { transform: none } 80% { transform: translateX(4px) } 90% { transform: translateX(-1px) } }
+@keyframes tourRing { from { opacity: .95; transform: scale(.98) } to { opacity: 0; transform: scale(1.07) } }
+@keyframes tourSwap { from { opacity: 0; transform: translateX(18px) } }
+@keyframes tourIc { from { transform: scale(.4) rotate(-20deg) } }
+@keyframes tourBean { to { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(var(--rz)) } }
+/* ---------- map page and «Кафенууд»: tags without the yellow fill ---------- */
+.pv .tagp2, .cgrid2 .tagp2 { background: transparent }
+
+/* ---------- café page: a compact header and a «Дэлгэрэнгүй» heading on phones ---------- */
+.rf-trap, .cd-more-h, .cd-arrow { display: none }
+.cd-tag { display: contents }
+.back-ic { display: grid; transform: scaleX(-1) }
+.cd-tags { display: contents }
+.plan-legend.off { display: none !important }
+/* map preview: the seat row stays a row */
+.pv-ms>div>.seats:first-child { display: inline-flex }
+@media (max-width:820px) {
+  /* map page: the café list scrolls vertically and the closed sheet is lower, so the map is bigger */
+  .ex-side { --peek: 178px }
+  .ex-side:not(.full) .ex-list { flex-direction: column; flex: 1; overflow: hidden; scroll-snap-type: none; padding: 4px 16px 16px }
+  .ex-side:not(.full) .lcard { flex: none; scroll-snap-align: none }
+
+  /* café page: no roof, just a short header —
+     [map] Name [♡][⚖] / mood line / hours · walk / the goal tags on their own line */
+  .cd-head.roof2 { display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; gap: 0 10px; min-height: 0; margin: 4px 0 14px; padding: 0 }
+  .roof2 .roof-svg { display: none }
+  .roof2 .back { position: static; grid-column: 1; grid-row: 1; justify-self: start }
+  .roof2 .cd-act { position: static; grid-column: 3; grid-row: 1; justify-self: end }
+  .roof2 .cd-title { display: contents }
+  .roof2 .cd-title h1 { grid-column: 2; grid-row: 1; margin: 0; font-size: 26px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .roof2 .mood-line { grid-column: 1 / -1; grid-row: 2; max-width: none; margin: 8px 0 0; font-size: 13px; text-align: center }
+  .roof2 .cd-pills { grid-column: 1 / -1; grid-row: 3; justify-content: center; gap: 6px; margin-top: 8px }
+  .roof2 .cd-pills .tagp2 { background: transparent }
+  /* the goal tags under the opening / walk / hours line, each with an arrow curving onto it */
+  .roof2 .cd-tags { display: flex; flex-basis: 100%; justify-content: center; gap: 28px; margin-top: 2px }
+  .roof2 .cd-tag { display: flex; flex-direction: column; align-items: center }
+  /* each arrow draws itself in, then keeps gently pointing down at its word */
+  .cd-arrow { animation: arrowBob 1.8s 1.5s ease-in-out infinite; display: block; width: 34px; height: 29px; margin-bottom: -2px; fill: none; stroke: var(--brown); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+  .cd-arrow path { stroke-dasharray: 60; stroke-dashoffset: 60; animation: arrowDraw .7s .3s ease-out forwards }
+  .cd-arrow path + path { animation-delay: .9s; animation-duration: .3s }
+  .cd-tag:nth-child(2) .cd-arrow { animation-delay: 1.8s }
+  .cd-tag:nth-child(2) .cd-arrow path { animation-delay: .55s }
+  .cd-tag:nth-child(2) .cd-arrow path + path { animation-delay: 1.15s }
+  .roof2 .cd-tag .tagp2 { border: 0; padding: 0 2px; background: transparent; font-size: 15px; font-weight: 800 }
+  .roof2 #cdMode { display: none }
+  /* separates the live picture of the café from the details below it */
+  .cd .cd-grid { grid-template-areas: "plan" "more" "side" "pred" }
+  .cd-more-h { margin: 10px 2px 0; font-family: var(--f-disp); font-size: 22px; font-weight: 700; color: var(--ink); text-align: center }
+  .cd-more-h { grid-area: more; display: block }
+  /* «Кафе дотор» centred, with the picture/table switch under it */
+  .cd .plan-card .card-h { flex-direction: column; align-items: center; text-align: center }
+  .cd .plan-card .card-h .r { margin: 0 }
+  .cd .plan-card .plan-legend { justify-content: center }
+  /* «Бүх кафе»: two lamps, one at each side */
+  .lamps-hd .lamp.l1 { left: -10px !important }
+  .lamps-hd .lamp.l6 { left: calc(100% - 80px) !important }
+  .lamps-hd .lamp.l6 .cord { height: 8px !important }
+  .plan-sizer { pointer-events: none }
+  /* the plan's buttons sit in a row under it, so they never cover a seat */
+  .cd .plan-tools { position: static; flex-direction: row; justify-content: flex-end; margin-top: 10px }
+  .cd .plan-tools .pt-sep { width: 1px; height: auto; margin: 4px 2px; background: var(--line2) }
+}
+/* ---------- desktop home: lighter map, window panes, «Танд санал болгох» carousel ---------- */
+.drec, .arch-panes { display: none }
+
+@media (min-width:821px) {
+  .hero-map.ex-map { opacity: .5 }
+  /* the title as on phones: orange «кафе» with a marker stroke that draws in */
+  .arch h1 em { font-style: normal; color: var(--orange2); background: linear-gradient(transparent 62%, rgba(255, 207, 113, .65) 0) no-repeat 0 0 / 0 100%; animation: mhMark .7s .5s ease-out forwards }
+  /* first screen: the hero leaves room so the «Танд санал болгох» title shows at the bottom */
+  .hero { height: calc(100dvh - var(--hd) - 166px); min-height: 460px }
+  .drec { display: block; padding-top: 34px }
+  /* short screens: smaller table so it never covers the stats under the lamps */
+  @media (max-height:820px) { .hero .deco { transform: scale(.68); transform-origin: 50% 100% } .hero .deco:not(.deco-table) { bottom: 0 } }
+  .drec-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px }
+  .drec-nav { display: flex; gap: 8px }
+  .drec-nav button { display: grid; place-items: center; width: 44px; height: 44px; border: 1.5px solid var(--line2); border-radius: 50%; background: var(--paper); color: var(--brown); transition: background .2s, border-color .2s, transform .15s }
+  .drec-nav button:hover { border-color: var(--brown); background: var(--sand2) }
+  .drec-nav button:active { transform: scale(.94) }
+  .drec-nav button svg { width: 18px; height: 18px }
+  .drec-nav button:first-child svg { transform: scaleX(-1) }
+  .drec-chips { display: flex; flex-wrap: wrap; gap: 8px }
+  .drec .mh-chip { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 16px; border: 1.5px solid var(--line2); border-radius: 999px; background: var(--paper); color: var(--ink2); font-size: 14px; font-weight: 800; transition: background .2s, color .2s, border-color .2s }
+  .drec .mh-chip svg { width: 16px; height: 16px }
+  .drec .mh-chip:hover { border-color: var(--brown) }
+  .drec .mh-chip[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: #fff }
+  .drec-track { display: flex; gap: 30px; margin: 0 -12px; padding: 4px 12px 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 12px; scrollbar-width: none; outline: 0 }
+  .drec-track::-webkit-scrollbar { display: none }
+  .drec .rc { flex: 0 0 272px; scroll-snap-align: start; position: relative; cursor: pointer; animation: lIn .4s both }
+  .drec .rc-body { transition: transform .25s cubic-bezier(.3, 1.4, .5, 1) }
+  .drec .rc:hover .rc-body { transform: translateY(-4px) }
+  .drec .rc:hover .rc-more i { transform: translateX(3px) }
+  .drec .mh-empty { color: var(--ink3); margin: 20px 0 }
+  /* rooftops, as on phones (five shapes in turn) */
+  .drec-track { padding-top: 10px }
+  .drec .rc-roof { position: relative; z-index: 2; margin: 0 -9px -8px; filter: drop-shadow(0 4px 3px rgba(62, 42, 23, .28)) }
+  .drec .rc-roof svg { display: block; width: 100%; height: auto; overflow: visible }
+  .drec .rc-body { border-radius: 6px 6px 22px 22px }
+  .drec .rc-card { transition: transform .25s cubic-bezier(.3, 1.4, .5, 1) }
+  .drec .rc:hover .rc-card { transform: translateY(-4px) }
+  .drec .rc:hover .rc-body { transform: none }
+  .drec .rf-lantern { transform-box: fill-box; transform-origin: 50% 0; animation: chSway 2.6s ease-in-out infinite alternate }
+  .drec .rf-smoke circle { animation: rfSmoke 2.6s ease-out infinite }
+  .drec .rf-smoke circle + circle { animation-delay: -1.3s }
+  /* just the round arrow, without the frosted bar behind it */
+  .drec .rc-more { border: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none }
+}
+
+/* the arch reads as a window: a frame bar down the middle and one across, over the faded map */
+@media (min-width:1000px) {
+  .arch-panes { display: block; position: absolute; inset: 0; z-index: 0; pointer-events: none }
+  .arch-panes::before, .arch-panes::after { content: ""; position: absolute; background: var(--brown); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .08) }
+  .arch-panes::before { left: 50%; top: 0; bottom: 0; width: 10px; margin-left: -5px }
+  .arch-panes::after { left: 0; right: 0; top: 64%; height: 10px; margin-top: -5px }
+}
+
+/* menu editor: who changed an item last (owner / staff / LiveSpace admin) */
+.me-by{font-weight:700;color:var(--ink2)}
+.me-by-admin{color:var(--brown)}
+.adm-menu .card-h h2{display:flex;align-items:center;gap:8px}
+.adm-menu .card-h h2 svg{width:22px;height:22px;color:var(--brown)}
+
+/* admin: café owner assignment */
+.adm-owner h3{display:flex;align-items:center;gap:8px}
+.adm-owner h3 svg{width:20px;height:20px;color:var(--brown)}
+.adm-owner-now{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin:6px 0 10px}
+.adm-owner .adm-actions{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;align-items:center}
+
+
+/* ===== Бодит газрын зураг (MapLibre GL · js/map-gl.js). Ачаалал бүтэлгүйтвэл зурсан SVG хэвээр. ===== */
+.map-gl,
+.map-gl.maplibregl-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  font-family: var(--f-ui, Manrope), sans-serif
+}
+
+.ex-map[data-map="gl"] {
+  cursor: auto
+}
+
+/* Одоогийн тэмдгийг (markerHTML) MapLibre байрлуулна: өөрийн left/top/transform-ийг цуцална. */
+.ml-mk .mk {
+  position: relative;
+  left: auto !important;
+  top: auto !important;
+  transform: none
+}
+
+.maplibregl-marker.ml-mk { z-index: 2 }
+.maplibregl-marker.ml-mk:has(.mk.dim) { z-index: 1 }
+.maplibregl-marker.ml-mk:has(.mk.hit) { z-index: 4 }
+.maplibregl-marker.ml-mk:has(.mk.sel) { z-index: 5 }
+.maplibregl-marker.ml-mk:has(.mk.hov),
+.maplibregl-marker.ml-mk:hover { z-index: 6 }
+
+/* «Та энд»: зурсан газрын зурагтай адил цэнхэр цэг (зөвхөн «Миний байршил» дарсны дараа). */
+.ml-you {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  pointer-events: none
+}
+
+.ml-you-dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #1A73E8;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .25)
+}
+
+.ml-you-pulse {
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  background: #1A73E8;
+  opacity: .18;
+  animation: mlYou 2.2s ease-out infinite
+}
+
+.ml-you b {
+  position: absolute;
+  left: 24px;
+  top: 0;
+  font: 800 12px Manrope, sans-serif;
+  color: #1A73E8;
+  white-space: nowrap;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff
+}
+
+@keyframes mlYou {
+  0% { transform: scale(.5); opacity: .5 }
+  100% { transform: scale(1.8); opacity: 0 }
+}
+
+/* OSM attribution: товч, тайлбартай давхцахгүй */
+.ex-map .maplibregl-ctrl-top-left {
+  z-index: 6
+}
+
+.ex-map .maplibregl-ctrl-attrib {
+  font-size: 11px;
+  color: var(--ink2);
+  background: rgba(255, 255, 255, .9)
+}
+
+.ex-map .maplibregl-ctrl-attrib a {
+  color: var(--ink2)
+}
+
+/* Урьдчилсан карт: «Чиглэл авах» (Google Maps) */
+.pv-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1.5px solid var(--line2);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--brown);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer
+}
+
+.pv-dir svg {
+  width: 15px;
+  height: 15px
+}
+
+.pv-dir:hover {
+  border-color: var(--brown)
+}
+
+.pv-dir:disabled {
+  color: var(--ink3);
+  cursor: default;
+  border-style: dashed
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ml-you-pulse { animation: none }
+}
+
+html.rm .ml-you-pulse {
+  animation: none
+}
+
+.ex-map .maplibregl-ctrl-attrib.maplibregl-compact-show { max-width: 250px }
+
+/* утсан дээр «ДЕМО» тайлбарын доор: OSM attribution үргэлж харагдана */
+@media (max-width:820px) {
+  .ex-map .maplibregl-ctrl-top-left { top: 58px }
+}

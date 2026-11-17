@@ -9,6 +9,7 @@ import { notifyCafe } from './browser-rooms.mjs';
 export { BrowserRoom } from './browser-rooms.mjs';
 import { PublicProfileCache } from './public-cache.mjs';
 import { createUserAccess, SUPER_ADMIN_SELECT } from '../server/services/user-access.mjs';
+import { createCafeOwnership } from '../server/services/cafe-ownership.mjs';
 import { DurableObject } from 'cloudflare:workers';
 import { ingest } from './ingest.mjs';
 import { partner } from './partner.mjs';
@@ -96,6 +97,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  const auth=env.SENSORS.get(env.SENSORS.idFromName('auth'));
  const registerUser=(db,input,role='user')=>createUser(db,input,role,auth);
  const userAccess=createUserAccess({sql:{first:(query,...args)=>first(db,query,...args),all:(query,...args)=>all(db,query,...args),batch:entries=>batch(db,entries)},hashPassword:password=>auth.passwordHash(password),verifyPassword:(password,hash)=>auth.passwordVerify(password,hash),fail,id});
+ const cafeOwnership=createCafeOwnership({sql:{first:(query,...args)=>first(db,query,...args),batch:entries=>batch(db,entries)},fail,id});
  if(p==='/api/v1/auth/reauthenticate' && m==='POST'){limit(`reauth:${user?.id}:${req.headers.get('cf-connecting-ip')}`,10,900000);return json(await userAccess.reauthenticate(user,(await body(req)).password));}
  if(p==='/api/v1/admin/users' || /^\/api\/v1\/admin\/users\/[^/]+(?:\/password)?$/.test(p) || p==='/api/v1/admin/audit') {
   guard(user,'admin');limit(`user-management:${user.id}`,30,60000);
@@ -158,9 +160,10 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   }
   if(p==='/api/v1/admin/applications' && m==='GET')return json({applications:(await all(db,`SELECT a.id,a.cafe_id,a.created_at,a.form,a.owner_id IS NOT NULL has_owner,c.status,c.name,u.email owner_email,(SELECT COUNT(*) FROM application_photos p WHERE p.application_id=a.id) photo_count FROM applications a JOIN cafes c ON c.id=a.cafe_id LEFT JOIN users u ON u.id=a.owner_id ORDER BY a.created_at DESC`)).map(r=>({...r,has_owner:!!r.has_owner,form:parse(r.form,{})}))});
   if(p==='/api/v1/admin/cafes' && m==='GET')return json({cafes:await all(db,`SELECT c.*,u.email owner_email,(SELECT COUNT(*) FROM devices d WHERE d.cafe_id=c.id AND d.revoked_at IS NULL) device_count,(SELECT MAX(ts) FROM measurements m WHERE m.cafe_id=c.id) last_measurement_at,(SELECT id FROM applications a WHERE a.cafe_id=c.id LIMIT 1) application_id,json_extract(c.visualization,'$.status') visualization_status FROM cafes c LEFT JOIN users u ON u.id=c.owner_id ORDER BY sort_order,created_at`)});
-  a=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)(?:\/(status|visualization))?$/);
+  a=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)(?:\/(status|visualization|owner))?$/);
   if(a) {
    const row=await first(db,'SELECT * FROM cafes WHERE id=?',a[0]);if(!row)fail(404,'not_found','Cafe not found');
+   if(a[1]==='owner' && m==='PUT'){limit(`cafe-owner:${user.id}:${req.headers.get('cf-connecting-ip')}`,30,60000);return json(await cafeOwnership.setOwner(user,row.id,await body(req)));}
    if(m==='GET' && !a[1])return json({cafe:{...await ownerView(db,row),owner:row.owner_id?publicUser(await first(db,'SELECT * FROM users WHERE id=?',row.owner_id)):null,public:row.status==='active'?await cafeView(db,row):null}});
    if(m==='PATCH' && !a[1]){const x=cleanCafe(await body(req));if((x.lat!=null || x.lng!=null) && x.map_x===undefined && x.map_y===undefined){const position=projectToMap(x.lat??row.lat,x.lng??row.lng);x.map_x=position.x;x.map_y=position.y;}await update(db,'cafes',row.id,{...x,updated_at:now()});return json({ok:true});}
    if(a[1]==='visualization' && m==='PUT'){const x=await body(req);if(!['not_started','in_progress','ready'].includes(x.status))fail(400,'bad_request','Invalid visualization status');const current=parse(row.visualization,{});const layout=x.layout?sanitizeLayout(x.layout):current.layout || null;if(x.status==='ready' && !layout)fail(400,'bad_request','Ready visualization needs layout');const visualization={...current,status:x.status,layout,notes:typeof x.notes==='string'?x.notes.slice(0,2000):current.notes || '',generator:'manual',updated_at:now()};await update(db,'cafes',row.id,{visualization:JSON.stringify(visualization),updated_at:now()});return json({visualization});}

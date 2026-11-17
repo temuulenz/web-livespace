@@ -61,6 +61,7 @@ The logged-in site is the same as the guest site. The only additions are an acco
 
 - Every change is recorded with time, admin and note, and the owner sees the same timeline.
 - A café appears on the public map only when it is `active`.
+- **Owner assignment.** Besides the partner-application claim, an admin can assign, change or remove a café's owner in the admin café view (`PUT /api/v1/admin/cafes/:id/owner` with `{"email": "..."}` or `{"email": null}`). The target must be an existing, enabled account with the `owner` role; promoting an account stays in user management. One shared policy (`server/services/cafe-ownership.mjs`) serves Node/SQLite and Cloudflare/D1. It rechecks the admin, the target and the current owner inside the write, and records `cafe.owner.assign` / `cafe.owner.remove` in the immutable `user_audit_log` in the same transaction. There is no schema change. Owner routes check `cafes.owner_id` on every request, so access moves at once.
 - Activating a real-data café requires a map position. Set `map_x`/`map_y`, or `lat`/`lng`, which are projected onto the illustrated map approximately.
 
 ## Café-specific visualization

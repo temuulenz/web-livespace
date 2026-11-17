@@ -6,6 +6,7 @@ import { SETUP_STATUSES, VIS_STATUSES, parseHours, projectToMap } from '../../js
 import { sanitizeLayout } from '../services/visualization.mjs';
 import { ownerCafeView } from './owner.mjs';
 import { deviceStatus } from '../services/sensor-state.mjs';
+import { createCafeOwnership } from '../services/cafe-ownership.mjs';
 
 const EDITABLE = { name: ['text', 80], category: ['text', 40], district: ['text', 40], address: ['text', 200], hours: ['hours'], phone: ['text', 30], contact_name: ['text', 80], email: ['text', 200], description: ['text', 1000], lat: ['number', -90, 90], lng: ['number', -180, 180], map_x: ['number', 0, 1000], map_y: ['number', 0, 680], total_seats: ['int', 1, 2000], sort_order: ['int', 0, 100000], data_mode: ['enum', ['demo', 'live']], tags: ['tags'], demo: ['demo'] };
 
@@ -85,6 +86,17 @@ export function register(router, deps) {
     const updated = getCafe(row.id);
     publish(updated);
     sendJson(ctx.res, 200, { ok: true });
+  });
+
+  // Assign, change or remove the café's owner account (shared policy with Cloudflare).
+  const ownership = createCafeOwnership({
+    sql: { first: async (q, ...args) => db.prepare(q).get(...args), batch: async entries => transaction(db, () => entries.map(([q, ...args]) => db.prepare(q).run(...args))) },
+    id: newId, fail: (status, code, message) => { throw new HttpError(status, code, message); }
+  });
+  router.put('/api/v1/admin/cafes/:id/owner', async ctx => {
+    admin(ctx);
+    deps.limit(`cafe-owner:${ctx.user.id}:${ctx.ip}`, 30, 60000);
+    sendJson(ctx.res, 200, await ownership.setOwner(ctx.user, ctx.params.id, await readJson(ctx)));
   });
 
   // Setup workflow: submitted → under_review → contacting → visualization → sensors → testing → active (or rejected).

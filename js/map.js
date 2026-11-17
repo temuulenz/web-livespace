@@ -1,4 +1,6 @@
 import { $, $$, clamp, rng, isMobile } from './dom.js';
+import { MAP_CONFIG } from './map-config.js';
+import { buildGlMap } from './map-gl.js';
 import { I, pinSVG } from './icons.js';
 import { SS, WIFI, getCafes, byId } from './cafes.js';
 import { freePct, tone, toneVar } from './cafe-metrics.js';
@@ -51,7 +53,7 @@ function markerHTML(c) {
  </button>`}
 // `markers: false` draws only the illustration (the home page preview): no pins, live pills or pulses.
 // `live` marks the real map, which uses the green land colour from styles/livespace.css.
-function buildMap(vp, { interactive = true, onSelect = null, focus = null, markers: withMarkers = true, live = interactive } = {}) {
+function buildSvgMap(vp, { interactive = true, onSelect = null, focus = null, markers: withMarkers = true, live = interactive } = {}) {
   vp.insertAdjacentHTML('beforeend', `<div class="map-inner${live ? ' map-live' : ''}${withMarkers ? '' : ' map-preview'}">${mapSVG()}<div class="mk-layer">${withMarkers ? getCafes().map(markerHTML).join('') : ''}</div></div>`);
   let markers = $$('.mk', vp); const markerById = new Map(markers.map(marker => [marker.dataset.mk, marker]));
   const events = new AbortController();
@@ -86,4 +88,40 @@ function buildMap(vp, { interactive = true, onSelect = null, focus = null, marke
     }, destroy() { ro.disconnect(); events.abort(); pvEl = null; drag = null } }
 }
 
-export { buildMap };
+
+// Газрын зураг: интерактив (#explore) нь Улаанбаатарын бодит газрын зураг (js/map-gl.js);
+// нүүр хуудасны жижиг урьдчилсан зураг ба ачаалал бүтэлгүйтсэн үед зурсан SVG газрын зураг.
+// Удирдлагын объект нь хоёуланд нь адилхан тул app.js өөрчлөгдөхгүй. Бодит газрын зураг
+// бэлэн болох хүртэлх сонголт, шүүлт, карт зэргийг хадгалж, аль газрын зураг идэвхжсэнд дахин хэрэглэнэ.
+function buildMap(vp, options = {}) {
+  const { interactive = true } = options;
+  if (!interactive || !MAP_CONFIG.enabled) { const svg = buildSvgMap(vp, options); vp.dataset.map = 'svg'; return svg; }
+  const state = { sel: null, dim: null, hits: null, pv: null, hov: new Set(), center: null };
+  let impl = null, dead = false;
+  const live = () => impl && impl.ready !== false ? impl : null;
+  const replay = () => {
+    const m = live(); if (!m) return;
+    m.select(state.sel); if (state.dim) m.dim(state.dim); m.hits(state.hits);
+    state.hov.forEach(id => m.hover(id, true));
+    if (state.center) m.centerOn(...state.center.slice(0, 3), true);
+    if (state.pv) m.setPv(state.pv);
+  };
+  const fallback = () => {
+    if (dead) return;
+    impl = buildSvgMap(vp, options); vp.dataset.map = 'svg'; replay();
+  };
+  impl = buildGlMap(vp, { ...options, markerHTML }, { onReady: replay, onFail: fallback });
+  return {
+    fit() { live()?.fit() },
+    centerOn(x, y, zoom) { state.center = [x, y, zoom]; live()?.centerOn(x, y, zoom) },
+    setPv(el) { state.pv = el; live()?.setPv(el) },
+    select(id) { state.sel = id; live()?.select(id) },
+    hover(id, on) { on ? state.hov.add(id) : state.hov.delete(id); live()?.hover(id, on) },
+    dim(set) { state.dim = set; live()?.dim(set) },
+    hits(set) { state.hits = set; live()?.hits(set) },
+    refresh(id) { live()?.refresh(id) },
+    destroy() { dead = true; impl?.destroy(); impl = null; delete vp.dataset.map }
+  };
+}
+
+export { buildMap, buildSvgMap, mapSVG, markerHTML };
