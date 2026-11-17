@@ -16,6 +16,8 @@ import { platform } from '../../services/platform.js';
 import { toast } from '../../components/feedback.js';
 import { openAuth, field } from '../authentication/auth-modal.js';
 import { signInPrompt } from '../account/account.js';
+import { IncomingOrders } from '../going/incoming-orders.js';
+import { MenuEditor } from '../menu/menu-editor.js';
 
 const STATUS_TEXT = {
   submitted: 'Таны хүсэлтийг хүлээн авлаа. Манай баг тантай удахгүй холбогдоно.',
@@ -81,7 +83,17 @@ export class OwnerPage extends Component {
     this.setState({ saving: false });
   }
   current() { return this.state.cafes?.find(c => c.id === this.state.selected); }
-  onUpdate() { this.syncPlan(); this.syncHistory(); }
+  onUpdate() { this.syncPlan(); this.syncHistory(); this.syncCustomer(); }
+  // Incoming visitors / pre-orders and the menu editor for the selected café.
+  syncCustomer() {
+    const cafe = this.current(), orders = this.$('[data-own-orders]'), menu = this.$('[data-own-menu]');
+    if (cafe && orders && this.custCafe === cafe.id && this.ordersView?.el === orders) return;
+    this.ordersView?.destroy(); this.menuView?.destroy(); this.ordersView = this.menuView = null; this.custCafe = null;
+    if (!cafe || !orders || !menu) return;
+    this.custCafe = cafe.id;
+    this.ordersView = this.child(IncomingOrders, orders, { cafeId: cafe.id });
+    this.menuView = this.child(MenuEditor, menu, { cafeId: cafe.id });
+  }
   syncHistory() {
     const cafe = this.current(), root = this.$('[data-owner-sensor-history]');
     if (!cafe || !root) return;
@@ -150,6 +162,9 @@ export class OwnerPage extends Component {
 
         ${c.application?.photos.length ? html`<section class="card own-photos" data-key="photos"><div class="card-h"><h2>Илгээсэн зураг</h2></div>
           <div class="ph-grid">${c.application.photos.map((p, i) => html`<figure class="ph"><img src="${p.url}" alt="Кафены зураг ${i + 1}" loading="lazy" decoding="async"></figure>`)}</div></section>` : ''}
+
+        <section class="card own-orders" data-key="orders"><div data-own-orders data-preserve data-key="orders-${c.id}"></div></section>
+        <section class="card own-menu" data-key="menu"><div data-own-menu data-preserve data-key="menu-${c.id}"></div></section>
 
         <section class="card own-info" data-key="info">
           <div class="card-h"><h2>Кафены мэдээлэл</h2></div>
