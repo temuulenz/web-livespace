@@ -1,5 +1,9 @@
 # LiveSpace Cloudflare architecture
 
+Current approved Phase 11 implementation: A–H backend modules are present; E–H reuse existing AnalyticsAggregator, D1, AppBackend, sessions and tenant services. Only additive migrations 0014–0016 and local configuration are added, with no remote resource creation. See current PHASE11_REPORT.md, BEHAVIOR_ANALYTICS.md, NOTIFICATIONS.md and RESOURCE_CONTROLS.md. Earlier Phase 7.2 absent-feature statements below are historical.
+
+Current Phase 11 status (2026-11-17): menus, inventory and reviews are implemented; promotion APIs are being validated. The older Phase 7.2 statements below about absent business features are historical. PHASE11_PROGRESS.md and feature contracts define the current state. E–H remain incomplete.
+
 Phase 7.2 is a local preparation, not a production deployment. The owner-provided production hostname is `https://livecafe.space`; DNS, routes and TLS were not changed or revalidated here. Historical workers.dev test endpoints in earlier documents are retained as historical evidence.
 
 ```mermaid

@@ -1,3 +1,8 @@
+import {phase11Route,phase11Service} from './phase11.mjs';
+import {runtimeMetrics,requestCafe,protectRequest} from '../shared/business/resources.mjs';
+import {analyticsSession,analyticsCookie,validateBehavior} from '../shared/business/behavior.mjs';
+import {phase11Config} from '../shared/business/phase11-config.mjs';
+import {promotionsRoute} from './promotions.mjs';
 import {reviewsRoute} from './reviews.mjs';
 import {inventoryRoute} from './inventory.mjs';
 import { menuRoute } from './menu.mjs';
@@ -54,15 +59,24 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  if(m!=='GET' && m!=='HEAD') {
   const origin=req.headers.get('origin');if(origin && origin!==u.origin)fail(403,'bad_origin','Cross-origin request rejected');
  }
+ if(/^\/api\/v1\/(?:cafes|owner|analytics|me\/notifications|me\/notification-preferences)(?:\/|$)/.test(p)){const identity=await session(db,req);protectRequest(p,identity,req.headers.get('cf-connecting-ip')||'local',limit,phase11Config(env));}
+ const phase11Response=await phase11Route(req,env,limit);if(phase11Response)return phase11Response;
+ const promotionResponse=await promotionsRoute(req,env,limit);if(promotionResponse)return promotionResponse;
  const reviewResponse=await reviewsRoute(req,env,limit);if(reviewResponse)return reviewResponse;
  const inventoryResponse=await inventoryRoute(req,env,limit);if(inventoryResponse)return inventoryResponse;
  const menuResponse=await menuRoute(req,env,limit);if(menuResponse)return menuResponse;
+ if(p==='/api/v1/analytics/session' && m==='POST') {
+  if(env.LS_ANALYTICS_ENABLED!=='1')fail(404,'analytics_disabled','Analytics disabled');limit('analytics-session:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
+  const s=analyticsSession(req.headers.get('cookie')||'');return json({ready:true},200,s.fresh?{'Set-Cookie':analyticsCookie(s.token,u.protocol==='https:')}:{});
+ }
  if(p==='/api/v1/analytics/events' && m==='POST') {
   if(env.LS_ANALYTICS_ENABLED!=='1'||!env.ANALYTICS)fail(404,'not_found','Analytics collection disabled');
-  limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
-  const input=await body(req,16384);let valid;try{valid=validateAnalyticsBatch(input);}catch{fail(422,'invalid_analytics','Invalid analytics batch');}
+  limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),phase11Config(env).analyticsBatches,60000);
+  const input=await body(req,16384),s=analyticsSession(req.headers.get('cookie')||'');let valid;try{valid=input?.schemaVersion===2?validateBehavior(input,s.token):validateAnalyticsBatch(input);}catch{fail(422,'invalid_analytics','Invalid analytics batch');}
   const cafe=await first(db,"SELECT id FROM cafes WHERE id=? AND status='active'",valid.cafeId);if(!cafe)fail(404,'not_found','Cafe not found');
-  return json(await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input),202);
+  if(await phase11Service(env).paused(valid.cafeId))fail(503,'analytics_paused','Optional analytics paused');
+  const value=await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input,s.token);
+  return json(value,202,s.fresh?{'Set-Cookie':analyticsCookie(s.token,u.protocol==='https:')}:{});
  }
  if(p==='/api/v1/ingest/measurements' && m==='POST')return ingest(req,db,limit,env,ctx);
  if(p==='/api/v1/health') {
@@ -217,6 +231,12 @@ export class AppBackend extends DurableObject {
  // response or authorization decision enters the public cache.
  constructor(ctx,env) { super(ctx,env);this.ctx=ctx;this.env=env;this.cache=new Map();this.historyCache=new Map();this.pending=new Map();this.quotaUntil=0;this.generation=0;this.profiles=new PublicProfileCache({kv:env.PUBLIC_CACHE,storage:ctx.storage,enabled:env.LS_KV_PUBLIC_ENABLED==='1'}); }
  async fetch(req) {
+  const start=performance.now(),path=new URL(req.url).pathname;
+  let response;try{response=await this.fetchInternal(req);return response;}finally{runtimeMetrics.record(requestCafe(path),response?.status||500,performance.now()-start);}
+ }
+ async alarm(){let delay=900000;try{const result=await phase11Service(this.env).maintenance();if(result?.more_tenants)delay=1000;else if(result?.next_due)delay=Math.max(1000,Math.min(900000,Date.parse(result.next_due)-Date.now()));runtimeMetrics.job();}catch{runtimeMetrics.job(true);}finally{await this.ctx.storage.setAlarm(Date.now()+delay);}}
+ async fetchInternal(req) {
+  if(!this.phase11Scheduled){const options=phase11Config(this.env);await batch(this.env.DB,[["UPDATE application_limits SET value=? WHERE key='tenant_media_bytes'",options.tenantMediaBytes],["UPDATE application_limits SET value=? WHERE key='media_upload_bytes'",options.mediaBytes],["UPDATE application_limits SET value=? WHERE key='csv_rows'",options.csvRows],["UPDATE application_limits SET value=? WHERE key='csv_bytes'",options.csvBytes]]);this.phase11Scheduled=true;if(!await this.ctx.storage.getAlarm())await this.ctx.storage.setAlarm(Date.now()+30000);}
   const u=new URL(req.url),p=u.pathname;
   const publicPath=p==='/api/v1/live' || p==='/api/v1/cafes' || /^\/api\/v1\/cafes\/[^/]+$/.test(p);
   const ttl=req.method==='GET'?(p==='/api/v1/health'?60000:publicPath?5000:0):0,key=p; // public projections ignore cookies and query parameters
@@ -237,6 +257,7 @@ export class AppBackend extends DurableObject {
    const deviceMutation=req.method!=='GET'?/^\/api\/v1\/admin\/devices\/([^/]+)/.exec(p):null;
    const previous=deviceMutation?await first(this.env.DB,'SELECT cafe_id FROM devices WHERE id=?',decodeURIComponent(deviceMutation[1])):null;
    const response=await handle(req,this.env,this.historyCache,this.profiles,this.ctx);
+   if(req.method!=='GET'&&response.ok&&!p.startsWith('/api/v1/analytics/')){const alarm=await this.ctx.storage.getAlarm();if(!alarm||alarm>Date.now()+1000)await this.ctx.storage.setAlarm(Date.now()+1000);}
    if(req.method!=='GET' && response.ok && !/^\/api\/v1\/(?:(?:owner|admin)\/)?cafes\/[^/]+\/(?:menu|inventory|reviews|ratings)(?:\/|$)/.test(p)){if(previous)this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,previous.cafe_id)).catch(()=>{}));this.generation++;this.cache.clear();const cafe=/^\/api\/v1\/(?:admin\/|owner\/)?cafes\/([^/]+)/.exec(p)?.[1];if(cafe){const id=decodeURIComponent(cafe);await this.profiles.invalidate(id);this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,id)).catch(()=>{}));}}
    return response;
   }catch(e){if(isQuotaError(e))this.quotaUntil=Date.now()+900000;return error(e);}

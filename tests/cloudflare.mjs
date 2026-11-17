@@ -27,7 +27,7 @@ try {
  const adminSql=join(dir,'admin.sql'),h=await hashPassword('test-password-123');
  await writeFile(adminSql,`INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES('admin','admin@test.mn','${h}','Admin','admin','${new Date().toISOString()}');`,{mode:0o600});
  cli('d1','execute','livespace','--local','--file',adminSql);
- worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
+ worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',vars:{LS_ANALYTICS_ENABLED:'1',LS_ANALYTICS_MIN_COHORT:'3'},port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
  origin=`http://${worker.address}:${worker.port}`;
  await check('health, static allow-list and seeded catalog',async()=>{assert.equal((await api('/health')).data.ok,true);assert.equal((await api('/cafes')).data.cafes.length,12);assert.equal((await fetch(origin+'/server/lib/auth.mjs')).status,404);const page=await fetch(origin+'/');assert.equal(page.status,200);assert.match(page.headers.get('content-security-policy') || '',/default-src 'self'/);});
  await check('auth rejects anonymous admin and cross-origin writes',async()=>{assert.equal((await api('/admin/devices')).res.status,401);assert.equal((await fetch(origin+'/api/v1/auth/login',{method:'POST',headers:{Origin:'https://evil.invalid','Content-Type':'application/json'},body:'{}'})).status,403);});
@@ -69,6 +69,21 @@ try {
    assert.equal((await api(stock+'/movements')).data.items.length,1);
   }finally{browser.close();await new Promise(resolve=>browser.once('close',resolve));}
  });
+ await check('Phase 11D D1 promotion publication, pricing, version and tenant isolation',async()=>{
+  const product=(await api('/cafes/menu-cf/menu')).data.products[0];
+  const base='/owner/cafes/menu-cf/promotions',at=Date.now();
+  const rule={name:'D1 discount',kind:'percentage',value:25,product_id:product.id,starts_at:new Date(at-60000).toISOString(),ends_at:new Date(at+3600000).toISOString(),published:true};
+  assert.equal((await api(base,'POST',rule,false)).res.status,401);
+  const result=await api(base,'POST',rule);assert.equal(result.res.status,201,JSON.stringify(result.data));const p=result.data.promotion;
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.promotions.length,1);
+  assert.equal((await api('/cafes/menu-cf/menu')).data.products[0].effective_price,3000);
+  assert.equal((await api(base+'/preview','POST',{promotion:rule,product_id:product.id})).data.price.effective_price,3000);
+  assert.equal((await api('/owner/cafes/B/promotions','POST',rule)).res.status,404);
+  assert.equal((await api(base+'/'+p.id,'PATCH',{version:1,published:false})).res.status,200);
+  assert.equal((await api(base+'/'+p.id,'PATCH',{version:1,published:true})).res.status,409);
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.promotions.length,0);
+  assert.equal((await api('/cafes/menu-cf/menu')).data.products[0].effective_price,4000);
+ });
  await check('Phase 11C review aggregates, author/owner isolation, reply and moderation audit',async()=>{
   const adminCookie=cookie;
   const register=await api('/auth/register','POST',{email:'review-user@example.invalid',password:'local-review-password-123'},false);assert.equal(register.res.status,201);cookie=register.res.headers.get('set-cookie').split(';')[0];
@@ -90,6 +105,26 @@ try {
   assert.equal((await api('/admin/cafes/menu-cf/reviews/'+review.id+'/moderation','POST',{version:review.version,action:'restore',reason:'Local appeal fixture'})).res.status,200);
   assert.equal((await api('/cafes/menu-cf/ratings')).data.review_count,1);
   cookie=adminCookie;
+ });
+ await check('Phase 11E-H private analytics, cohort suppression, notification outbox and scoped monitoring',async()=>{
+  for(let i=0;i<3;i++){
+   const ready=await fetch(origin+'/api/v1/analytics/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(ready.status,200);const analyticsCookie=ready.headers.get('set-cookie').split(';')[0];
+   const payload={schemaVersion:2,cafeId:'menu-cf',events:[{id:'cf-behavior-'+i,type:'cafe_view'}]};
+   const send=()=>fetch(origin+'/api/v1/analytics/events',{method:'POST',headers:{'Content-Type':'application/json',Cookie:analyticsCookie},body:JSON.stringify(payload)});
+   let response=await send();assert.equal(response.status,202,await response.clone().text());response=await send();assert.equal((await response.json()).duplicates,1);
+  }
+  assert.equal((await api('/owner/cafes/menu-cf/analytics','GET',undefined,false)).res.status,401);
+  const report=await api('/owner/cafes/menu-cf/analytics');assert.equal(report.res.status,200,JSON.stringify(report.data));assert.equal(report.data.current.unique_sessions,3);assert.equal(report.data.current.behavior.find(e=>e.event_type==='cafe_view').count,3);
+  assert.equal((await fetch(origin+'/api/v1/owner/cafes/menu-cf/analytics.csv',{headers:{cookie}})).headers.get('content-type'),'text/csv; charset=utf-8');
+  assert.equal((await api('/admin/analytics')).res.status,200);
+  assert.equal((await api('/admin/resources/monitor')).data.provider_billing.status,'unavailable');
+  assert.equal((await api('/me/notification-preferences','PATCH',{promotion:true})).res.status,200);
+  for(let i=0;i<4;i++)await api('/admin/maintenance','POST',{});
+  assert.equal((await api('/me/notifications')).res.status,200);
+  assert.equal((await api('/me/notifications/read-all','POST',{})).res.status,200);
+  assert.equal((await api('/admin/resource-controls','PATCH',{analytics_paused:true})).res.status,200);
+  const stopped=await api('/analytics/events','POST',{schemaVersion:2,cafeId:'menu-cf',events:[{id:'cf-paused-event',type:'cafe_view'}]},false);assert.equal(stopped.res.status,503);
+  assert.equal((await api('/admin/resource-controls','PATCH',{analytics_paused:false})).res.status,200);
  });
  await check('Super Admin ID binding, administrator restrictions, recent auth and session revocation',async()=>{
   const regularCookie=cookie;
@@ -161,7 +196,7 @@ try {
  });
  await check('worker restart retains replay receipts',async()=>{
   s.ws.close();await new Promise(r=>s.ws.once('close',r));await worker.stop();
-  worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
+  worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',vars:{LS_ANALYTICS_ENABLED:'1',LS_ANALYTICS_MIN_COHORT:'3'},port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
   origin=`http://${worker.address}:${worker.port}`;s=socket(t);await s.next();s.ws.send(JSON.stringify(frame));assert.equal((await s.next()).status,'duplicate');
  });
  await check('disable invalidates an established connection',async()=>{await api('/admin/devices/CF-SIM','PATCH',{enabled:false});s.ws.send(JSON.stringify({...frame,messageId:'disabled'}));assert.equal((await s.next()).error.code,'device_assignment_changed');});

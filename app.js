@@ -1,26 +1,27 @@
-import { $, $$, clamp, isMobile } from './js/dom.js';
-import { store } from './js/storage.js';
-import { Prefs, F, favs } from './js/state.js';
-import { I, pinSVG, cardPin } from './js/icons.js';
+import { configureErrors, createRouter, escapeHTML, mount } from './framework/index.js';
+import { animNum, countUp } from './js/animations.js';
 import { Snd } from './js/audio.js';
-import { SS, WIFI, WIFI_S, TOTAL_SEATS, getCafes, byId } from './js/cafes.js';
-import { freePct, crowdCat, tone, mood, nowHour, profile } from './js/cafe-metrics.js';
-import { ssGlyph, ssArt, wifiSVG, seatRow, mSeat, mSound, mWifi, tagPills } from './js/components/atmosphere.js';
-import { buildMap } from './js/map.js';
-import { directionsUrl } from './js/map-gl.js';
-import { FloorPlan, ZONES } from './js/simulation/floor-plan.js';
-import { pageTasks } from './js/lifecycle.js';
-import { countUp, animNum } from './js/animations.js';
-import { openModal, closeModal, toast } from './js/components/feedback.js';
-import { createRouter, configureErrors, mount, escapeHTML } from './framework/index.js';
-import { platform, initPlatform } from './js/services/platform.js';
-import { dataMode, freshnessHTML, modeBadge, hasMeasurements, measuredSeats } from './js/live/freshness.js';
-import { sensorPanelHTML, noiseText } from './js/live/sensor-ui.js';
-import { LiveNoise } from './js/features/sensors/live-noise.js';
-import { isRealMode } from './js/live/sensor-state.js';
-import { SensorHistory } from './js/features/sensors/sensor-history.js';
+import { crowdCat, freePct, mood, nowHour, profile, tone } from './js/cafe-metrics.js';
+import { SS, TOTAL_SEATS, WIFI, WIFI_S, byId, getCafes } from './js/cafes.js';
+import { mSeat, mSound, mWifi, seatRow, ssArt, ssGlyph, tagPills, wifiSVG } from './js/components/atmosphere.js';
+import { closeModal, openModal, toast } from './js/components/feedback.js';
+import { $, $$, clamp, isMobile } from './js/dom.js';
+import { AccountPage, bindAccountPopover, renderAccountButton } from './js/features/account/account.js';
 import { openAuth, watchAuthCancel } from './js/features/authentication/auth-modal.js';
-import { renderAccountButton, bindAccountPopover, AccountPage } from './js/features/account/account.js';
+import { bindDeskRec, bindMobileHome, deskRecHTML, mobileHomeHTML, pauseOffscreen } from './js/features/home/mobile-home.js';
+import { LiveNoise } from './js/features/sensors/live-noise.js';
+import { SensorHistory } from './js/features/sensors/sensor-history.js';
+import { I, cardPin, pinSVG } from './js/icons.js';
+import { pageTasks } from './js/lifecycle.js';
+import { dataMode, freshnessHTML, hasMeasurements, measuredSeats, modeBadge } from './js/live/freshness.js';
+import { isRealMode } from './js/live/sensor-state.js';
+import { sensorPanelHTML } from './js/live/sensor-ui.js';
+import { directionsUrl } from './js/map-gl.js';
+import { buildMap } from './js/map.js';
+import { initPlatform, platform } from './js/services/platform.js';
+import { FloorPlan, ZONES } from './js/simulation/floor-plan.js';
+import { F, Prefs, favs } from './js/state.js';
+import { store } from './js/storage.js';
 // Pages and panels the home page never shows are loaded only when they open (smaller first load).
 const lazy = {
   partner: () => import('./js/features/partner/partner-form.js'),
@@ -33,7 +34,6 @@ const lazy = {
 };
 let navToken = 0;   // a lazily loaded page only renders if the visitor is still on it
 const loadFailed = () => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">Энэ хэсгийг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.</p></div></div>`;
-import { mobileHomeHTML, bindMobileHome, deskRecHTML, bindDeskRec, pauseOffscreen } from './js/features/home/mobile-home.js';
 
 // Customer features (menu, «Очих», pre-orders) mounted into the original pages; released on navigation.
 let custViews = [];
@@ -230,7 +230,7 @@ document.addEventListener('click', e => { const card = e.target.closest('[data-h
 /* ================= pages ================= */
 const app = $('#app');
 function footer() {
-  return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff"><b>Live</b><img class="logo-cup" src="logo-sm.webp" alt=""><span>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
+  return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff"><b>Live</b><img class="logo-cup" src="logo.webp" alt=""><span>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
  <div><h4>ЦЭС</h4><a href="#explore">Газрын зураг</a><a href="#cafes">Кафенууд</a><a href="#about">Бидний тухай</a><a href="#partner">Хамтын ажиллагаа</a></div>
  <div><h4>КАФЕ ЭЗЭМШИГЧ</h4><a href="#staff">Ажилтны шууд хяналт</a><a href="#partner">Кафегаа нэмэх</a><span style="display:block;padding:4px 0">Улаанбаатар, Монгол</span></div></div>
  <div class="ft-b"><span>© 2026 LiveSpace</span><span>${CAFES.some(hasMeasurements) ? 'Демо болон бодит хэмжилтийг тус тусад нь тэмдэглэсэн' : 'Прототип · бүх утга демо өгөгдөл'}</span></div></div></footer>`}

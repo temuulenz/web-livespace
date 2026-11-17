@@ -46,7 +46,7 @@ export function readBody(req, limit) {
     const chunks = [];
     req.on('data', chunk => {
       size += chunk.length;
-      if (size > limit) { reject(new HttpError(413, 'payload_too_large', `Request body exceeds ${Math.round(limit / 1024)} KB`)); req.destroy(); return; }
+      if (size > limit) { reject(new HttpError(413, 'payload_too_large', `Request body exceeds ${Math.round(limit / 1024)} KB`)); req.pause(); return; }
       chunks.push(chunk);
     });
     req.on('end', () => resolveBody(Buffer.concat(chunks)));
@@ -88,6 +88,7 @@ export function sendJson(res, status, data, headers = {}) {
 export function sendError(res, error) {
   if (res.headersSent) { res.end(); return; }
   const status = error instanceof HttpError ? error.status : 500;
+  if (status === 413) { res.shouldKeepAlive = false; res.setHeader('Connection', 'close'); }
   const payload = { error: { code: error instanceof HttpError ? error.code : 'internal', message: error instanceof HttpError ? error.message : 'Internal server error' } };
   if (error instanceof HttpError && error.details) payload.error.details = error.details;
   sendJson(res, status, payload);

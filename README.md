@@ -45,23 +45,23 @@ To switch tile providers, change `tiles` and `glyphs` in `js/map-config.js` to a
 
 ## Code map
 
-| Responsibility | Files |
-| --- | --- |
-| App start-up, routing, original page templates, delegated UI events | `app.js` |
-| Framework: components, rendering, store, router, API, live channel, session | `framework/` |
-| Café records and the data boundary (server records merge into the same objects) | `js/cafes.js`, `js/services/platform.js` |
-| Measurement → levels, opening hours, map projection, setup workflow (shared with the server) | `js/live/levels.js` |
-| Demo / live / test / outdated labels | `js/live/freshness.js` |
-| Café display calculations | `js/cafe-metrics.js` |
-| Preferences, filters and favourites | `js/state.js`, `js/storage.js` |
-| SVG artwork and atmosphere components | `js/icons.js`, `js/components/atmosphere.js` |
-| Map rendering and interaction | `js/map.js` (drawn SVG + fallback), `js/map-gl.js` (real map), `js/map-style.js`, `js/map-config.js` |
-| Café simulation (`FloorPlan`) and per-café interior layouts | `js/simulation/floor-plan.js`, `js/simulation/layouts.js` |
-| Web Audio | `js/audio.js` |
-| Route-owned timers, number animations, modals, toasts | `js/lifecycle.js`, `js/animations.js`, `js/components/feedback.js` |
-| Login window, account, partner form, owner and admin dashboards | `js/features/*` |
-| Backend: HTTP, SQLite, auth, SSE, routes, services | `server/` |
-| Reference device client for the ingestion API | `tools/device-client.mjs` |
+| Responsibility                                                                                | Files                                                                                                        |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| App start-up, routing, original page templates, delegated UI events                           | `app.js`                                                                                                   |
+| Framework: components, rendering, store, router, API, live channel, session                   | `framework/`                                                                                               |
+| Café records and the data boundary (server records merge into the same objects)              | `js/cafes.js`, `js/services/platform.js`                                                                 |
+| Measurement → levels, opening hours, map projection, setup workflow (shared with the server) | `js/live/levels.js`                                                                                        |
+| Demo / live / test / outdated labels                                                          | `js/live/freshness.js`                                                                                     |
+| Café display calculations                                                                    | `js/cafe-metrics.js`                                                                                       |
+| Preferences, filters and favourites                                                           | `js/state.js`, `js/storage.js`                                                                           |
+| SVG artwork and atmosphere components                                                         | `js/icons.js`, `js/components/atmosphere.js`                                                             |
+| Map rendering and interaction                                                                 | `js/map.js` (drawn SVG + fallback), `js/map-gl.js` (real map), `js/map-style.js`, `js/map-config.js` |
+| Café simulation (`FloorPlan`) and per-café interior layouts                               | `js/simulation/floor-plan.js`, `js/simulation/layouts.js`                                                |
+| Web Audio                                                                                     | `js/audio.js`                                                                                              |
+| Route-owned timers, number animations, modals, toasts                                         | `js/lifecycle.js`, `js/animations.js`, `js/components/feedback.js`                                     |
+| Login window, account, partner form, owner and admin dashboards                               | `js/features/*`                                                                                            |
+| Backend: HTTP, SQLite, auth, SSE, routes, services                                            | `server/`                                                                                                  |
+| Reference device client for the ingestion API                                                 | `tools/device-client.mjs`                                                                                  |
 
 The stylesheets must stay in this order: `styles.css`, `styles/pages.css`, `styles/responsive.css`, `styles/refinements.css`, then `styles/livespace.css`. The first four are the original design and are byte-identical (a test checks this). The last file holds every addition in this version.
 
@@ -84,3 +84,7 @@ The 2026-10 refactor audit is in [REFACTOR_REPORT.md](REFACTOR_REPORT.md).
 ## Cloudflare production backend
 
 The backend is deployed at **https://livespace.temuulenbayarjargal.workers.dev** on Workers Free, with D1 and SQLite Durable Objects. The separate implementation preserves the local Node fallback. See [deployment commands and rollout gates](docs/CLOUDFLARE_DEPLOYMENT.md), [local verification](docs/CLOUDFLARE_TESTING.md), and [Phase E checkpoint](docs/PHASE_E_PROGRESS.md). The existing production Worker is named `livespace`. Production verification passed, including authenticated WSS and browser polling. The approved client-originated heartbeat, measured Free-plan budgets, secure device-token path and recovery command are documented there. GitHub main-branch automatic builds remain enabled; no Git operations were performed.
+
+## Phase 11 backend checkpoint
+
+The local code now implements Phase 11A–H: menu/media, inventory, reviews, promotions, privacy-conscious behavior/owner analytics, persistent in-app notifications and scoped resource controls. Existing native frontend components/customer mocks were preserved; integration contracts are in [the frontend guide](docs/FRONTEND_INTEGRATION_GUIDE.md) and [API index](docs/PHASE11_API_CONTRACT.md). Analytics remains disabled by default. See [approved acceptance](docs/PHASE11_ACCEPTANCE.md), [current report](docs/PHASE11_REPORT.md) and [migration/configuration guidance](docs/PHASE11_MIGRATIONS.md) before a separately authorized rollout. This checkpoint was validated only with disposable local Node/Cloudflare data; these new changes were not deployed to production.

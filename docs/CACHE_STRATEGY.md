@@ -1,5 +1,9 @@
 # Cache boundaries
 
+Current Phase 11: menu/review caches remain bounded and tenant scoped; promotion prices evaluate after the raw menu cache. Private aggregate reports use a 30-second/128-entry cache with current authorization before hits and never enter KV/shared HTTP caches. Notification and inventory state remain authoritative. See BEHAVIOR_ANALYTICS.md for bounded-flush/cache lag. Earlier absent-feature statements below are historical.
+
+Current Phase 11 status (2026-11-17): menu and review snapshots have bounded caches as documented in their feature guides; inventory remains authoritative indexed reads. Promotion prices are recomputed after the raw menu cache. Older absent-feature statements below describe the Phase 7.2 checkpoint.
+
 Phase 7.1 current live and history caches remain in AppBackend; they never enter KV. D1 remains authoritative. Optional `PUBLIC_CACHE` KV plus `LS_KV_PUBLIC_ENABLED=1` applies only to `/api/v1/cafes/:id/profile`, an explicit whitelist projection without owner IDs, sessions, live measurements or device diagnostics. No future menus/orders/inventory are implemented.
 
 Profile keys: `public:v1:cafe:{encoded-id}:profile:g{epoch}`. The existing singleton AppBackend stores each tenant epoch durably; successful cafe mutations advance it. Old KV values can remain eventually consistent but cannot satisfy the new generation key. TTL is one hour in KV and at most one minute in the 128-entry memory cache. A cold generation reads D1 once; hits do not query D1 merely to check freshness. Public address/hours/name data can remain stale for the documented TTL if edited outside application mutation routes. Never use this cache for publication of private information.

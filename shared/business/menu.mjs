@@ -1,3 +1,4 @@
+import {promotionPrice} from './promotions.mjs';
 import {businessSqlError} from './sql-errors.mjs';
 import {parseMenuCsv,previewHash} from './menu-csv.mjs';
 // Runtime-neutral service. Adapters supply prepared SQL and atomic batch writes.
@@ -71,6 +72,7 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
    await cafe(cafeId,user);const old=await get(cafeId,kind,entityId);
    if(kind!=='categories')return this.update(cafeId,kind,entityId,{version:old.version,...(kind==='products'?{archived:true,published:false}:{active:false})},user);
    if(await sql.first('SELECT id FROM menu_items WHERE cafe_id=? AND category_id=? LIMIT 1',cafeId,entityId))fail(409,'category_in_use','Move products before deleting category');
+   if(await sql.first('SELECT id FROM promotions WHERE cafe_id=? AND category_id=? LIMIT 1',cafeId,entityId))fail(409,'category_in_use','Category is referenced by a promotion');
    await sql.batch([['DELETE FROM menu_categories WHERE cafe_id=? AND id=?',cafeId,entityId],audit(cafeId,user,'categories.delete',entityId)]);return {deleted:true};
   },
   async bulk(cafeId,kind,input,user) {
@@ -90,7 +92,9 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
   async importCsv(cafeId,input,user,confirm=false) {
    await cafe(cafeId,user);
    if(!input||typeof input!=='object'||Object.keys(input).some(k=>!['csv','preview_id','confirm'].includes(k)))invalid('Invalid import request');
-   const rows=parseMenuCsv(input.csv,fail);
+   const configured=Object.fromEntries((await sql.all("SELECT key,value FROM application_limits WHERE key IN('csv_rows','csv_bytes')")).map(r=>[r.key,r.value]));
+   if(typeof input.csv!=='string'||Buffer.byteLength(input.csv)>configured.csv_bytes)invalid('CSV byte limit reached');
+   const rows=parseMenuCsv(input.csv,fail);if(rows.length>configured.csv_rows)invalid('CSV row limit reached');
    for(const row of rows){validate('products',row);await relations(cafeId,'products',row);}
    const preview_id=previewHash(cafeId,user.id,input.csv);
    if(!confirm)return {preview_id,products:rows,published:false,requires_confirmation:true};
@@ -132,6 +136,14 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
  for(const method of ['create','update','remove','bulk','importCsv']){
   const original=service[method];service[method]=async function(cafeId,...args){const value=await original.call(service,cafeId,...args);if(method!=='importCsv'||args[2]===true){generation++;for(const [key,entry] of cache)if(entry.cafeId===cafeId)cache.delete(key);}return value;};
  }
+ // Compute time-sensitive prices after the raw snapshot cache, including cache hits.
+ const snapshot=service.publicMenu;
+ service.publicMenu=async(cafeId,query={})=>{
+  const result=await snapshot(cafeId,query),at=clock();
+  const rows=await sql.all('SELECT * FROM promotions WHERE cafe_id=? AND published=1 AND starts_at<=? AND ends_at>? ORDER BY id LIMIT 100',cafeId,at,at);
+  const promotions=rows.map(p=>({...p,recurrence:p.recurrence?JSON.parse(p.recurrence):null}));
+  return {...result,products:result.products.map(p=>({...p,...promotionPrice(p,promotions,at),variants:p.variants.map(v=>({...v,...promotionPrice({...v,base_price:v.price,id:p.id,category_id:p.category_id},promotions,at)}))}))};
+ };
  return service;
  function integer(raw,fallback,min,max){if(raw===undefined)return fallback;if(!/^\d+$/.test(String(raw))||!Number.isSafeInteger(Number(raw))||Number(raw)<min||Number(raw)>max)invalid('Invalid pagination');return Number(raw);}
 }

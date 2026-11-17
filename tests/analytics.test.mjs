@@ -20,3 +20,7 @@ test('conflicting analytics IDs roll back the entire batch',()=>{
  const {db,ctx}=fixture();acceptAnalytics(ctx,batch());const mixed=batch('menu_view','event-0002');mixed.events.push(batch('product_view').events[0]);
  assert.throws(()=>acceptAnalytics(ctx,mixed),/conflict/);assert.equal(db.prepare('SELECT COUNT(*) n FROM event_receipts').get().n,1);assert.equal(db.prepare('SELECT SUM(n) n FROM counters').get().n,1);db.close();
 });
+
+test('legacy intake honors configured daily budgets without changing default receipts',()=>{
+ const {db,ctx}=fixture();try{acceptAnalytics(ctx,batch(),Date.now(),{analyticsDaily:1});assert.throws(()=>acceptAnalytics(ctx,batch('menu_view','event-config-2'),Date.now(),{analyticsDaily:1}),/budget/);assert.equal(db.prepare('SELECT SUM(n) n FROM counters').get().n,1);}finally{db.close();}
+});

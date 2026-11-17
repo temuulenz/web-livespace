@@ -1,3 +1,7 @@
+import {RESOURCES_SCHEMA} from '../../shared/business/resources-schema.mjs';
+import {NOTIFICATIONS_SCHEMA} from '../../shared/business/notifications-schema.mjs';
+import {BEHAVIOR_SCHEMA} from '../../shared/business/behavior-schema.mjs';
+import { PROMOTIONS_SCHEMA } from '../../shared/business/promotions-schema.mjs';
 import { REVIEWS_SCHEMA } from '../../shared/business/reviews-schema.mjs';
 import { INVENTORY_SCHEMA } from '../../shared/business/inventory-schema.mjs';
 import { MENU_HARDENING_SCHEMA } from '../../shared/business/menu-hardening-schema.mjs';
@@ -195,7 +199,7 @@ BEGIN
  VALUES('super-admin-bind:' || NEW.user_id,'operator-bootstrap',NEW.user_id,'super_admin.bind',NEW.bound_at,'{}');
 END;
 `
-, MENU_SCHEMA, MENU_HARDENING_SCHEMA, INVENTORY_SCHEMA, REVIEWS_SCHEMA];
+, MENU_SCHEMA, MENU_HARDENING_SCHEMA, INVENTORY_SCHEMA, REVIEWS_SCHEMA, PROMOTIONS_SCHEMA, BEHAVIOR_SCHEMA, NOTIFICATIONS_SCHEMA, RESOURCES_SCHEMA];
 
 export function openDatabase(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
