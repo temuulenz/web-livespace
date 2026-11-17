@@ -26,6 +26,12 @@ async function photoDataURL(file, max = 640) {
   return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
 }
 
+const EDITOR_LABEL = { owner: 'Эзэмшигч', staff: 'Ажилтан', admin: 'LiveSpace админ' };
+const ROLE_NOTE = {
+  admin: 'Кафе эзэмшигчээс авсан цэсийн мэдээллийг энд оруулж, засна. Эзэмшигч өөрөө ч өөрийн самбараас засах боломжтой; мөр бүр хэн сүүлд өөрчилснийг харуулна.',
+  owner: 'Цэсээ өөрөө оруулж, засах боломжтой. Хүсвэл цэсийн мэдээллээ LiveSpace багт илгээхэд админ оруулж өгнө.',
+  staff: 'Өнөөдөр дууссан бүтээгдэхүүнийг «Өнөөдөр байгаа» товчоор унтраана уу.'
+};
 const fld = (errors, name, label, control, extra = '') => html`<div class="fld${errors[name] ? ' err' : ''}${raw(extra)}"><label for="me-${name}">${label}</label>${control}<span class="em" role="alert">${errors[name] || ''}</span></div>`;
 
 export class MenuEditor extends Component {
@@ -50,6 +56,8 @@ export class MenuEditor extends Component {
     catch (error) { this.setState({ error: error.message || 'Цэс ачаалж чадсангүй' }); }
   }
   item(id) { return this.state.items?.find(item => item.id === id); }
+  // Who is editing: 'owner' (café owner), 'staff' or 'admin' (LiveSpace team entering the owner's menu).
+  role() { return EDITOR_LABEL[this.props.editor] ? this.props.editor : 'owner'; }
   edit(id) {
     Snd.ui('whoosh');
     this.setState({ editing: id, errors: {}, photo: id === 'new' ? null : this.item(id)?.photo ?? null, confirmDelete: null });
@@ -70,7 +78,7 @@ export class MenuEditor extends Component {
     const editing = this.state.editing;
     this.setState({ busy: true });
     try {
-      await customer.menu.save(this.props.cafeId, { id: editing === 'new' ? undefined : editing, name: values.name, price: parsePrice(values.price), category: values.category, photo: this.state.photo, available: !!values.available });
+      await customer.menu.save(this.props.cafeId, { id: editing === 'new' ? undefined : editing, name: values.name, price: parsePrice(values.price), category: values.category, photo: this.state.photo, available: !!values.available, editedBy: this.role() });
       Snd.ui('chime'); toast(editing === 'new' ? `«${values.name}» цэсэнд нэмэгдлээ` : `«${values.name}» хадгалагдлаа`, true);
       this.setState({ editing: null, errors: {}, photo: null, busy: false });
     } catch (error) {
@@ -80,7 +88,7 @@ export class MenuEditor extends Component {
   async toggle(id, available) {
     const item = this.item(id); if (!item) return;
     Snd.ui('click');
-    try { await customer.menu.setAvailable(this.props.cafeId, id, available); toast(available ? `«${item.name}» өнөөдөр байгаа` : `«${item.name}» — Дууссан`, available); }
+    try { await customer.menu.setAvailable(this.props.cafeId, id, available, this.role()); toast(available ? `«${item.name}» өнөөдөр байгаа` : `«${item.name}» — Дууссан`, available); }
     catch (error) { Snd.ui('err'); toast(error.message); }
   }
   async remove(id) {
@@ -113,7 +121,7 @@ export class MenuEditor extends Component {
     const confirming = this.state.confirmDelete === item.id;
     return html`<li class="me-row${item.available ? '' : ' is-out'}" data-key="me-${item.id}">
       <img src="${menuPhoto(item)}" alt="" width="58" height="44" loading="lazy" decoding="async">
-      <div class="me-info"><b>${item.name}</b><small class="muted"><span class="num">${formatMNT(item.price)}</span>${item.available ? '' : ' · Дууссан'}</small></div>
+      <div class="me-info"><b>${item.name}</b><small class="muted"><span class="num">${formatMNT(item.price)}</span>${item.available ? '' : ' · Дууссан'}${item.editedBy ? html` · <span class="me-by me-by-${item.editedBy}">${EDITOR_LABEL[item.editedBy]} засварласан</span>` : ''}</small></div>
       <div class="me-avail"><span>Өнөөдөр байгаа</span><button class="sw" role="switch" data-me-avail="${item.id}" aria-checked="${item.available}" aria-label="${item.name} өнөөдөр байгаа"></button></div>
       <div class="me-btns">${confirming
         ? html`<span class="me-ask">Устгах уу?</span><button class="btn btn-g me-danger" data-me-del-yes="${item.id}">Тийм</button><button class="btn btn-g" data-me-del-no>Үгүй</button>`
@@ -126,7 +134,7 @@ export class MenuEditor extends Component {
       <div class="r"><button class="btn btn-p me-new" data-me-new ${raw(editing === 'new' ? 'disabled' : '')}>${raw(I.plus)} Шинэ бүтээгдэхүүн</button></div></div>`;
     if (error) return html`${head}<p class="muted">${error}</p>`;
     if (!items) return html`${head}<div class="skel" style="height:160px"></div>`;
-    const note = customer.mode === 'mock' ? html`<p class="muted me-note">Демо: өөрчлөлт зөвхөн энэ хөтөч дээр хадгалагдана.</p>` : '';
+    const note = html`<p class="muted me-note">${ROLE_NOTE[this.role()]}${customer.mode === 'mock' ? ' Демо: өөрчлөлт зөвхөн энэ хөтөч дээр хадгалагдана.' : ''}</p>`;
     return html`${head}${note}${editing ? this.formHTML() : ''}
       ${items.length ? MENU_CATEGORIES.filter(c => items.some(i => i.category === c)).map(c => html`<section class="me-group" data-key="meg-${c}"><h3>${c}</h3><ul class="me-list">${items.filter(i => i.category === c).map(i => this.rowHTML(i))}</ul></section>`)
         : html`<p class="muted">Цэс хоосон байна. «Шинэ бүтээгдэхүүн» товчоор нэмнэ үү.</p>`}`;

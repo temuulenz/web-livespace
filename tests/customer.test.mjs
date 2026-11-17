@@ -149,6 +149,22 @@ test('mock menu editing persists and validates', async () => {
   assert.deepEqual(await reloaded.menu.list('B'), seedMenu('B'), 'other cafés are untouched');
 });
 
+test('admins and owners both maintain a menu; each item remembers who changed it last', async () => {
+  const now = clock(), adapter = createMockAdapter({ storage: memoryStorage(), now });
+  const { item } = await adapter.menu.save('A', { name: 'Раф кофе', price: 11000, category: 'Кофе', editedBy: 'admin' });
+  assert.equal(item.editedBy, 'admin');
+  assert.equal(item.editedAt, now());
+  now.advance(MIN);
+  await adapter.menu.save('A', { ...item, price: 11500, editedBy: 'owner' });
+  let saved = (await adapter.menu.list('A')).find(m => m.id === item.id);
+  assert.deepEqual([saved.price, saved.editedBy], [11500, 'owner']);
+  await adapter.menu.setAvailable('A', item.id, false, 'staff');
+  saved = (await adapter.menu.list('A')).find(m => m.id === item.id);
+  assert.deepEqual([saved.available, saved.editedBy], [false, 'staff']);
+  const { item: unknown } = await adapter.menu.save('A', { name: 'Тест', price: 100, category: 'Цай', editedBy: 'hacker' });
+  assert.ok(!('editedBy' in unknown), 'unknown roles are not recorded');
+});
+
 test('mock going: login required, one active visit, pre-order snapshot, staff statuses, auto-expiry, privacy', async () => {
   const now = clock(), storage = memoryStorage(), adapter = createMockAdapter({ storage, now });
   let changes = 0; adapter.subscribe(() => changes++);

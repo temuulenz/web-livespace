@@ -6,9 +6,10 @@
 //   adapter.mode                                  'mock' (shows ДЕМО notices) | 'http'
 //   adapter.subscribe(fn) → unsubscribe           fn() after any change (also from other tabs)
 //   adapter.menu.list(cafeId)                     → items [{ id, name, price, category, photo, available }]
-//   adapter.menu.save(cafeId, item)               → { item }  (no id = create)
+//   adapter.menu.save(cafeId, item)               → { item }  (no id = create; item.editedBy 'owner'|'staff'|'admin')
 //   adapter.menu.remove(cafeId, id)
-//   adapter.menu.setAvailable(cafeId, id, bool)
+//   adapter.menu.setAvailable(cafeId, id, bool, editedBy)
+//   Menu writers: the café's owner/staff AND LiveSpace admins (who enter the menu the owner sends).
 //   adapter.auth.current()                        → { id, phone } | null
 //   adapter.auth.requestCode(phone)               → { phone, resendAt, expiresAt, demoCode? }
 //   adapter.auth.verifyCode(phone, code)          → user
@@ -34,6 +35,7 @@ export class CustomerError extends Error {
 }
 
 export const DEMO_CODE = '123456';
+export const MENU_EDITORS = ['owner', 'staff', 'admin'];
 
 // localStorage with failures reported (quota, private mode) instead of swallowed.
 export const browserStorage = {
@@ -88,6 +90,10 @@ export function createMockAdapter({ storage = browserStorage, now = Date.now, wi
   const menus = () => storage.get('mock_menus', {});
   const menuOf = cafeId => menus()[cafeId] || seedMenu(cafeId);
   const writeMenu = (cafeId, items) => { const all = menus(); all[cafeId] = items; const ok = storage.set('mock_menus', all); emit(); return ok; };
+  // Menus are maintained by the café's owner/staff or by a LiveSpace admin entering what the
+  // owner sent; each item remembers who changed it last. (The mock has no sessions: a real
+  // adapter takes the role from the signed-in account, never from the request.)
+  const editStamp = by => MENU_EDITORS.includes(by) ? { editedBy: by, editedAt: now() } : {};
   const findItem = (cafeId, id) => { const item = menuOf(cafeId).find(m => m.id === id); if (!item) throw new CustomerError('not_found', 'Бүтээгдэхүүн олдсонгүй'); return item; };
 
   // Visits: the visitor's own are stored; status changes on simulated ones stay in memory.
@@ -121,7 +127,7 @@ export function createMockAdapter({ storage = browserStorage, now = Date.now, wi
         if (input.photo != null && !/^data:image\/(jpeg|png|webp);base64,/.test(input.photo)) errors.photo = 'Зургийн формат буруу байна';
         if (Object.keys(errors).length) throw new CustomerError('validation', 'Талбаруудыг шалгана уу', errors);
         const items = menuOf(cafeId);
-        const item = { id: input.id || nextId('m-'), name: String(input.name).trim(), price: Number(input.price), category: input.category, photo: input.photo ?? null, available: input.available !== false };
+        const item = { id: input.id || nextId('m-'), name: String(input.name).trim(), price: Number(input.price), category: input.category, photo: input.photo ?? null, available: input.available !== false, ...editStamp(input.editedBy) };
         const index = items.findIndex(m => m.id === item.id);
         if (input.id && index < 0) throw new CustomerError('not_found', 'Бүтээгдэхүүн олдсонгүй');
         if (index < 0) items.push(item); else items[index] = item;
@@ -129,7 +135,7 @@ export function createMockAdapter({ storage = browserStorage, now = Date.now, wi
         return { item: { ...item } };
       }),
       remove: (cafeId, id) => later(() => { findItem(cafeId, id); writeMenu(cafeId, menuOf(cafeId).filter(m => m.id !== id)); }),
-      setAvailable: (cafeId, id, available) => later(() => { findItem(cafeId, id); writeMenu(cafeId, menuOf(cafeId).map(m => m.id === id ? { ...m, available: !!available } : m)); })
+      setAvailable: (cafeId, id, available, editedBy) => later(() => { findItem(cafeId, id); writeMenu(cafeId, menuOf(cafeId).map(m => m.id === id ? { ...m, available: !!available, ...editStamp(editedBy) } : m)); })
     },
 
     auth: {

@@ -92,7 +92,7 @@ export class OwnerPage extends Component {
     if (!cafe || !orders || !menu) return;
     this.custCafe = cafe.id;
     this.ordersView = this.child(IncomingOrders, orders, { cafeId: cafe.id });
-    this.menuView = this.child(MenuEditor, menu, { cafeId: cafe.id });
+    this.menuView = this.child(MenuEditor, menu, { cafeId: cafe.id, editor: 'owner' });
   }
   syncHistory() {
     const cafe = this.current(), root = this.$('[data-owner-sensor-history]');

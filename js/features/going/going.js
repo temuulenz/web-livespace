@@ -108,7 +108,9 @@ export class GoingPanel extends Component {
   }
   onMount() {
     this.onCleanup(customer.subscribe(() => this.load()));
-    this.interval(() => this.tick(), 1000);
+    // Checked 4× a second but re-rendered only when the shown time changes, so the countdown
+    // never lags its own second boundaries by up to a second.
+    this.interval(() => this.tick(), 250);
     this.interval(() => this.load(), 30000);
     this.load();
   }
@@ -121,8 +123,10 @@ export class GoingPanel extends Component {
   tick() {
     const { active } = this.state, now = Date.now();
     if (!active) return;
-    if (countdown(active, now).phase === 'expired') { toast('Таны «Очих»-ын хугацаа дууслаа'); this.load(); return; }
-    this.setState({ now });
+    const cd = countdown(active, now);
+    if (cd.phase === 'expired') { if (!this.expiring) { this.expiring = true; toast('Таны «Очих»-ын хугацаа дууслаа'); this.load().finally(() => { this.expiring = false; }); } return; }
+    const shown = cd.phase + cd.text;
+    if (shown !== this.shown) { this.shown = shown; this.setState({ now }); }
   }
   async start() {
     const { cafe } = this.props;
