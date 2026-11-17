@@ -23,6 +23,15 @@ import { renderAccountButton, bindAccountPopover, AccountPage } from './js/featu
 import { partnerFormHTML, bindPartnerForm, pendingClaimHTML, openOwnerSignup } from './js/features/partner/partner-form.js';
 import { OwnerPage } from './js/features/owner-dashboard/owner-page.js';
 import { AdminPage } from './js/features/admin-dashboard/admin-page.js';
+import { MenuSection } from './js/features/menu/menu-view.js';
+import { MenuEditor } from './js/features/menu/menu-editor.js';
+import { GoingPanel } from './js/features/going/going.js';
+import { IncomingOrders } from './js/features/going/incoming-orders.js';
+
+// Customer features (menu, «Очих», pre-orders) mounted into the original pages; released on navigation.
+let custViews = [];
+const mountCust = (Component, el, props) => { if (el) custViews.push(mount(Component, el, props)) };
+const dropCust = () => { custViews.forEach(v => v.destroy()); custViews = [] };
 
 const CAFES = getCafes();
 let cmpIds = [];
@@ -371,7 +380,7 @@ function renderCafe(id) {
 }
 function buildCafe(c) {
   sensorHistoryView?.destroy(); sensorHistoryView = null;
-  liveNoiseView?.destroy(); liveNoiseView = null;
+  liveNoiseView?.destroy(); liveNoiseView = null; dropCust();
   const t = tone(c), fp_ = freePct(c);
   const legend = `<div class="plan-legend"><span><i class="lg-seat"></i>Сул</span><span><i class="lg-seat o"></i>Хүнтэй</span><span><i class="lg-seat u">?</i>Мэдээлэлгүй</span></div>`;
   app.innerHTML = `<div class="page"><div class="wrap cd">
@@ -405,9 +414,11 @@ function buildCafe(c) {
    <input type="range" id="teSl" min="8" max="22" step="1" value="${nowHour()}" aria-label="Цаг сонгох">
   </section>
  </div>`: `<div class="card" style="margin-top:20px;text-align:center;padding:40px">${emptyArt()}<h2 style="margin:10px 0">${c.status_text ? 'Мэдээлэл хүлээгдэж байна' : 'Одоо хаалттай'}</h2><p class="muted">${closedText(c)}.</p><a class="btn btn-p" href="#explore">Нээлттэй кафе хайх</a></div>`}
+ <div class="cd-cust"><section class="card going-card" id="goingPanel" aria-label="Очих"></section><section class="card menu-card" id="cafeMenu" aria-label="Цэс"></section></div>
  ${dataMode(c) !== 'demo' ? '<section class="card" id="publicSensorHistory"></section>' : ''}
  </div>${footer()}</div>`;
   if ($('#publicSensorHistory')) sensorHistoryView = mount(SensorHistory, $('#publicSensorHistory'), { cafeId: c.id, source: c.live?.sensor?.dataSource || 'real', role: 'public' });
+  mountCust(GoingPanel, $('#goingPanel'), { cafe: c }); mountCust(MenuSection, $('#cafeMenu'), { cafeId: c.id });
   if (!c.open) return;
   syncDetailNoise(c); renderWF(c.wifi, c);
   // floor plan
@@ -595,7 +606,9 @@ function renderStaff() {
    <div class="seg" id="musSeg"><span class="ind-s"></span><button data-mus="calm" aria-selected="true">Тайван</button><button data-mus="mid" aria-selected="false">Дунд</button><button data-mus="up" aria-selected="false">Эрч хүчтэй</button></div>
    <div style="display:flex;gap:16px;align-items:center"><div class="eq" id="eq">${'<i></i>'.repeat(6)}</div><div><b style="color:#fff" id="musV">Хөгжмийн дуу 32%</b><br><small id="musR">Санал болгосон: орчны чимээ аль хэдийн өндөр байна.</small></div></div>
    <small style="color:#BFAE95">Тоног төхөөрөмжийг удирдахгүй — зөвхөн ажилтанд санал болгоно.</small></section>
- </div></div></div>${footer()}</div>`;
+ </div></div>
+ <div class="st-cust"><section class="card" id="stIncoming" aria-label="Ирэх зочид"></section><section class="card" id="stMenu" aria-label="Цэс засах"></section></div></div>${footer()}</div>`;
+  mountCust(IncomingOrders, $('#stIncoming'), { cafeId: c.id }); mountCust(MenuEditor, $('#stMenu'), { cafeId: c.id });
   fp = new FloorPlan($('#planWrap'), { ...c, occ: 78 }, { sound: 4, onStats: s => { const pct = Math.round((s.total - s.free) / s.total * 100); $('#occC').style.strokeDashoffset = 377 - 377 * pct / 100; animNum($('#occT'), pct, '%'); $('#stFree').textContent = Math.round(s.free / s.total * 100) + '%' } });
   const ts = [{ t: 'Wi-Fi ажиллахгүй', e: '2 цаг' }]; let exp = '2 цаг';
   const rts = () => { $('#tsList').innerHTML = ts.length ? ts.map((x, i) => `<div class="tstat"><div><b>${x.t}</b><small>${x.e}-ийн дараа автоматаар дуусна</small></div><button class="btn btn-g" data-tsx="${i}" style="color:var(--terraT)">Цуцлах</button></div>`).join('') : '<small class="muted">Идэвхтэй түр төлөв алга.</small>'; $$('[data-tsx]').forEach(b => b.onclick = () => { ts.splice(+b.dataset.tsx, 1); Snd.ui('click'); rts() }) }; rts();
@@ -612,7 +625,7 @@ function renderStaff() {
 // the previous page's timers, frames, simulation, map, audio and listeners.
 const page = (Component, props) => () => { app.innerHTML = ''; pageComp = mount(Component, app, props) };
 function teardown() {
-  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
+  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; dropCust(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
   if (pageComp) { pageComp.destroy(); pageComp = null } if (partnerCleanup) { partnerCleanup(); partnerCleanup = null } cdCafe = null;
 }
 const router = createRouter({
