@@ -5,13 +5,15 @@
 import { escapeHTML } from '../../../framework/index.js';
 import { $, $$, clamp, isMobile } from '../../dom.js';
 import { I } from '../../icons.js';
-import { SS, WIFI } from '../../cafes.js';
 import { Prefs, favs } from '../../state.js';
 import { store } from '../../storage.js';
 import { Snd } from '../../audio.js';
 import { freePct } from '../../cafe-metrics.js';
 import { pageTasks } from '../../lifecycle.js';
 import { ssGlyph, wifiSVG } from '../../components/atmosphere.js';
+import { openState, seatState, wifiState, walkText } from '../../live/status.js';
+import { trustHTML } from '../../live/status-ui.js';
+import { platform } from '../../services/platform.js';
 
 /* ---------- hanging lamps (the same shades as the desktop hero) ---------- */
 // [left, cord length, colour, shade, sway seconds]
@@ -100,24 +102,23 @@ const REC_SORTS = [
 // carousels can show the same café at once.
 let uidSeq = 0;
 function recCard(c, k, n, plain = false) {
-  const uid = 'rc' + (++uidSeq), free = freePct(c), name = escapeHTML(c.name);
-  const meta = [c.dist, c.walk != null ? `${c.walk} мин алхана` : ''].filter(Boolean).join(' · ');
+  const uid = 'rc' + (++uidSeq), name = escapeHTML(c.name), opts = { staleAfterSec: platform.config?.sensor_stale_after_sec ?? 30 };
+  // Walk time comes from the sample «Та энд» point, so it says so.
+  const meta = c.walk != null ? walkText(c) : c.dist || '';
+  const op = openState(c), seat = seatState(c, opts), wifi = wifiState(c);
   return `<article class="rc" style="--n:${n}" data-href="#cafe-${encodeURIComponent(c.id)}" aria-roledescription="санал болгох кафе" aria-label="${name}">
   <div class="rc-card">
    ${plain ? '' : `<div class="rc-roof">${roofSVG(k, n, uid)}</div>`}
    <div class="rc-body">
     ${sceneSVG(c, k, uid)}
-    <span class="rc-open${c.open ? '' : ' off'}"><span class="olamp ${c.open ? 'on' : 'off'}" aria-hidden="true">${I.lamp}</span>${c.open ? 'Нээлттэй' : 'Хаалттай'}</span>
+    <span class="rc-open${c.open ? '' : ' off'}"><span class="olamp ${c.open ? 'on' : 'off'}" aria-hidden="true">${I.lamp}</span>${op.open ? 'Нээлттэй' : 'Хаалттай'}</span>
     <button class="heart rc-heart" data-fav="${escapeHTML(c.id)}" aria-pressed="${favs.has(c.id)}" aria-label="${name} хадгалах">${I.heart}</button>
     <div class="rc-info">
      ${meta ? `<span class="rc-kick">${I.pin}${escapeHTML(meta)}</span>` : ''}
      <h3>${name}</h3>
-     <div class="rc-stats">
-      <span class="rc-free">${I.seat}<b class="num">${free == null ? '—' : free + '%'}</b> сул</span>
-      <span>${ssGlyph(c.sound)}${SS[c.sound]?.short || 'Хэмжилтгүй'}</span>
-      <span class="rc-wifi" title="Wi-Fi · ${WIFI[c.wifi || 0]}" aria-label="Wi-Fi ${WIFI[c.wifi || 0]}">${wifiSVG(c.wifi || 0, 16)}</span>
-     </div>
-     <a class="rc-more" href="#cafe-${encodeURIComponent(c.id)}" aria-label="${name} дэлгэрэнгүй"><i>${I.arr}</i></a>
+     <span class="rc-line rc-openl">${escapeHTML(op.text)}</span>
+     ${c.open ? `<span class="rc-line rc-facts" title="${escapeHTML(seat.text + ' · ' + wifi.source)}">${I.seat}${escapeHTML(seat.short)} · ${escapeHTML(wifi.short)}</span>` : ''}
+     <div class="rc-foot">${trustHTML(c, opts)}<a class="rc-more" href="#cafe-${encodeURIComponent(c.id)}" aria-label="${name} дэлгэрэнгүй">Дэлгэрэнгүй<i>${I.arr}</i></a></div>
     </div>
    </div>
   </div>

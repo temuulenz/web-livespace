@@ -17,6 +17,7 @@ import { menuPhoto } from '../menu/menu-view.js';
 import { openPhoneAuth } from '../authentication/phone-auth.js';
 
 const PAY_NOTE = 'Кафе дээр төлнө';
+const NO_SEAT = html`<p class="going-noseat">${raw(I.seat)}<span><b>Суудал баталгаажуулахгүй.</b> «Очих» нь ирэх төлөвлөгөөг л кафед мэдэгдэнэ — суудал хадгалахгүй.</span></p>`;
 const linesHTML = lines => html`<ul class="going-lines">${lines.map(l => html`<li><span><b class="num">${l.qty} ×</b> ${l.name}</span><span class="num">${formatMNT(l.price * l.qty)}</span></li>`)}</ul>`;
 const statusBadge = status => html`<span class="badge going-st st-${status}">${STATUS_LABEL[status] || status}</span>`;
 
@@ -87,6 +88,7 @@ class GoingFlow extends Component {
         ${lines.length ? html`<div class="going-sum-total"><dt>Нийт</dt><dd class="num">${formatMNT(total)}</dd></div>` : ''}
       </dl>
       <p class="going-pay">${raw(I.info)} <span><b>${PAY_NOTE}.</b> Энэ хувилбарт онлайн төлбөр байхгүй. Кафе таныг ${GRACE_MIN} минут хүлээгээд автоматаар цуцална.</span></p>
+      ${NO_SEAT}
       ${err}
       <div class="going-foot"><button class="btn btn-g" data-step="order">Буцах</button><button class="btn btn-p" data-going-confirm ${raw(busy ? 'disabled' : '')}>${busy ? 'Илгээж байна…' : 'Баталгаажуулах'}</button></div>`;
   }
@@ -166,7 +168,7 @@ export class GoingPanel extends Component {
     if (!loaded) return html`${head}<div class="skel" style="height:90px"></div>`;
     const summary = html`<p class="going-count">${raw(I.people)}${count ? html`<span><b class="num">${count} хүн</b> ирэхээр төлөвлөж байна</span>` : html`<span class="muted">Одоогоор ирэхээр төлөвлөсөн хүн алга</span>`}</p>`;
     const body = active ? this.activeHTML(active) : cafe.open
-      ? html`<div class="going-cta"><p class="muted">Ирэх цагаа сонгоод, хүсвэл урьдчилан захиалаарай — очиход тань бэлэн болно. ${PAY_NOTE}.</p><button class="btn btn-p" data-going-start>${raw(I.walk)} Очих</button></div>`
+      ? html`<div class="going-cta"><p class="muted">Ирэх цагаа сонгоод, хүсвэл урьдчилан захиалаарай — очиход тань бэлэн болно. ${PAY_NOTE}.</p><button class="btn btn-p" data-going-start>${raw(I.walk)} Очих</button>${NO_SEAT}</div>`
       : html`<div class="going-cta"><p class="muted">Кафе хаалттай үед «Очих» боломжгүй.</p><button class="btn btn-p" disabled>Очих</button></div>`;
     const who = user ? html`<p class="going-who muted"><span class="num">${formatPhone(user.phone)}</span> · <button class="linkb" data-going-signout>Гарах</button></p>`
       : html`<p class="going-who muted">«Очих», урьдчилсан захиалгад утсаар нэвтэрнэ. <button class="linkb" data-going-login>Нэвтрэх</button></p>`;

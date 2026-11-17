@@ -45,6 +45,12 @@ export function liveTilesHTML(live) {
   return html`${raw(sensorPanelHTML({ live }))}<div class="own-tiles">${seats}${noise}${wifi}</div>`;
 }
 
+// «Юу хийх вэ?» — next steps when data or a device connection is lost.
+const NEXT_STEPS = {
+  load: ['Интернэт холболтоо шалгаад «Дахин оролдох»-г дарна уу.', 'Болохгүй бол хуудсаа дахин ачаална уу.', 'Асуудал үргэлжилбэл LiveSpace-ийн багт хандана уу.'],
+  device: ['Мэдрэгч, камерын цахилгаан залгаатай эсэхийг шалгана уу.', 'Кафены Wi-Fi ажиллаж байгаа, төхөөрөмж сүлжээнд холбогдсон эсэхийг шалгана уу.', 'Төхөөрөмжийг унтрааж асаана уу — холбогдмогц хэмжилт өөрөө үргэлжилнэ.', 'Тасалдал үргэлжилбэл LiveSpace-ийн багт хандана уу.']
+};
+const nextStepsHTML = (kind, note = '') => html`<div class="own-next" role="note"><h3>Юу хийх вэ?</h3><ol>${NEXT_STEPS[kind].map(s => html`<li>${s}</li>`)}</ol>${note ? html`<p class="muted">${note}</p>` : ''}</div>`;
 export class OwnerPage extends Component {
   initialState() { return { cafes: null, error: null, selected: null, saving: false, formErrors: {} }; }
   events() {
@@ -118,7 +124,7 @@ export class OwnerPage extends Component {
     if (!platform.online) return html`<div class="wrap page"><div class="card gate"><h1>Кафе эзэмшигч</h1><p class="muted">Энэ хувилбар сервергүй ажиллаж байгаа тул самбар ашиглах боломжгүй.</p></div></div>`;
     if (!user) return signInPrompt('owner', 'Кафе эзэмшигчийн самбарт нэвтэрнэ үү.');
     if (!platform.session.hasRole('owner', 'admin')) return html`<div class="wrap page"><div class="card gate"><span class="gate-ic">${raw(I.hand)}</span><h1>Кафе эзэмшигч үү?</h1><p class="muted">«Хамтын ажиллагаа» хуудаснаас хүсэлт илгээснээр кафе эзэмшигчийн самбар нээгдэнэ.</p><a class="btn btn-p" href="#partner">Хамтран ажиллах →</a></div></div>`;
-    if (this.state.error) return html`<div class="wrap page"><div class="card gate"><h1>Мэдээлэл ачаалж чадсангүй</h1><p class="muted">${this.state.error}</p><button class="btn btn-o" data-own-retry>Дахин оролдох</button></div></div>`;
+    if (this.state.error) return html`<div class="wrap page"><div class="card gate"><h1>Мэдээлэл ачаалж чадсангүй</h1><p class="muted">${this.state.error}</p>${nextStepsHTML('load')}<button class="btn btn-o" data-own-retry>Дахин оролдох</button></div></div>`;
     const { cafes } = this.state;
     if (!cafes) return html`<div class="wrap page"><div class="skel" style="height:150px;margin-top:24px"></div><div class="skel" style="height:320px;margin-top:20px"></div></div>`;
     if (!cafes.length) return html`<div class="wrap page"><div class="card gate"><span class="gate-ic">${raw(I.hand)}</span><h1>Кафе бүртгэгдээгүй байна</h1><p class="muted">Хамтран ажиллах хүсэлт илгээсний дараа энд харагдана.</p><a class="btn btn-p" href="#partner">Хүсэлт илгээх →</a></div></div>`;
@@ -157,6 +163,7 @@ export class OwnerPage extends Component {
           <div class="card-h"><h2>Мэдрэгч, камер</h2></div>
           ${c.devices.length ? html`<ul class="own-devices">${c.devices.map(d => html`<li><span class="dot ${d.online ? 'on' : ''}"></span><b>${d.label || d.id}</b><small class="muted">${sensorStatusLabel(d.status)} · ${sensorSourceLabel(d.is_test ? 'simulated' : 'real')}${d.last_seen_at ? ` · сүүлд ${dateTime(d.last_seen_at)}` : ''}</small>${raw(deviceDiagnosticsHTML(d))}</li>`)}</ul>`
             : html`<p class="own-msg">Төхөөрөмж хараахан суурилуулаагүй.</p>`}
+          ${c.devices.some(d => !d.online) ? nextStepsHTML('device', 'Энэ хооронд зочдод «Мэдээлэл хуучирсан» гэж харагдана; хуучин тоог шинэ мэт харуулахгүй.') : ''}
         </section>
         <section class="card" data-key="sensor-history"><div data-owner-sensor-history data-preserve data-key="sensor-history-${c.id}"></div></section>
 
