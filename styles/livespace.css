@@ -1790,3 +1790,10 @@ html.rm .ml-you-pulse {
 @media (max-width:820px) {
   .ex-map .maplibregl-ctrl-top-left { top: 58px }
 }
+
+/* Performance: animations inside SVG drawings cannot be GPU-composited, so every running one
+   repaints its whole card picture each frame. Only the card in focus animates its drawing
+   (phone: the centred card; desktop: the hovered card), and nothing animates off screen. */
+.mh-track .rc:not(.on) svg *,
+.drec .rc:not(:hover) svg *,
+.offscreen, .offscreen * { animation-play-state: paused !important }

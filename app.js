@@ -21,24 +21,32 @@ import { isRealMode } from './js/live/sensor-state.js';
 import { SensorHistory } from './js/features/sensors/sensor-history.js';
 import { openAuth, watchAuthCancel } from './js/features/authentication/auth-modal.js';
 import { renderAccountButton, bindAccountPopover, AccountPage } from './js/features/account/account.js';
-import { partnerFormHTML, bindPartnerForm, pendingClaimHTML, openOwnerSignup } from './js/features/partner/partner-form.js';
-import { OwnerPage } from './js/features/owner-dashboard/owner-page.js';
-import { AdminPage } from './js/features/admin-dashboard/admin-page.js';
-import { MenuSection } from './js/features/menu/menu-view.js';
-import { MenuEditor } from './js/features/menu/menu-editor.js';
-import { GoingPanel } from './js/features/going/going.js';
-import { IncomingOrders } from './js/features/going/incoming-orders.js';
-import { mobileHomeHTML, bindMobileHome, deskRecHTML, bindDeskRec } from './js/features/home/mobile-home.js';
+// Pages and panels the home page never shows are loaded only when they open (smaller first load).
+const lazy = {
+  partner: () => import('./js/features/partner/partner-form.js'),
+  owner: () => import('./js/features/owner-dashboard/owner-page.js').then(m => m.OwnerPage),
+  admin: () => import('./js/features/admin-dashboard/admin-page.js').then(m => m.AdminPage),
+  menuView: () => import('./js/features/menu/menu-view.js').then(m => m.MenuSection),
+  menuEditor: () => import('./js/features/menu/menu-editor.js').then(m => m.MenuEditor),
+  going: () => import('./js/features/going/going.js').then(m => m.GoingPanel),
+  incoming: () => import('./js/features/going/incoming-orders.js').then(m => m.IncomingOrders)
+};
+let navToken = 0;   // a lazily loaded page only renders if the visitor is still on it
+const loadFailed = () => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">Энэ хэсгийг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.</p></div></div>`;
+import { mobileHomeHTML, bindMobileHome, deskRecHTML, bindDeskRec, pauseOffscreen } from './js/features/home/mobile-home.js';
 
 // Customer features (menu, «Очих», pre-orders) mounted into the original pages; released on navigation.
 let custViews = [];
-const mountCust = (Component, el, props) => { if (el) custViews.push(mount(Component, el, props)) };
+const mountCust = (load, el, props) => {
+  if (!el) return;
+  load().then(Component => { if (el.isConnected && !el.dataset.mounted) { el.dataset.mounted = '1'; custViews.push(mount(Component, el, props)) } }).catch(() => { if (el.isConnected) el.innerHTML = '<p class="muted">Энэ хэсгийг ачаалж чадсангүй.</p>' });
+};
 const dropCust = () => { custViews.forEach(v => v.destroy()); custViews = [] };
 
 const CAFES = getCafes();
 let cmpIds = [];
 let sensorHistoryView = null, liveNoiseView = null;
-let selId = null, mapCtl = null, fp = null, homeMini = null, homeMobileOff = null, deskRecOff = null, cdCafe = null, pageComp = null;
+let selId = null, mapCtl = null, fp = null, homeMini = null, homeMobileOff = null, deskRecOff = null, homeOffscreenOff = null, cdCafe = null, pageComp = null;
 let navDepth = 0;
 // Cafés without live data yet are shown like closed ones, with an honest reason.
 const closedText = c => c.status_text || `${c.opens} нээгдэнэ`;
@@ -222,7 +230,7 @@ document.addEventListener('click', e => { const card = e.target.closest('[data-h
 /* ================= pages ================= */
 const app = $('#app');
 function footer() {
-  return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff"><b>Live</b><img class="logo-cup" src="logo.webp" alt=""><span>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
+  return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff"><b>Live</b><img class="logo-cup" src="logo-sm.webp" alt=""><span>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
  <div><h4>ЦЭС</h4><a href="#explore">Газрын зураг</a><a href="#cafes">Кафенууд</a><a href="#about">Бидний тухай</a><a href="#partner">Хамтын ажиллагаа</a></div>
  <div><h4>КАФЕ ЭЗЭМШИГЧ</h4><a href="#staff">Ажилтны шууд хяналт</a><a href="#partner">Кафегаа нэмэх</a><span style="display:block;padding:4px 0">Улаанбаатар, Монгол</span></div></div>
  <div class="ft-b"><span>© 2026 LiveSpace</span><span>${CAFES.some(hasMeasurements) ? 'Демо болон бодит хэмжилтийг тус тусад нь тэмдэглэсэн' : 'Прототип · бүх утга демо өгөгдөл'}</span></div></div></footer>`}
@@ -234,6 +242,8 @@ function plantSVG(w, flip) { return `<svg width="${w}" viewBox="0 0 120 170" sty
 function renderHome() {
   const open = CAFES.filter(c => c.open), measured = open.filter(c => freePct(c) != null); const avg = measured.length ? Math.round(measured.reduce((s, c) => s + freePct(c), 0) / measured.length) : '—'; const good = open.filter(c => c.wifi >= 3).length;
   const stat = (n, l) => `<b class="num" data-count="${n}">${n}</b><span>${l}</span>`;
+  // Phones and desktops show different home layouts (styles/livespace.css); only the visible one is built.
+  const mob = isMobile();
   app.innerHTML = `<div class="page">
  <section class="hero" aria-label="LiveSpace">
   <div class="hero-bar"></div>
@@ -252,9 +262,9 @@ function renderHome() {
   <div class="deco" style="left:5%">${plantSVG(120)}</div><div class="deco" style="left:15%">${plantSVG(70, 1)}</div>
   <div class="deco deco-table" style="right:6%;bottom:0"><svg width="170" viewBox="0 0 170 180"><path d="M70 38h30v12a15 15 0 0 1-30 0z" fill="#FFF9EC" stroke="#3E2A17" stroke-width="4"/><path d="M100 41h5a6 6 0 0 1 0 12h-5" fill="none" stroke="#3E2A17" stroke-width="4"/><ellipse cx="85" cy="72" rx="80" ry="13" fill="#B6771D"/><rect x="79" y="78" width="12" height="80" fill="#B6771D"/><path d="M47 180a38 20 0 0 1 76 0z" fill="#B6771D"/></svg></div>
  </section>
- ${mobileHomeHTML({ cafes: CAFES })}
+ ${mob ? mobileHomeHTML({ cafes: CAFES }) : ''}
  <div class="wrap">
-  ${deskRecHTML()}
+  ${mob ? '' : deskRecHTML()}
   <section class="sec"><div class="sec-h"><h2>Ойролцоох кафенууд</h2><p>Танд хамгийн ойр 6 кафе</p></div>
    <div class="cgrid">${[...CAFES].sort((a, b) => parseFloat(a.dist) * (a.dist.includes('км') ? 1000 : 1) - parseFloat(b.dist) * (b.dist.includes('км') ? 1000 : 1)).slice(0, 6).map(cafeCard).join('')}</div>
    <div style="text-align:center;margin-top:28px"><a class="btn btn-o" href="#cafes">Бүх кафе харах →</a></div></section>
@@ -264,12 +274,15 @@ function renderHome() {
   <div class="band"><div><h2>Кафе эзэмшигч үү?</h2><p>Кафегаа LiveSpace-д нэмж, илүү олон зочинд хүрээрэй.</p></div><a class="btn btn-y" href="#partner">Хамтран ажиллах →</a></div>
  </div>${footer()}</div>`;
   // The home map is only a preview of the illustration: the real map with its pins opens on #explore.
-  homeMini = buildMap($('#miniMap'), { interactive: false, markers: false });
+  // Phones hide the desktop hero, so its drawing (≈540 SVG nodes) is not built there.
+  if (!mob) homeMini = buildMap($('#miniMap'), { interactive: false, markers: false });
   $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.hsearch')) { Snd.ui('whoosh'); location.hash = 'explore' } });
   const search = q => { F.q = q; const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
   $('#hs').onsubmit = e => { e.preventDefault(); search($('#hq').value.trim()) };
   homeMobileOff = bindMobileHome($('.mhome'), { cafes: CAFES, onSearch: search });
   deskRecOff = bindDeskRec($('.drec'), { cafes: CAFES });
+  // Sections scrolled out of view stop animating (no visible change; saves repaints every frame).
+  homeOffscreenOff = pauseOffscreen([$(".hero"), $(".cgrid"), $(".ss-row")]);
   // Phones scroll the five noise cards sideways; the dots under them show which one is in view.
   const ssRow = $('.ss-row'); let ssFrame;
   ssRow.addEventListener('scroll', () => { if (ssFrame === undefined) ssFrame = pageTasks.frame(() => { ssFrame = undefined; const cards = $$('.ss-card', ssRow), x = ssRow.scrollLeft + 16; let k = 0; cards.forEach((c, i) => { if (Math.abs(c.offsetLeft - x) < Math.abs(cards[k].offsetLeft - x)) k = i }); if (ssRow.scrollLeft + ssRow.clientWidth >= ssRow.scrollWidth - 4) k = cards.length - 1; $$('.ss-dots i').forEach((d, i) => d.classList.toggle('on', i === k)) }) }, { passive: true });
@@ -437,7 +450,7 @@ function buildCafe(c) {
  ${dataMode(c) !== 'demo' ? '<section class="card" id="publicSensorHistory"></section>' : ''}
  </div>${footer()}</div>`;
   if ($('#publicSensorHistory')) sensorHistoryView = mount(SensorHistory, $('#publicSensorHistory'), { cafeId: c.id, source: c.live?.sensor?.dataSource || 'real', role: 'public' });
-  mountCust(GoingPanel, $('#goingPanel'), { cafe: c }); mountCust(MenuSection, $('#cafeMenu'), { cafeId: c.id });
+  mountCust(lazy.going, $('#goingPanel'), { cafe: c }); mountCust(lazy.menuView, $('#cafeMenu'), { cafeId: c.id });
   if (!c.open) return;
   syncDetailNoise(c); renderWF(c.wifi, c);
   // floor plan
@@ -595,9 +608,14 @@ function renderPartner() {
  <section class="sec"><div class="sec-h"><h2>Хамтран ажилласнаар</h2></div><div class="g4">${[[I.people, 'Илүү олон хэрэглэгч', 'Сурах, ажиллах газар хайж буй хэрэглэгчдэд таны кафе газрын зураг дээр харагдана.'], [I.clock, 'Бодит цагийн мэдээлэл', 'Сул суудал, дуу чимээ, Wi-Fi-гаа хэрэглэгчиддээ шууд харуулна.'], [I.chart, 'Ачааллын тойм', 'Өдрийн аль цагт ачаалал ихтэй, тайван байдгийг харж, үйлчилгээгээ төлөвлөнө.'], [I.star, 'Брэндээ таниулах', 'Кафены онцлог, тав тухтай орчноо олон хүнд таниулна.']].map(([ic, b, s]) => `<div class="icard"><span class="ic">${ic}</span><b>${b}</b><span>${s}</span></div>`).join('')}</div>
   <p style="text-align:center;margin-top:18px"><a class="btn btn-o" href="#staff">Ажилтны шууд хяналтыг үзэх →</a></p></section>
  <section class="sec" id="pform"><div class="sec-h"><h2>Хамтран ажиллах хүсэлт</h2></div>
- ${pendingClaimHTML()}
- ${partnerFormHTML()}</section></div>${footer()}</div>`;
-  partnerCleanup = bindPartnerForm($('#pf'));
+ <div id="pformBody"><div class="skel" style="height:420px"></div></div></section></div>${footer()}</div>`;
+  // The application form (photos, validation, owner sign-up) loads with this page only.
+  const token = navToken;
+  lazy.partner().then(({ pendingClaimHTML, partnerFormHTML, bindPartnerForm }) => {
+    if (token !== navToken) return;
+    $('#pformBody').outerHTML = pendingClaimHTML() + partnerFormHTML();
+    partnerCleanup = bindPartnerForm($('#pf'));
+  }).catch(() => { if (token === navToken) $('#pformBody').innerHTML = '<p class="muted">Маягтыг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.</p>' });
 }
 
 /* ---------- staff ---------- */
@@ -627,7 +645,7 @@ function renderStaff() {
    <small style="color:#BFAE95">Тоног төхөөрөмжийг удирдахгүй — зөвхөн ажилтанд санал болгоно.</small></section>
  </div></div>
  <div class="st-cust"><section class="card" id="stIncoming" aria-label="Ирэх зочид"></section><section class="card" id="stMenu" aria-label="Цэс засах"></section></div></div>${footer()}</div>`;
-  mountCust(IncomingOrders, $('#stIncoming'), { cafeId: c.id }); mountCust(MenuEditor, $('#stMenu'), { cafeId: c.id, editor: 'staff' });
+  mountCust(lazy.incoming, $('#stIncoming'), { cafeId: c.id }); mountCust(lazy.menuEditor, $('#stMenu'), { cafeId: c.id, editor: 'staff' });
   fp = new FloorPlan($('#planWrap'), { ...c, occ: 78 }, { sound: 4, onStats: s => { const pct = Math.round((s.total - s.free) / s.total * 100); $('#occC').style.strokeDashoffset = 377 - 377 * pct / 100; animNum($('#occT'), pct, '%'); $('#stFree').textContent = Math.round(s.free / s.total * 100) + '%' } });
   const ts = [{ t: 'Wi-Fi ажиллахгүй', e: '2 цаг' }]; let exp = '2 цаг';
   const rts = () => { $('#tsList').innerHTML = ts.length ? ts.map((x, i) => `<div class="tstat"><div><b>${x.t}</b><small>${x.e}-ийн дараа автоматаар дуусна</small></div><button class="btn btn-g" data-tsx="${i}" style="color:var(--terraT)">Цуцлах</button></div>`).join('') : '<small class="muted">Идэвхтэй түр төлөв алга.</small>'; $$('[data-tsx]').forEach(b => b.onclick = () => { ts.splice(+b.dataset.tsx, 1); Snd.ui('click'); rts() }) }; rts();
@@ -643,8 +661,13 @@ function renderStaff() {
 // the original pages keep their render functions. Every navigation first releases
 // the previous page's timers, frames, simulation, map, audio and listeners.
 const page = (Component, props) => () => { app.innerHTML = ''; pageComp = mount(Component, app, props) };
+const lazyPage = (load, props) => () => {
+  const token = navToken; app.innerHTML = '<div class="wrap page"><div class="skel" style="height:150px;margin-top:24px"></div></div>';
+  load().then(Component => { if (token === navToken) { app.innerHTML = ''; pageComp = mount(Component, app, props) } }).catch(() => { if (token === navToken) app.innerHTML = loadFailed() });
+};
 function teardown() {
-  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; dropCust(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } if (homeMobileOff) { homeMobileOff(); homeMobileOff = null } if (deskRecOff) { deskRecOff(); deskRecOff = null } refreshResults = () => { }; closeModal();
+  navToken++;
+  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; dropCust(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } if (homeMobileOff) { homeMobileOff(); homeMobileOff = null } if (deskRecOff) { deskRecOff(); deskRecOff = null } if (homeOffscreenOff) { homeOffscreenOff(); homeOffscreenOff = null } refreshResults = () => { }; closeModal();
   if (pageComp) { pageComp.destroy(); pageComp = null } if (partnerCleanup) { partnerCleanup(); partnerCleanup = null } cdCafe = null;
 }
 const router = createRouter({
@@ -667,8 +690,8 @@ const router = createRouter({
     { path: 'partner', name: 'partner', enter: renderPartner },
     { path: 'staff', name: 'staff', enter: renderStaff },
     { path: 'account', name: 'account', enter: page(AccountPage, { favorites: () => [...favs].map(byId).filter(Boolean), cafeCard }) },
-    { path: 'owner', name: 'owner', enter: page(OwnerPage) },
-    { path: 'admin', name: 'admin', enter: page(AdminPage) }
+    { path: 'owner', name: 'owner', enter: lazyPage(lazy.owner) },
+    { path: 'admin', name: 'admin', enter: lazyPage(lazy.admin) }
   ]
 });
 const route = () => router.resolve();
@@ -676,8 +699,8 @@ const route = () => router.resolve();
 // opened directly from a link, it goes to the map.
 document.addEventListener('click', e => { if (e.target.closest('[data-back]') && navDepth > 1) { e.preventDefault(); Snd.ui('click'); history.back() } });
 document.addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute('href') === '#pform') { e.preventDefault(); $('#pform').scrollIntoView({ behavior: Prefs.reduced ? 'auto' : 'smooth' }); return } if (a && !e.defaultPrevented) { Snd.ui('click') } });
-document.addEventListener('click', e => { if (e.target.closest('[data-owner-signup]')) { Snd.ui('whoosh'); openOwnerSignup() } });
-let lastMobile = isMobile(); window.addEventListener('resize', () => { const m = isMobile(); if (m !== lastMobile) { lastMobile = m; if ((location.hash || '').startsWith('#explore')) route() } });
+document.addEventListener('click', e => { if (e.target.closest('[data-owner-signup]')) { Snd.ui('whoosh'); lazy.partner().then(m => m.openOwnerSignup()) } });
+let lastMobile = isMobile(); window.addEventListener('resize', () => { const m = isMobile(); if (m !== lastMobile) { lastMobile = m; const h = location.hash || ''; if (h.startsWith('#explore') || h === '' || h === '#' || h.startsWith('#home')) route() } });
 document.documentElement.classList.toggle('rm', Prefs.reduced);
 configureErrors({ message: 'Энэ хэсгийг харуулахад алдаа гарлаа. Хуудсаа дахин ачаална уу.', render: message => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">${escapeHTML(message)}</p></div></div>` });
 
