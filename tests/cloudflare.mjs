@@ -46,9 +46,9 @@ try {
   const {readFileSync}=await import('node:fs');const image='data:image/jpeg;base64,'+readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)).toString('base64');
   result=await api(base+'/products/'+product.id+'/image','PUT',{version:product.version,image});assert.equal(result.res.status,200,JSON.stringify(result.data));product=result.data.item;
   assert.equal((await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image')).status,404);
-  const privateImage=await fetch(origin+'/api/v1'+base+'/products/'+product.id+'/image',{headers:{cookie}});assert.equal(privateImage.status,200);assert.equal(privateImage.headers.get('content-type'),'image/jpeg');
+  const privateImage=await fetch(origin+'/api/v1'+base+'/products/'+product.id+'/image',{headers:{cookie}});assert.equal(privateImage.status,200);assert.equal(privateImage.headers.get('content-type'),'image/jpeg');assert.deepEqual(Buffer.from(await privateImage.arrayBuffer()),readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)));
   assert.equal((await api(base+'/products/'+product.id,'PATCH',{version:product.version,published:true})).res.status,200);
-  assert.equal((await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image')).status,200);
+  const publicImage=await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image');assert.equal(publicImage.status,200);assert.deepEqual(Buffer.from(await publicImage.arrayBuffer()),readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)));assert.match(publicImage.headers.get('etag'),/^"d1-v2-/);const oldEtag='"'+(await import('node:crypto')).createHash('sha256').update(readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url))).digest('hex')+'"';const refreshed=await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image',{headers:{'If-None-Match':oldEtag}});assert.equal(refreshed.status,200);assert.deepEqual(Buffer.from(await refreshed.arrayBuffer()),readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)));
  });
  await check('Phase 11B inventory D1 retry, authorization and public browser delta',async()=>{
   const menuBase='/owner/cafes/menu-cf/menu',stock='/owner/cafes/menu-cf/inventory';
@@ -278,7 +278,15 @@ try {
   assert.equal(await rejectionStatus(openRoom('A','admin',ownerCookie)),403);
   const pub=openRoom('A','public',''),priv=openRoom('A','admin');
   try{const first=await pub.next(),privateFirst=await priv.next();assert.equal(first.type,'live.snapshot');assert.equal(first.data.id,'A');assert.ok(!('diagnostics'in first));assert.ok(Array.isArray(privateFirst.diagnostics));
-   const pong=once(pub.ws,'message');pub.ws.send('ping');assert.equal((await pong)[0].toString(),'pong');
+   // Unsolicited public snapshots may arrive while automatic pong is in flight.
+   // Require a bounded pong and validate every interleaved frame's scope/privacy.
+   const pong=new Promise((resolve,reject)=>{
+    const cleanup=()=>{clearTimeout(timer);pub.ws.off('message',onMessage);pub.ws.off('error',onError);};
+    const onError=e=>{cleanup();reject(e);};
+    const onMessage=bytes=>{try{const value=bytes.toString();if(value==='pong'){cleanup();resolve(value);return;}const snapshot=JSON.parse(value);assert.equal(snapshot.type,'live.snapshot');assert.equal(snapshot.data.id,'A');assert.ok(!('diagnostics' in snapshot));}catch(e){cleanup();reject(e);}};
+    const timer=setTimeout(()=>{cleanup();reject(Error('Automatic pong deadline'));},5000);
+    pub.ws.on('message',onMessage);pub.ws.on('error',onError);
+   });pub.ws.send('ping');assert.equal(await pong,'pong');
    const revoked=new Promise(resolve=>priv.ws.once('close',resolve));
    const hashed=(await import('../cloudflare/core.mjs')).sha(cookie.slice('ls_session='.length));
    cli('d1','execute','livespace','--local','--command',"DELETE FROM sessions WHERE token_hash='"+hashed+"'");

@@ -7,7 +7,7 @@ import {phase11Config} from '../shared/business/phase11-config.mjs';
 import {createInsights,safeCsv} from '../shared/business/insights.mjs';
 import {businessFixture,fail,id} from './support/business.mjs';
 const options=phase11Config({LS_ANALYTICS_MIN_COHORT:'3'}),now=Date.parse('2026-11-17T03:00:00Z');
-function store(){const db=new DatabaseSync(':memory:');const sql={exec(q,...a){const s=db.prepare(q);return s.columns().length?s.all(...a):(s.run(...a),[]);}},ctx={storage:{sql,transactionSync(fn){db.exec('BEGIN');try{const r=fn();db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}}}};initializeAnalytics(sql);return {db,ctx};}
+function store(){const db=new DatabaseSync(':memory:');const sql={exec(q,...a){const s=db.prepare(q);return s.all(...a);}},ctx={storage:{sql,transactionSync(fn){db.exec('BEGIN');try{const r=fn();db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}}}};initializeAnalytics(sql);return {db,ctx};}
 function sink(f){return {prepare:q=>({bind:(...args)=>({q,args})}),batch:async entries=>{f.db.exec('BEGIN');try{const rows=entries.map(e=>{f.db.prepare(e.q).run(...e.args);return {meta:{}};});f.db.exec('COMMIT');return rows;}catch(e){f.db.exec('ROLLBACK');throw e;}}};}
 const input=(id='event-v20001',type='cafe_view')=>({schemaVersion:2,cafeId:'a',events:[{id,type}]});
 test('v2 analytics validates minimal payloads, uses server time and cafe-scoped pseudonyms',()=>{

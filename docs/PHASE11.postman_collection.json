@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "LiveSpace Phase 11A local checkpoint",
+    "name": "LiveSpace Phase 11 readiness checkpoint",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Local menu integration only. Use existing login to establish cookie. Never point demonstrations at production."
+    "description": "A-H backend and operational readiness; local synthetic fixtures only. Do not target production."
   },
   "variable": [
     {
@@ -1046,6 +1046,13 @@
           "mode": "raw",
           "raw": "{\n  \"promotion\": false\n}"
         }
+      }
+    },
+    {
+      "name": "Minimal operational readiness (local)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/ready"
       }
     }
   ]

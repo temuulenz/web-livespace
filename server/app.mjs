@@ -1,3 +1,4 @@
+import {operationalLog,requestId,routeGroup,readiness} from '../shared/operations.mjs';
 import * as phase11Routes from './routes/phase11.mjs';
 import {createPhase11} from '../shared/business/phase11.mjs';
 import {createRuntimeMetrics,requestCafe,protectRequest} from '../shared/business/resources.mjs';
@@ -60,9 +61,11 @@ export async function createApp(config) {
     const ctx = { req, res, url, path: url.pathname, method: req.method, query: Object.fromEntries(url.searchParams), params: {}, cookies: parseCookies(req.headers.cookie) };
     ctx.ip = (config.trustProxy && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress || '';
     for (const [key, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(key, value);
-    const requestStart=performance.now();if(ctx.path.startsWith('/api/'))res.once('finish',()=>metrics.record(requestCafe(ctx.path),res.statusCode,performance.now()-requestStart));
+    const requestStart=performance.now(),correlation=requestId();res.setHeader('X-Request-ID',correlation);
+    if(ctx.path.startsWith('/api/'))res.once('finish',()=>{const elapsed=performance.now()-requestStart;metrics.record(requestCafe(ctx.path),res.statusCode,elapsed);if(config.requestLogs||res.statusCode>=500)operationalLog('http_request',{request_id:correlation,route:routeGroup(ctx.path),status:res.statusCode,duration_ms:elapsed,runtime:'node'},config.logSink);});
     try {
       if (ctx.path.startsWith('/api/')) {
+        if(ctx.path==='/api/v1/ready'&&ctx.method==='GET'){deps.limit('readiness:'+ctx.ip,30,60000);const value=await readiness(sql);sendJson(res,value.ready?200:503,value);return;}
         ctx.user = deps.sessions.user(ctx.cookies[SESSION_COOKIE]);
         protectRequest(ctx.path,ctx.user,ctx.ip,deps.limit,config.phase11);
         if (ctx.method !== 'GET' && ctx.method !== 'HEAD' && !ctx.path.startsWith('/api/v1/ingest/')) sameOrigin(ctx);
@@ -72,7 +75,6 @@ export async function createApp(config) {
       if (await serveStatic(ctx)) return;
       sendJson(res, 404, { error: { code: 'not_found', message: 'Not found' } });
     } catch (error) {
-      if (!(error instanceof HttpError)) console.error(error);
       sendError(res, error);
     }
   }
@@ -80,9 +82,16 @@ export async function createApp(config) {
   const server = createServer(handle);
   deps.sensors = createSensorService(deps);
   deps.sensorGateway = createSensorGateway(server, deps);
-  const purge = setInterval(() => deps.sessions.purge(), 3600 * 1000); purge.unref();
+  const purge = setInterval(() => {try{deps.sessions.purge();}catch{operationalLog('background_failure',{runtime:'node',job:'sessions'},config.logSink);}}, 3600 * 1000); purge.unref();
   let running=false;
-  const maintenance=setInterval(async()=>{if(running)return;running=true;try{await deps.behavior.maintenance();await deps.phase11.maintenance();metrics.job();}catch{metrics.job(true);}finally{running=false;}},30000);maintenance.unref();
+  // Optional collector failure must not prevent the independent inbox/resource pass.
+  deps.runMaintenance=async()=>{
+    let failed=false;
+    try{await deps.behavior.maintenance();}catch{failed=true;operationalLog('background_failure',{runtime:'node',job:'analytics_flush'},config.logSink);}
+    try{await deps.phase11.maintenance();}catch{failed=true;operationalLog('background_failure',{runtime:'node',job:'maintenance'},config.logSink);}
+    metrics.job(failed);
+  };
+  const maintenance=setInterval(async()=>{if(running)return;running=true;try{await deps.runMaintenance();}finally{running=false;}},30000);maintenance.unref();
   let closePromise;
   return {
     server, deps,

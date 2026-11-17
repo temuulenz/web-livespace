@@ -1,5 +1,7 @@
 # Phase 11 engineering report — A–H
 
+Current readiness follow-up: [PHASE11_PRODUCTION_READINESS.md](PHASE11_PRODUCTION_READINESS.md) records subsequent local fixes/recovery/staging validation and the remaining production NO-GO gates. Counts/findings in this earlier report remain dated evidence.
+
 Status: local backend implementation and validation complete against PHASE11_ACCEPTANCE.md. Final evidence is in PHASE11_PROGRESS.md. This report supersedes the historical A–D checkpoint and its resolved missing-policy blocker. Existing frontend work, original styles/fixtures and Android v1 wire behavior were preserved. No deployment, production database/resource change, paid service, Git branch/index/commit/push/merge operation or frontend redesign was performed.
 
 ## Completion matrix

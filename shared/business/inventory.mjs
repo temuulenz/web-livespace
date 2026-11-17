@@ -1,4 +1,4 @@
-import {businessCommon,payloadHash} from './common.mjs';
+import {businessCommon,payloadHash,businessWriteEntries} from './common.mjs';
 export function createInventoryService({sql,fail,id,clock=()=>new Date().toISOString(),afterCommit=async()=>{}}){
  const c=businessCommon({sql,fail});
  const reasons=['restock','manual_adjustment','correction','waste'];
@@ -61,7 +61,7 @@ export function createInventoryService({sql,fail,id,clock=()=>new Date().toISOSt
    }
    const response={items:results,duplicate:false};
    entries.push(['INSERT INTO inventory_receipts(cafe_id,request_id,actor_id,payload_hash,response,at) VALUES(?,?,?,?,?,?)',cafe,input.idempotency_key,user.id,hash,JSON.stringify(response),at]);
-   try{await sql.batch(entries);}catch(e){const saved=await sql.first('SELECT * FROM inventory_receipts WHERE cafe_id=? AND request_id=?',cafe,input.idempotency_key);if(saved)return replay(saved);throw e;}
+   try{await sql.batch(businessWriteEntries(entries,cafe,user,id('audit'),at));}catch(e){const saved=await sql.first('SELECT * FROM inventory_receipts WHERE cafe_id=? AND request_id=?',cafe,input.idempotency_key);if(saved)return replay(saved);throw e;}
    // Persistence and all movement/audit/receipt writes have committed before fan-out.
    try{const revision=(await sql.first('SELECT revision FROM inventory_revisions WHERE cafe_id=?',cafe))?.revision||0;const eligible=await c.cafe(cafe,null,true);if(eligible){const items=(await publicRows(cafe,{limit:'100'},results.map(({product_id,variant_id})=>({product_id,variant_id})))).items;await afterCommit({type:'inventory.changed',schemaVersion:1,cafe_id:cafe,revision,items,snapshot_url:`/api/v1/cafes/${encodeURIComponent(cafe)}/inventory`});}}catch{/* Best effort: snapshot recovery remains authoritative. */}
    return response;

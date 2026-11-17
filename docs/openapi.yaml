@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "LiveSpace Phase 11 backend API",
-    "version": "11-local-complete",
-    "description": "Phase 11 A\u2013H backend APIs implemented and locally validated against PHASE11_ACCEPTANCE.md. Separate deployment review required; no production authorization. Full privacy, role, time, data-source and unavailable-metric semantics in feature guides."
+    "version": "11-readiness-local",
+    "description": "Phase 11 A\u2013H backend APIs implemented and locally validated against PHASE11_ACCEPTANCE.md. Separate deployment review required; no production authorization. Full privacy, role, time, data-source and unavailable-metric semantics in feature guides. Operational readiness is locally validated; production remains NO-GO pending PHASE11_PRODUCTION_READINESS.md."
   },
   "servers": [
     {
@@ -4932,6 +4932,70 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/ready": {
+      "get": {
+        "summary": "Minimal uncached Phase 11 schema/binding readiness",
+        "description": "No tenant/SQL/private diagnostics. Not a full dependency, job or storage integrity check. See PHASE11_MONITORING_RUNBOOK.md. X-Request-ID is server generated.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ready",
+                    "api"
+                  ],
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "api": {
+                      "type": "string",
+                      "enum": [
+                        "1"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unavailable or missing required schema/bindings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ready",
+                    "api"
+                  ],
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "api": {
+                      "type": "string",
+                      "enum": [
+                        "1"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Readiness probe limit: 30 requests per client IP per minute per runtime"
           }
         }
       }

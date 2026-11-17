@@ -11,7 +11,7 @@ export function createBehaviorBackend(db,config){
   if(stores.has(cafe))return stores.get(cafe);
   const file=join(directory,createHash('sha256').update(cafe).digest('hex')+'.sqlite');if(!create&&!existsSync(file))return null;
   mkdirSync(directory,{recursive:true});const local=new DatabaseSync(file);local.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=3000');
-  const sql={exec(q,...a){const stmt=local.prepare(q);return stmt.columns().length?stmt.all(...a):(stmt.run(...a),[]);}},ctx={storage:{sql,transactionSync:fn=>transaction(local,fn)}};initializeAnalytics(sql);
+  const sql={exec(q,...a){const stmt=local.prepare(q);return stmt.all(...a);}},ctx={storage:{sql,transactionSync:fn=>transaction(local,fn)}};initializeAnalytics(sql);
   // Eviction closes only durable stores; no uncommitted counters are lost.
   if(stores.size>=16){const key=stores.keys().next().value;stores.get(key).local.close();stores.delete(key);}
   const value={ctx,local,tail:Promise.resolve()};stores.set(cafe,value);return value;

@@ -1,3 +1,4 @@
+import {operationalLog} from '../shared/operations.mjs';
 import {validateBehavior,authorizeBehaviorTargets} from '../shared/business/behavior.mjs';
 import {phase11Config} from '../shared/business/phase11-config.mjs';
 import {first as dbFirst} from './core.mjs';
@@ -21,7 +22,7 @@ export class AnalyticsAggregator extends DurableObject {
  async alarm(){
   if(this.env.LS_ANALYTICS_ENABLED!=='1')return; // durable pending counters retained, no optional retry traffic
   try{const r=await this.flush();await setMeasuredAlarm(this.ctx,this.sqlMetrics,Date.now()+(r.pending?1000:86400000));}
-  catch(e){await setMeasuredAlarm(this.ctx,this.sqlMetrics,Date.now()+(isQuotaError(e)?3600000:900000));}
+  catch(e){operationalLog('background_failure',{runtime:'cloudflare',job:'analytics_flush'});await setMeasuredAlarm(this.ctx,this.sqlMetrics,Date.now()+(isQuotaError(e)?3600000:900000));}
  }
 }
 // Future owner interface: bounded summaries, never raw receipts or visitor data.

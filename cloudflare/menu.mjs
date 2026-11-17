@@ -1,4 +1,4 @@
-import {createMenuStorage} from './menu-media-storage.mjs';
+import {createMenuStorage,menuImageEtag} from './menu-media-storage.mjs';
 import {businessSqlError} from '../shared/business/sql-errors.mjs';
 import {createMenuMedia} from '../shared/business/menu-media.mjs';
 import {mediaResponse} from './media.mjs';
@@ -17,7 +17,7 @@ export async function menuRoute(req,env,limit) {
  if(imageMatch){
   const media=createMenuMedia({sql,menu,id,fail,storage:createMenuStorage(env)});
   const user=owner?await session(env.DB,req):null;
-  if(req.method==='GET'){const {image,body:value}=await media.read(cafe,entity,user,!owner);return mediaResponse(req,{mime:image.mime,visibility:'private'},{body:value,etag:'"'+image.sha256+'"'});}
+  if(req.method==='GET'){const {image,body:value}=await media.read(cafe,entity,user,!owner);return mediaResponse(req,{mime:image.mime,visibility:'private'},{body:value,etag:menuImageEtag(image)});}
   if(owner&&['PUT','DELETE'].includes(req.method))return json({item:await media[req.method==='PUT'?'replace':'remove'](cafe,entity,await body(req,1450000),user)});
   fail(405,'method_not_allowed','Method not allowed');
  }

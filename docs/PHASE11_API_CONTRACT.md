@@ -10,9 +10,10 @@ All eight backend subphases are implemented locally against PHASE11_ACCEPTANCE.m
 | [PROMOTIONS.md](PROMOTIONS.md) | Rules/targets/schedules, owner preview, deterministic prices, publication and cache-time evaluation |
 | [BEHAVIOR_ANALYTICS.md](BEHAVIOR_ANALYTICS.md) | V2 session/intake, safe owner/admin day/week/month reports, comparisons/CSV, cohort suppression and legacy v1 compatibility |
 | [NOTIFICATIONS.md](NOTIFICATIONS.md) | Current-recipient inbox/unread/read/preferences, domain outbox, recipient/marketing policy, cooldowns and budgets |
+| [PHASE11_MONITORING_RUNBOOK.md](PHASE11_MONITORING_RUNBOOK.md) | Minimal readiness/correlation and operational metric semantics |
 | [RESOURCE_CONTROLS.md](RESOURCE_CONTROLS.md) | Cafe/admin usage, measured/unavailable diagnostics, configuration, optional-work pause and bounded maintenance |
 
-[openapi.yaml](openapi.yaml) uses JSON syntax valid as YAML 1.2 and contains 70 operations across 53 paths. [PHASE11.postman_collection.json](PHASE11.postman_collection.json) contains 71 requests including existing login, with local fixture placeholders. The linked feature guides define full request/response/role/error/source/cache/retention semantics and examples.
+[openapi.yaml](openapi.yaml) uses JSON syntax valid as YAML 1.2 and contains 71 operations across 54 paths. [PHASE11.postman_collection.json](PHASE11.postman_collection.json) contains 72 requests including existing login, with local fixture placeholders. The linked feature guides define full request/response/role/error/source/cache/retention semantics and examples.
 
 Private APIs reuse current cookie sessions and authoritative cafe/author/admin/recipient checks. Same-origin writes, prepared SQL, strict payload whitelists, bounded bodies/rates/pages and atomic version/audit/idempotency guards remain server-side. No client-provided actor/ownership/recipient is trusted. Public projections omit credentials, private diagnostics and individual behavior; low analytics cohorts/keys never enter CSV. No researcher role/raw behavior export, orders/payments/sales conversion API or external messaging provider was introduced.
 

@@ -1,0 +1,19 @@
+{
+  "status": "proposed_operator_template_not_connected_to_a_paging_service",
+  "interval_seconds": 60,
+  "probe_timeout_seconds": 10,
+  "public_probes": ["/api/v1/health", "/api/v1/ready"],
+  "private_probe": "/api/v1/admin/resources/monitor",
+  "privacy": "Store only fixed-schema operational fields. Never capture request bodies, query strings, cookies, credentials, SQL or exception text.",
+  "rules": [
+    {"name": "readiness", "critical_after_consecutive_failures": 2, "owner": "on-call operator"},
+    {"name": "server_error_rate", "window_seconds": 300, "minimum_requests": 100, "warning_fraction": 0.01, "critical_fraction": 0.05, "calculation": "delta server_errors / delta requests; reset baseline on runtime restart", "owner": "backend on-call"},
+    {"name": "api_latency_p95", "warning_ms": 500, "critical_ms": 2000, "semantics": "recent 256 samples, not provider CPU", "owner": "backend on-call"},
+    {"name": "maintenance_freshness", "node_critical_after_seconds": 120, "cloudflare_critical_after_seconds": 1200, "unknown_requires_investigation": true, "owner": "on-call operator"},
+    {"name": "background_failures", "critical_on_positive_counter_delta": true, "owner": "backend on-call"},
+    {"name": "notification_overdue_seconds", "warning": 300, "critical": 1800, "semantics": "proposed pilot alert bounds; not a delivery SLA", "owner": "backend on-call"},
+    {"name": "application_quota", "warning_percent": 70, "critical_percent": 90, "hard_percent": 100, "owner": "backend on-call"},
+    {"name": "provider_daily_budget", "warning_percent": 70, "critical_percent": 90, "source": "operator-configured account provider metrics, not application estimates", "owner": "Cloudflare account operator"},
+    {"name": "backup_freshness", "status": "requires approved backup cadence and RPO", "owner": "release/database operator"}
+  ]
+}

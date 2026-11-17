@@ -10,7 +10,7 @@
 
 Node startup applies ordered transaction-wrapped migrations from server/lib/db.mjs. D1 files are applied only to disposable local persistence in validation. No remote migrations were run. Promotion schema is shared verbatim with D1, verified by a parity test. It adds tenant-scoped promotions, composite product/category references, an indexed publication/schedule lookup and an atomic 100-rule tenant capacity trigger. Existing tables and stable menu IDs remain compatible; no destructive migration or data reseed.
 
-The pre-Android v1 fixture is unchanged. Its upgrade test now expects Node version 9. Before a separately authorized deployment, inspect current remote migration state, back up and rehearse additive upgrades on representative data; retain all cumulative Durable Object migrations and media read bindings. Recovery means compatible code/feature shutdown retaining additive data, never down-migration or dropping tables. New code that projects promotions requires migration 0013 before serving menu requests.
+The pre-Android v1 fixture is unchanged. The current upgrade test expects Node schema 12; the earlier version-9 checkpoint is superseded by the E–H extension below. Before a separately authorized deployment, inspect current remote migration state, back up and rehearse additive upgrades on representative data; retain all cumulative Durable Object migrations and media read bindings. Recovery means compatible code/feature shutdown retaining additive data, never down-migration or dropping tables. New code that projects promotions requires migration 0013 before serving menu requests.
 
 ## E–H approved extension
 

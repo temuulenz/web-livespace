@@ -1,3 +1,4 @@
+import {operationalLog,requestId,routeGroup,readiness} from '../shared/operations.mjs';
 import {phase11Route,phase11Service} from './phase11.mjs';
 import {runtimeMetrics,requestCafe,protectRequest} from '../shared/business/resources.mjs';
 import {analyticsSession,analyticsCookie,validateBehavior} from '../shared/business/behavior.mjs';
@@ -231,11 +232,20 @@ export class AppBackend extends DurableObject {
  // response or authorization decision enters the public cache.
  constructor(ctx,env) { super(ctx,env);this.ctx=ctx;this.env=env;this.cache=new Map();this.historyCache=new Map();this.pending=new Map();this.quotaUntil=0;this.generation=0;this.profiles=new PublicProfileCache({kv:env.PUBLIC_CACHE,storage:ctx.storage,enabled:env.LS_KV_PUBLIC_ENABLED==='1'}); }
  async fetch(req) {
-  const start=performance.now(),path=new URL(req.url).pathname;
-  let response;try{response=await this.fetchInternal(req);return response;}finally{runtimeMetrics.record(requestCafe(path),response?.status||500,performance.now()-start);}
+  const start=performance.now(),path=new URL(req.url).pathname,correlation=requestId();
+  let response;try{response=await this.fetchInternal(req);}catch(e){response=error(e);}
+  const elapsed=performance.now()-start;runtimeMetrics.record(requestCafe(path),response.status,elapsed);
+  if(this.env.LS_REQUEST_LOGS==='1'||response.status>=500)operationalLog('http_request',{request_id:correlation,route:routeGroup(path),status:response.status,duration_ms:elapsed,runtime:'cloudflare'});
+  const result=new Response(response.body,response);result.headers.set('X-Request-ID',correlation);return result;
  }
- async alarm(){let delay=900000;try{const result=await phase11Service(this.env).maintenance();if(result?.more_tenants)delay=1000;else if(result?.next_due)delay=Math.max(1000,Math.min(900000,Date.parse(result.next_due)-Date.now()));runtimeMetrics.job();}catch{runtimeMetrics.job(true);}finally{await this.ctx.storage.setAlarm(Date.now()+delay);}}
+ async alarm(){let delay=900000;try{const result=await phase11Service(this.env).maintenance();if(result?.more_tenants)delay=1000;else if(result?.next_due)delay=Math.max(1000,Math.min(900000,Date.parse(result.next_due)-Date.now()));runtimeMetrics.job();}catch{runtimeMetrics.job(true);operationalLog('background_failure',{runtime:'cloudflare',job:'maintenance'});}finally{await this.ctx.storage.setAlarm(Date.now()+delay);}}
  async fetchInternal(req) {
+  if(new URL(req.url).pathname==='/api/v1/ready'&&req.method==='GET'){
+   limit('readiness:'+(req.headers.get('cf-connecting-ip')||'local'),30,60000);
+   let validConfig=true;try{phase11Config(this.env);}catch{validConfig=false;}
+   const readyBindings=validConfig&&!!(this.env.DB&&this.env.SENSORS&&this.env.BACKEND)&&(! (this.env.LS_ANALYTICS_ENABLED==='1')||!!this.env.ANALYTICS)&&(!(this.env.LS_BROWSER_REALTIME_ENABLED==='1')||!!this.env.BROWSER_ROOMS)&&(!(this.env.LS_R2_MEDIA_ENABLED==='1')||!!this.env.MEDIA)&&(!(this.env.LS_KV_PUBLIC_ENABLED==='1')||!!this.env.PUBLIC_CACHE);
+   const value=await readiness({first:(q,...a)=>first(this.env.DB,q,...a)},readyBindings);return json(value,value.ready?200:503);
+  }
   if(!this.phase11Scheduled){const options=phase11Config(this.env);await batch(this.env.DB,[["UPDATE application_limits SET value=? WHERE key='tenant_media_bytes'",options.tenantMediaBytes],["UPDATE application_limits SET value=? WHERE key='media_upload_bytes'",options.mediaBytes],["UPDATE application_limits SET value=? WHERE key='csv_rows'",options.csvRows],["UPDATE application_limits SET value=? WHERE key='csv_bytes'",options.csvBytes]]);this.phase11Scheduled=true;if(!await this.ctx.storage.getAlarm())await this.ctx.storage.setAlarm(Date.now()+30000);}
   const u=new URL(req.url),p=u.pathname;
   const publicPath=p==='/api/v1/live' || p==='/api/v1/cafes' || /^\/api\/v1\/cafes\/[^/]+$/.test(p);
@@ -264,6 +274,7 @@ export class AppBackend extends DurableObject {
  }
 }
 export default {async fetch(req,env,ctx){try{
+ if(new URL(req.url).pathname==='/api/v1/ready'&&req.method==='GET'&&!env.BACKEND)return json({ready:false,api:'1'},503,{'X-Request-ID':requestId()});
  if(req.method==='GET' && new URL(req.url).pathname==='/api/v1/config' && globalThis.caches?.default){
   const cached=await caches.default.match(req);if(cached)return cached;
   const response=await env.BACKEND.get(env.BACKEND.idFromName('application')).fetch(req);

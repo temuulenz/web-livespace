@@ -216,12 +216,17 @@ export function openDatabase(file) {
   return db;
 }
 
+// Node 22.13 lacks isTransaction. Track wrapper-owned transactions as well as
+// using the native flag on newer runtimes; retain BEGIN IMMEDIATE locking.
+const ownedTransactions = new WeakSet();
 // Run `fn` in a transaction; nested calls join the outer one.
 export function transaction(db, fn) {
-  if (db.isTransaction) return fn();
+  if (db.isTransaction || ownedTransactions.has(db)) return fn();
   db.exec('BEGIN IMMEDIATE');
+  ownedTransactions.add(db);
   try { const result = fn(); db.exec('COMMIT'); return result; }
   catch (error) { db.exec('ROLLBACK'); throw error; }
+  finally { ownedTransactions.delete(db); }
 }
 
 export const now = () => new Date().toISOString();

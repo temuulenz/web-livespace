@@ -10,6 +10,7 @@ export function loadConfig(env = process.env, overrides = {}) {
   const dataDir = resolve(env.LS_DATA_DIR || join(root, 'data'));
   return {
     phase11: phase11Config(env),
+    requestLogs: env.LS_REQUEST_LOGS === '1',
     port: int(env.PORT, 8080, 0, 65535),
     host: env.HOST || '127.0.0.1',
     staticDir: root,

@@ -33,7 +33,7 @@ export function createNotifications({sql,fail,id,options,clock=()=>new Date().to
      if(event.category==='promotion_expiry'&&!await sql.first('SELECT id FROM promotions WHERE id=? AND cafe_id=? AND published=1 AND ends_at>?',event.entity_id,event.cafe_id,at)){await sql.batch([["INSERT OR IGNORE INTO notification_deliveries VALUES(?,?,'suppressed')",event.id,recipient.id]]);continue;}
      const before=await sql.first('SELECT n FROM notification_budgets WHERE recipient_id=? AND day=?',recipient.id,day);if((before?.n||0)>=options.notificationDaily){deferred=true;continue;}
      // Serialize dedup, cooldown and budget admission with the notification insert.
-     const cooldownEntity=event.category==='resource'?(event.cafe_id||'platform')+':'+event.entity_id+':'+event.id.split(':').at(-1):event.category==='inventory'?event.id:event.entity_id;
+     const cooldownEntity=event.category==='resource'?(event.cafe_id?'cafe:'+event.cafe_id:'platform')+':'+event.entity_id+':'+event.id.split(':').at(-1):event.category==='inventory'?event.id:event.entity_id;
      const cutoff=new Date(Date.parse(at)-options.cooldownSec*1000).toISOString();
      const guard=event.category==='resource'?"u.role='admin'":['sensor_offline','sensor_recovered'].includes(event.category)?"(u.role='admin' OR u.id=(SELECT owner_id FROM cafes WHERE id=?))":event.category==='promotion'?"EXISTS(SELECT 1 FROM favorites WHERE user_id=u.id AND cafe_id=?)":event.recipient_id?'u.id=?':"u.id=(SELECT owner_id FROM cafes WHERE id=?)";
      const guardArgs=event.category==='resource'?[]:[event.category==='promotion'||!event.recipient_id?event.cafe_id:event.recipient_id];
