@@ -43,3 +43,27 @@ After each task: focused tests, actual Node/D1 evidence, contracts, work log/che
 Recovered58 files from f81abe9 without switching/cherry-picking/committing. Four overlaps integrated rather than overwritten: worker routing, Node JSON/CSP, Node admin routes, Cloudflare tests. Newer cafe-owner assignment policy now also fences current session/version at commit, preserving its owner_changed error contract and all prior assertions. Added logout-before-reassignment regression; no frontend source changes. Current branch main, all work uncommitted.
 
 Fresh evidence: /tmp/ls-redo-*.log; TEST_RESULTS.md and measurement JSON updated. Node176, Cloudflare28, sensors26, E2E13, bounded load12 plus R2/KV/analytics/cold-restart checks, D1 rules/auth-fence probe, sensor10 writes/frame, dry-run and whitespace all passed. Prior counts in historical sections are not current. Remaining11E–H/full readiness audit unchanged; production/pilot NO-GO. Next new implementation is11E; do not redo recovered A–D/security work.
+
+## Current recovery on main at 952874d
+
+| Task | Status | Evidence or next action |
+|---|---|---|
+| Recover working tree and establish baseline | VERIFIED | 19 modified, six untracked, empty index; npm ci and 185 Node tests passed |
+| 11E analytics completion | IN_PROGRESS | Review legacy response compatibility, private read authority and local workerd coverage |
+| 11F reporting, 11G notifications, 11H controls | TODO | Separate independent safeguards from research and recipient policy |
+| Phases 12–20 | TODO | Continue with verified local gaps and readiness evidence |
+
+| Task started after recovery | Status | Evidence or validation |
+|---|---|---|
+| Private application photo authorization | IMPLEMENTED | Node and Worker recheck current access after storage I/O. Node race regression passed. Full runtime checks underway. |
+| 11F owner/admin analytics export | IN_PROGRESS | Reuse the bounded 11E report and authorization routes. Verify CSV encoding, privacy and runtime parity. |
+
+## Final demo gate
+
+| Task | Status | Evidence |
+|---|---|---|
+| 11E item analytics and compatibility | VERIFIED | Node and local D1/DO ingest, scope, retries and flush |
+| 11F venue event CSV | VERIFIED | Bounded attachment and spreadsheet-safe fields verified on Node and Cloudflare |
+| Private photos and maintenance diagnostics | IMPLEMENTED | Deterministic Node photo race passed. Cloudflare integration ran on the intermediate bundle. |
+| Local first-client demo | VERIFIED | Disposable launcher and Chromium smoke, 13 E2E, 185 Node. See DEMO_READINESS.md. |
+| Extended roadmap | SKIPPED_WITH_REASON | Owner paused work for the meeting. Resume from AI_HANDOVER.md after approval. |

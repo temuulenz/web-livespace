@@ -24,7 +24,8 @@ export class BrowserRoom extends DurableObject {
   if(req.headers.get('origin')!==url.origin)fail(403,'bad_origin','WebSocket origin rejected');
   if(req.headers.get('upgrade')?.toLowerCase()!=='websocket')fail(426,'upgrade_required','WebSocket required');
   if(this.ctx.getWebSockets().length>=600)fail(429,'room_capacity','Room connection limit reached');
-  this.bind(cafe);const a={cafe,scope};
+  // Read-only tenant check first; room storage is only written (via snapshot→bind) after the café is authorized.
+  const bound=[...this.sql.exec('SELECT cafe FROM room_state WHERE id=1')][0];if(bound&&bound.cafe!==cafe)fail(403,'tenant_mismatch','Room tenant mismatch');const a={cafe,scope};
   if(scope!=='public'){const user=await session(this.env.DB,req);guard(user,...(scope==='admin'?['admin']:['owner','admin']));const raw=/(?:^|;\s*)ls_session=([^;]+)/.exec(req.headers.get('cookie')||'')?.[1];a.sessionHash=sha(raw);}
   const row=await this.authorized(a);if(!row)fail(404,'not_found','Cafe not found');
   const snapshot=await this.snapshot(row,scope!=='public',scope!=='public');

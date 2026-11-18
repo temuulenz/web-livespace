@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "LiveSpace Phase 11A\u201311D backend API",
-    "version": "11D",
-    "description": "Implemented menu/inventory/reviews/promotions and readiness. E\u2013H remain incomplete. Full semantics in feature guides. Business mutations may return 409 access_changed after transactional permission recheck."
+    "title": "LiveSpace Phase 11 backend API",
+    "version": "11F-partial",
+    "description": "Menu, inventory, reviews, promotions, venue event analytics and readiness. Research, notifications and resource-control acceptance remain incomplete. Business mutations may return 409 access_changed after transactional permission recheck."
   },
   "servers": [
     {
@@ -3721,6 +3721,295 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/events": {
+      "post": {
+        "summary": "Accept optional venue analytics events",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "schemaVersion",
+                  "cafeId",
+                  "events"
+                ],
+                "properties": {
+                  "schemaVersion": {
+                    "type": "integer",
+                    "enum": [
+                      1
+                    ]
+                  },
+                  "cafeId": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "events": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type",
+                        "id",
+                        "timestamp"
+                      ],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "cafe_view",
+                            "menu_view",
+                            "product_view",
+                            "favorite_add",
+                            "directions_click",
+                            "promotion_view",
+                            "out_of_stock_view"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 8,
+                          "maxLength": 64
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "itemId": {
+                          "type": "string",
+                          "maxLength": 80
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted and duplicate event counts"
+          },
+          "404": {
+            "description": "Collection disabled or cafe unavailable"
+          },
+          "409": {
+            "description": "Event ID conflict"
+          },
+          "413": {
+            "description": "Body too large"
+          },
+          "422": {
+            "description": "Invalid batch or item"
+          },
+          "429": {
+            "description": "Intake limit reached"
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/analytics": {
+      "get": {
+        "summary": "Read venue event analytics",
+        "description": "Owner route requires venue ownership or administrator role. Administrator route requires administrator role. See ANALYTICS_ARCHITECTURE.md for response fields, time bounds and CSV truncation.",
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hour",
+                "day"
+              ]
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "UTC",
+                "Asia/Ulaanbaatar"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded event and item counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Role required"
+          },
+          "404": {
+            "description": "Cafe not available to this actor"
+          },
+          "422": {
+            "description": "Invalid report options"
+          },
+          "429": {
+            "description": "Read limit reached"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/cafes/{cafe}/analytics": {
+      "get": {
+        "summary": "Read venue event analytics",
+        "description": "Owner route requires venue ownership or administrator role. Administrator route requires administrator role. See ANALYTICS_ARCHITECTURE.md for response fields, time bounds and CSV truncation.",
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hour",
+                "day"
+              ]
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "UTC",
+                "Asia/Ulaanbaatar"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded event and item counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Role required"
+          },
+          "404": {
+            "description": "Cafe not available to this actor"
+          },
+          "422": {
+            "description": "Invalid report options"
+          },
+          "429": {
+            "description": "Read limit reached"
           }
         }
       }

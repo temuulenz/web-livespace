@@ -44,3 +44,19 @@ Installed BROWSER_PATH: /home/temuulen/.cache/ms-playwright/chromium-1255/chrome
 Resolved test failure: new Node readiness initially lacked db in route dependency destructuring, producing503; fixed, focused and full suites pass. No unresolved executed-test failures. Static-only test:browser/test:visual/test:visitor-visual not rerun this session (SKIPPED_WITH_REASON: frontend untouched; full Node fidelity tests and fresh backend browser E2E/CF run; allowance conservation). No lint/typecheck script exists; native modules parse through actual tests/Worker bundling. New CI workflow is manual-only and NOT remotely executed. Production, hardware, account quotas, full mixed future-business load, external alerting and production restore NOT verified.
 
 Source-pattern scan:237 source/config/doc text files, zero selected key/token-pattern flags; no matching values printed and ignored credential/data/artifact paths excluded. OpenAPI/Postman parse:53 operations/54 requests. Complete session diff reviewed for backend-only scope; git diff for js/framework/styles/app.js/index.html is empty. No schema/fixture regeneration outside the new additive0013 promotion migration and schema-version expectations.
+
+## Recovery rerun on main at 952874d
+
+| Command | Result |
+|---|---|
+| npm ci | 42 packages audited, zero reported vulnerabilities |
+| npm test | 185 passed on the recovered baseline and on the first hardening batch |
+| node --test tests/analytics-items.test.mjs tests/claude-security-regressions.test.mjs | 9 passed after the CSV and photo regressions and transactional Node intake checks |
+| npm run test:sensors | Passed |
+| npm run test:browser | 17 passed; external MapLibre/OpenFreeMap check skipped and SVG fallback exercised |
+| npm run test:e2e | 13 passed |
+| npm run test:cloudflare | 28 passed on the intermediate Worker bundle, including local D1 migration and photo checks |
+| npm run cf:check | Dry-run passed on the intermediate Worker bundle |
+| git diff --check | Passed |
+
+Browser commands used the installed chromium-1255 path. Worker commands ran with WRANGLER_SEND_METRICS=false. The final Worker edits require fresh bundle verification. Load, visual and write-budget commands are tracked in /tmp/livespace-resume-* and are pending at this checkpoint.

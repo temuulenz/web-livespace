@@ -17,6 +17,26 @@ try {
  execFileSync(process.execPath,['scripts/cloudflare-assets.mjs'],{stdio:'pipe'});cli('d1','migrations','apply','livespace','--local');cli('d1','execute','livespace','--local','--file',resolve('cloudflare/seed.sql'));
  const password='local-phase72-benchmark-password',hash=await hashPassword(password),sql=join(dir,'admin.sql');await writeFile(sql,`INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES('root','temuulenbayarjargal@icloud.com','${hash}','Local','admin',datetime('now')); INSERT INTO super_admin_identity VALUES(1,'root',datetime('now')); UPDATE cafes SET owner_id='root';`,{mode:0o600});cli('d1','execute','livespace','--local','--file',sql);await start();
  const login=await api('/auth/login','POST',{email:'temuulenbayarjargal@icloud.com',password});assert.equal(login.res.status,200);cookie=login.res.headers.get('set-cookie').split(';')[0];
+ const category=(await api('/owner/cafes/A/menu/categories','POST',{name:'Local analytics',published:true})).data.item;
+ const product=(await api('/owner/cafes/A/menu/products','POST',{category_id:category.id,name:'Local product',base_price:1000,published:true})).data.item;
+ const batch={schemaVersion:1,cafeId:'A',events:Array.from({length:32},(_,i)=>({id:'load-event-'+i,type:i===0?'product_view':'cafe_view',timestamp:new Date().toISOString(),...(i===0?{itemId:product.id}:{})}))};
+ const foreign=await api('/analytics/events','POST',{...batch,cafeId:'B'});assert.equal(foreign.res.status,422);
+ const accepted=await api('/analytics/events','POST',batch);assert.equal(accepted.data.accepted,32);
+ const duplicate=await api('/analytics/events','POST',batch);assert.equal(duplicate.data.duplicates,32);
+ const flushed=await api('/admin/resources/analytics-flush/A','POST',{});assert.equal(flushed.res.status,200);
+ const repeated=await api('/admin/resources/analytics-flush/A','POST',{});assert.equal(repeated.data.summaries,0);assert.equal(repeated.data.itemSummaries,0);
+ const analyticsPath='/owner/cafes/A/analytics?granularity=day&timezone=Asia%2FUlaanbaatar';
+ const summary=await api(analyticsPath);
+ assert.equal(summary.res.status,200);assert.equal(summary.data.schemaVersion,1);assert.equal(summary.data.uniqueVisitors,null);
+ assert.equal(summary.data.rows.reduce((n,row)=>n+row.event_count,0),32);
+ assert.equal(summary.data.items.length,1);assert.equal(summary.data.items[0].item_id,product.id);assert.equal(summary.data.items[0].event_count,1);
+ assert.equal((await api(analyticsPath,'GET',undefined,false)).res.status,401);
+ const csv=await fetch(origin+'/api/v1'+analyticsPath+'&format=csv',{headers:{Cookie:cookie}});
+ assert.equal(csv.status,200);assert.match(csv.headers.get('content-type'),/^text\/csv/);
+ assert.equal(csv.headers.get('x-analytics-items-status'),'complete');assert.ok((await csv.text()).includes(product.id));
+ report.analytics={firstFlush:flushed.data,repeatedFlush:repeated.data,stats:(await api('/admin/resources?cafe_id=A')).data.analytics};
+ console.log('PASS analytics intake, tenant scope, deduplication, flush, JSON and CSV');
+ if(!process.argv.includes('--analytics-only')){
  const ids=['A','I','F','O','T','J','K','B','L','P'],tokens=[];
  for(const [i,id] of ids.entries()){assert.equal((await api('/admin/cafes/'+id,'PATCH',{data_mode:'live',hours:'00:00–23:59'})).res.status,200);const d=await api('/admin/devices','POST',{id:'LOAD-'+i,cafe_id:id,kind:'simulator'});assert.equal(d.res.status,201);tokens.push(d.data.token);}
  const cpuStart=await runtimeCPU(),ticksPerSecond=Number(execFileSync('getconf',['CLK_TCK'],{encoding:'utf8'}));
@@ -42,7 +62,6 @@ try {
  }
  const ownerTimes=[];for(let i=0;i<10;i++){const r=await api('/owner/cafes');assert.ok(r.data.cafes.length>=10);ownerTimes.push(r.ms);}report.ownerDashboard={latencyMs:quantiles(ownerTimes)};
  const profileTimes=[];for(let i=0;i<100;i++)profileTimes.push((await api('/cafes/A/profile')).ms);report.profile={latencyMs:quantiles(profileTimes),resources:(await api('/admin/resources')).data};
- const batch={schemaVersion:1,cafeId:'A',events:Array.from({length:32},(_,i)=>({id:'load-event-'+i,type:'cafe_view',timestamp:new Date().toISOString()}))};const accepted=await api('/analytics/events','POST',batch);assert.equal(accepted.data.accepted,32);const duplicate=await api('/analytics/events','POST',batch);assert.equal(duplicate.data.duplicates,32);const flushed=await api('/admin/resources/analytics-flush/A','POST',{});assert.equal(flushed.res.status,200);const repeated=await api('/admin/resources/analytics-flush/A','POST',{});assert.equal(repeated.data.summaries,0);report.analytics={firstFlush:flushed.data,repeatedFlush:repeated.data,stats:(await api('/admin/resources?cafe_id=A')).data.analytics};
  const pic='data:image/jpeg;base64,'+(await readFile('tests/fixtures/upload-valid.jpg')).toString('base64');const application=await api('/applications','POST',{cafe_name:'R2 local',contact_name:'Owner',phone:'88000000',email:'local@example.mn',district:'Сүхбаатар',category:'Кафе',address:'Local test',description:'Local media test',hours:'00:00–23:59',photos:[pic,pic,pic]});assert.equal(application.res.status,201,JSON.stringify(application.data));
  const owned=await api('/admin/cafes/'+application.data.cafe_id),url=owned.data.cafe.application.photos[0].url;const image=await fetch(origin+url,{headers:{Cookie:cookie}});assert.equal(image.status,200);assert.equal((await fetch(origin+url)).status,401);const etag=image.headers.get('etag');assert.equal((await fetch(origin+url,{headers:{Cookie:cookie,'If-None-Match':etag}})).status,304);report.media={bytes:(await image.arrayBuffer()).byteLength,etagSupported:true,privateAuthorization:true};
  const counts=JSON.parse(cli('d1','execute','livespace','--local','--command',`SELECT (SELECT COUNT(*) FROM photo_bytes) legacy_blobs,(SELECT COUNT(*) FROM media_objects) r2_pointers,(SELECT COUNT(*) FROM media_staging) pending_objects;`,'--json'));assert.equal(counts[0].results[0].legacy_blobs,0);assert.equal(counts[0].results[0].r2_pointers,3);assert.equal(counts[0].results[0].pending_objects,0);report.media.metadata=counts[0].results[0];
@@ -50,4 +69,5 @@ try {
  await worker.stop();worker=null;await start();const cold=await api('/cafes/A/profile');assert.equal(cold.data.profile.id,'A');const reconnect=open('/ws/browser/A');const snap=await reconnect.next(m=>m.type==='live.snapshot');assert.equal(snap.data.id,'A');await close([reconnect]);const coldStats=(await api('/admin/resources')).data.cache;assert.equal(coldStats.kvReads,1);assert.equal(coldStats.misses,0);report.coldRestart={profileMs:cold.ms,kvProfileRecovered:true,snapshotRecovered:true,cache:coldStats};
  for(const cafes of [1,3,5,10])for(const dau of [100,500,1000]){const cadence=cafes===1?30:60,messages=cafes*86400/cadence,oldPolls=dau*1800/10,roomJoins=dau*3*1.1;report.projections.push({cafes,sensors:cafes,dau,sessionMinutes:30,cafesSubscribedPerSession:3,reconnectFraction:.1,sensorCadenceSeconds:cadence,sensorMessagesPerDay:messages,oldLivePollsPerDay:oldPolls,newBrowserUpgradesPerDay:Math.ceil(roomJoins),d1TelemetryWritesPerDay:messages*10,estimatedWorkerRequestsPerDay:Math.ceil(dau*(10+3*1.1)+cafes*4),targetD1WritesFits:messages*10<50000});}
  await mkdir('.artifacts',{recursive:true});await writeFile('.artifacts/phase72-load.json',JSON.stringify(report,null,2));console.log('PASS R2/KV/analytics/cold-restart checks; report .artifacts/phase72-load.json');
+ }
 }finally{await worker?.stop();await rm(dir,{recursive:true,force:true});}

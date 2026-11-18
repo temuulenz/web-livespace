@@ -3,6 +3,7 @@ import {DurableObject} from 'cloudflare:workers';
 import {initializeAnalytics,acceptAnalytics,flushAnalytics} from './analytics-store.mjs';
 import {validateAnalyticsBatch} from '../js/services/analytics-schema.js';
 import {fail,all,isQuotaError} from './core.mjs';
+import {readAnalyticsSummary} from '../shared/business/analytics.mjs';
 export class AnalyticsAggregator extends DurableObject {
  constructor(ctx,env){super(ctx,env);this.ctx=ctx;this.env=env;this.sqlMetrics={};this.store={storage:{sql:measuredSql(ctx.storage.sql,this.sqlMetrics),transactionSync:fn=>ctx.storage.transactionSync(fn)}};initializeAnalytics(this.store.storage.sql);this.tail=Promise.resolve();}
  stats(){return {...this.sqlMetrics};}
@@ -20,9 +21,5 @@ export class AnalyticsAggregator extends DurableObject {
   catch(e){await setMeasuredAlarm(this.ctx,this.sqlMetrics,Date.now()+(isQuotaError(e)?3600000:900000));}
  }
 }
-// Future owner interface: bounded summaries, never raw receipts or visitor data.
-export async function readAnalytics(db,cafe,{granularity='hour',since=new Date(Date.now()-7*86400000).toISOString(),until=new Date().toISOString()}={}) {
- if(!['hour','day'].includes(granularity)||!Number.isFinite(Date.parse(since))||!Number.isFinite(Date.parse(until))||Date.parse(until)<=Date.parse(since)||Date.parse(until)-Date.parse(since)>31*86400000)fail(422,'invalid_range','Use an increasing range of at most 31 days');
- const bucket=granularity==='day'?"substr(hour,1,10)":"hour";
- return {schemaVersion:1,cafeId:cafe,timezone:'UTC',granularity,metric:'event_count',uniqueVisitors:null,rows:await all(db,`SELECT ${bucket} bucket,event_type,SUM(event_count) event_count FROM analytics_hourly WHERE cafe_id=? AND hour>=? AND hour<? GROUP BY bucket,event_type ORDER BY bucket LIMIT 5208`,cafe,new Date(since).toISOString(),new Date(until).toISOString())};
-}
+// Owner/admin interface: bounded hourly/daily summaries plus per-item summaries, never raw receipts or visitor data.
+export const readAnalytics=(db,cafe,query={})=>readAnalyticsSummary((q,...a)=>all(db,q,...a),cafe,query,fail);
