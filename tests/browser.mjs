@@ -64,9 +64,19 @@ try {
     assert.equal(await evaluate(`document.querySelector('.pv').dataset.id`), 'A');
     await evaluate(`document.querySelector('.pv').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}))`);
     await waitFor(`location.hash === '#cafe-A' && !!document.querySelector('canvas')`);
+    await waitFor(`document.querySelector('#cafeMenu')?.innerText.includes('ТУРШИЛТЫН ЦЭС')`);
+    assert.match(await evaluate(`document.querySelector('#cafeMenu').innerText`), /эзэмшигчийн хадгалсан өөрчлөлт биш/);
   });
   await check('home map is a still preview; home has no goal buttons, recommendations sort by seats/noise/Wi-Fi', async () => {
     await navigate('#home');
+    assert.equal(await evaluate(`!!document.querySelector('.home-spotlight [data-spot-next]')`), true);
+    assert.equal(await evaluate(`document.querySelectorAll('.home-spotlight .ccard').length > 0`), true);
+    await click('.home-spotlight [data-spot-next]');
+    assert.equal(await evaluate(`document.querySelectorAll('.home-spotlight [aria-current="true"]').length`), 1);
+    await click('.home-spotlight [data-spot-pause]');
+    assert.equal(await evaluate(`document.querySelector('.home-spotlight [data-spot-pause]').textContent`), 'Үргэлжлүүлэх');
+    await click('.home-spotlight [data-spot-pause]');
+    assert.equal(await evaluate(`document.querySelector('.home-spotlight [data-spot-pause]').textContent`), 'Түр зогсоох');
     // No pins, live pills or pulses on the home preview: the real map lives on #explore.
     assert.equal(await evaluate(`document.querySelectorAll('#miniMap .mk').length`), 0);
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('#miniMap .you')).animationName`), 'none');

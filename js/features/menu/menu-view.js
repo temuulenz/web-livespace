@@ -26,7 +26,10 @@ export const menuItemHTML = item => html`<article class="menu-item${item.availab
 export class MenuSection extends Component {
   initialState() { return { items: null, error: '', cat: 'all' }; }
   events() {
-    return { 'click [data-menu-cat]': (e, b) => { Snd.ui('click'); this.setState({ cat: b.dataset.menuCat }); } };
+    return {
+      'click [data-menu-cat]': (e, b) => { Snd.ui('click'); this.setState({ cat: b.dataset.menuCat }); },
+      'click [data-menu-retry]': () => this.load()
+    };
   }
   onMount() { this.onCleanup(customer.subscribe(() => this.load())); this.load(); }
   async load() {
@@ -35,15 +38,16 @@ export class MenuSection extends Component {
   }
   render() {
     const { items, error, cat } = this.state;
-    const head = html`<div class="card-h"><h2>${raw(I.cup)} Цэс</h2>${customer.mode === 'mock' ? html`<span class="badge b-demo">ДЕМО</span>` : ''}</div>`;
-    if (error) return html`${head}<p class="muted">${error}</p>`;
+    const demo = customer.mode === 'mock';
+    const head = html`<div class="card-h"><h2>${raw(I.cup)} Цэс</h2>${demo ? html`<span class="badge b-demo">ТУРШИЛТЫН ЦЭС</span>` : html`<span class="badge b-live">ХАДГАЛСАН ЦЭС</span>`}</div>`;
+    if (error) return html`${head}<p class="muted" role="alert">${error}</p><button class="btn btn-o" data-menu-retry>Дахин оролдох</button>`;
     if (!items) return html`${head}<div class="skel" style="height:140px"></div>`;
     if (!items.length) return html`${head}<p class="muted">Энэ кафе цэсээ хараахан оруулаагүй байна.</p>`;
     const groups = groupMenu(items), cats = groups.map(([c]) => c);
     const shown = cat === 'all' || !cats.includes(cat) ? groups : groups.filter(([c]) => c === cat);
     const out = items.filter(item => !item.available).length;
     return html`${head}
-      <p class="muted menu-note">Үнэ төгрөгөөр${out ? html` · <span class="menu-out-k">Дууссан</span> — өнөөдөр байхгүй` : ''} · Төлбөрийг кафе дээр төлнө.</p>
+      <p class="muted menu-note">${demo ? 'Жишээ цэс · эзэмшигчийн хадгалсан өөрчлөлт биш. ' : ''}Үнэ төгрөгөөр${out ? html` · <span class="menu-out-k">Дууссан</span> — өнөөдөр байхгүй` : ''} · Төлбөрийг кафе дээр төлнө.</p>
       ${cats.length > 1 ? html`<div class="chips menu-cats" role="group" aria-label="Цэсийн ангилал">
         <button class="chip" data-menu-cat="all" aria-pressed="${cat === 'all' || !cats.includes(cat)}">Бүгд</button>
         ${MENU_CATEGORIES.filter(c => cats.includes(c)).map(c => html`<button class="chip" data-menu-cat="${c}" aria-pressed="${c === cat}">${c}</button>`)}</div>` : ''}
