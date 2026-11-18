@@ -8,7 +8,9 @@ const Snd = {
   tone(f, dur, { type = 'sine', vol = .15, to = null, delay = 0, dest = null } = {}) { const c = this.ensure(); if (!c) return; const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur * .8); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + dur); o.connect(g).connect(dest || c.destination); o.onended = () => { o.disconnect(); g.disconnect() }; o.start(t); o.stop(t + dur + .05) },
   burst(dur, { vol = .08, f = 2000, q = 1, type = 'bandpass', delay = 0, to = null, dest = null } = {}) { const c = this.ensure(); if (!c) return; const t = c.currentTime + delay, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); s.buffer = this.noiseBuf(); fl.type = type; fl.frequency.setValueAtTime(f, t); if (to) fl.frequency.exponentialRampToValueAtTime(to, t + dur); fl.Q.value = q; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + dur); s.connect(fl).connect(g).connect(dest || c.destination); s.onended = () => { s.disconnect(); fl.disconnect(); g.disconnect() }; s.start(t, Math.random()); s.stop(t + dur + .05) },
   ui(name) {
-    if (!Prefs.sound) return; const s = this; ({
+    // Before the visitor's first tap/key the browser keeps audio muted anyway; creating the
+    // AudioContext then only costs main-thread time during page load.
+    if (!Prefs.sound || navigator.userActivation?.hasBeenActive === false) return; const s = this; ({
       pop() { s.tone(380, .14, { to: 820, vol: .16 }); s.tone(1240, .08, { vol: .04, delay: .03, type: 'triangle' }) },
       click() { s.burst(.035, { vol: .09, f: 3200, q: 2.5 }) },
       whoosh() { s.burst(.28, { vol: .05, f: 500, to: 2200, q: .8 }) },

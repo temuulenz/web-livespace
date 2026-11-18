@@ -1,3 +1,4 @@
+import {phase11Config} from '../shared/business/phase11-config.mjs';
 // Configuration from environment variables (all optional for local development).
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,8 @@ const int = (value, fallback, min, max) => { const n = Number.parseInt(value, 10
 export function loadConfig(env = process.env, overrides = {}) {
   const dataDir = resolve(env.LS_DATA_DIR || join(root, 'data'));
   return {
+    phase11: phase11Config(env),
+    requestLogs: env.LS_REQUEST_LOGS === '1',
     port: int(env.PORT, 8080, 0, 65535),
     host: env.HOST || '127.0.0.1',
     staticDir: root,

@@ -1,3 +1,4 @@
+import {phase11Config} from '../shared/business/phase11-config.mjs';
 import { measuredSql,setMeasuredAlarm } from './resources.mjs';
 import {DurableObject} from 'cloudflare:workers';
 import {SESSION_SELECT} from '../server/services/user-access.mjs';
@@ -23,7 +24,7 @@ export class BrowserRoom extends DurableObject {
   if(!['public','owner','admin'].includes(scope)||[...url.searchParams.keys()].some(k=>k!=='scope'))fail(400,'bad_subscription','Invalid subscription');
   if(req.headers.get('origin')!==url.origin)fail(403,'bad_origin','WebSocket origin rejected');
   if(req.headers.get('upgrade')?.toLowerCase()!=='websocket')fail(426,'upgrade_required','WebSocket required');
-  if(this.ctx.getWebSockets().length>=600)fail(429,'room_capacity','Room connection limit reached');
+  if(this.ctx.getWebSockets().length>=phase11Config(this.env).connections)fail(429,'room_capacity','Room connection limit reached');
   this.bind(cafe);const a={cafe,scope};
   if(scope!=='public'){const user=await session(this.env.DB,req);guard(user,...(scope==='admin'?['admin']:['owner','admin']));const raw=/(?:^|;\s*)ls_session=([^;]+)/.exec(req.headers.get('cookie')||'')?.[1];a.sessionHash=sha(raw);}
   const row=await this.authorized(a);if(!row)fail(404,'not_found','Cafe not found');

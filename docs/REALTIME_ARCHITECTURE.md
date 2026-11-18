@@ -1,5 +1,9 @@
 # Browser realtime and sensor compatibility
 
+Current Phase 11: existing inventory/sensor SSE and cafe rooms are preserved. Persistent notifications use recipient-scoped HTTP inbox/read/preferences, never public SSE. Optional realtime notification delivery was not necessary or added. See NOTIFICATIONS.md; earlier absent business-event statements below are historical.
+
+Current Phase 11 status (2026-11-17): inventory events/snapshot recovery are implemented as documented in INVENTORY_MANAGEMENT.md. Older statements below about absent business events are historical. Notification infrastructure in 11G remains incomplete.
+
 `/ws/sensors` retains the frozen Android v1 JSON/auth/ACK/replay contract and existing SensorGateway class. Node SSE and bounded polling remain supported. The new `/ws/browser/:cafeId?scope=public|owner|admin` endpoint uses one SQLite BrowserRoom DO per stable `cafe:{id}`, not one per browser and not a global private room. Wrangler prepares the binding and additive DO class migration; no namespace exists remotely until an approved deployment. Browser realtime requires `LS_BROWSER_REALTIME_ENABLED=1` plus the binding.
 
 Same-origin Origin is mandatory for browser upgrades; production uses HTTPS/WSS. Public subscribers require an active cafe. Private subscribers use existing HttpOnly sessions and D1 ownership/RBAC; bearer sensor tokens do not authenticate browsers. Session hashes, credentials and private diagnostics never appear in public frames. Subscription attachments preserve cafe, scope and session hash through hibernation. Room identity is stored and mismatched tenants are rejected. Connection cap: 600 per cafe; per-IP upgrade admission is bounded separately.

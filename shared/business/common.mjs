@@ -14,3 +14,20 @@ export function businessCommon({sql,fail}){
 }
 function canonical(x){if(Array.isArray(x))return x.map(canonical);if(x&&typeof x==='object')return Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])]));return x;}
 export const payloadHash=x=>createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
+
+// Reuse a domain audit insert as a transaction-time authority fence. Its
+// NOT NULL id aborts the whole batch on authority changes, like promotions.
+export function businessWriteEntries(entries,cafe,user,auditId,at,policy='owner') {
+ const condition=policy==='owner'
+  ? "u.role IN('owner','admin') AND EXISTS(SELECT 1 FROM cafes WHERE id=? AND owner_id=u.id)"
+  : policy==='admin'?"u.role='admin'":"1=1";
+ const check=`EXISTS(SELECT 1 FROM users u WHERE u.id=? AND u.disabled_at IS NULL AND ${condition})`;
+ const args=[user.id,...(policy==='owner'?[cafe]:[])];
+ const index=entries.findIndex(([q])=>q.startsWith('INSERT INTO business_audit('));
+ if(index<0)return [...entries,[`INSERT INTO business_audit(id,cafe_id,actor_id,action,entity_id,at) VALUES(CASE WHEN ${check} THEN ? ELSE NULL END,?,?,?,?,?)`,...args,auditId,cafe,user.id,'authorization.check',cafe,at]];
+ return entries.map((entry,i)=>{
+  if(i!==index)return entry;
+  const [query,...values]=entry;
+  return [query.replace(/VALUES\(([^,]+),/,`VALUES(CASE WHEN ${check} THEN $1 ELSE NULL END,`),...args,...values];
+ });
+}

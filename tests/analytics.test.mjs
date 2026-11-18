@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {DatabaseSync} from 'node:sqlite';
 import {initializeAnalytics,acceptAnalytics,flushAnalytics} from '../cloudflare/analytics-store.mjs';import {validateAnalyticsBatch} from '../js/services/analytics-schema.js';import {createAnalyticsCollector} from '../js/services/analytics.js';
-function fixture(){const db=new DatabaseSync(':memory:');const sql={exec(query,...args){const stmt=db.prepare(query);return stmt.columns().length?stmt.all(...args):(stmt.run(...args),[]);}};const ctx={storage:{sql,transactionSync(fn){db.exec('BEGIN');try{const r=fn();db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}}}};initializeAnalytics(sql);return {db,ctx};}
+function fixture(){const db=new DatabaseSync(':memory:');const sql={exec(query,...args){const stmt=db.prepare(query);return stmt.all(...args);}};const ctx={storage:{sql,transactionSync(fn){db.exec('BEGIN');try{const r=fn();db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}}}};initializeAnalytics(sql);return {db,ctx};}
 const batch=(type='cafe_view',id='event-0001')=>validateAnalyticsBatch({schemaVersion:1,cafeId:'a',events:[{id,type,timestamp:new Date().toISOString()}]});
 test('analytics accepts only whitelisted minimal events and no visitor identities',()=>{assert.equal(batch().events[0].type,'cafe_view');const b=batch();b.events[0].visitorId='identity';assert.throws(()=>validateAnalyticsBatch(b));assert.throws(()=>batch('purchase'));});
 test('analytics receipts and counters survive service recreation, deduplicate and isolate cafes',()=>{const {db,ctx}=fixture();assert.equal(acceptAnalytics(ctx,batch()).accepted,1);initializeAnalytics(ctx.storage.sql);assert.equal(acceptAnalytics(ctx,batch()).duplicates,1);const other=batch();other.cafeId='b';assert.throws(()=>acceptAnalytics(ctx,other));assert.equal(db.prepare('SELECT n FROM counters').get().n,1);db.close();});
@@ -19,4 +19,8 @@ test('intake during an outstanding flush remains dirty until the next flush',asy
 test('conflicting analytics IDs roll back the entire batch',()=>{
  const {db,ctx}=fixture();acceptAnalytics(ctx,batch());const mixed=batch('menu_view','event-0002');mixed.events.push(batch('product_view').events[0]);
  assert.throws(()=>acceptAnalytics(ctx,mixed),/conflict/);assert.equal(db.prepare('SELECT COUNT(*) n FROM event_receipts').get().n,1);assert.equal(db.prepare('SELECT SUM(n) n FROM counters').get().n,1);db.close();
+});
+
+test('legacy intake honors configured daily budgets without changing default receipts',()=>{
+ const {db,ctx}=fixture();try{acceptAnalytics(ctx,batch(),Date.now(),{analyticsDaily:1});assert.throws(()=>acceptAnalytics(ctx,batch('menu_view','event-config-2'),Date.now(),{analyticsDaily:1}),/budget/);assert.equal(db.prepare('SELECT SUM(n) n FROM counters').get().n,1);}finally{db.close();}
 });

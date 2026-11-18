@@ -3,6 +3,7 @@ import {businessCommon} from './common.mjs';
 export const RATING_CRITERIA=['taste','service','comfort','value','study'];
 export function createReviewService({sql,fail,id,clock=()=>new Date().toISOString()}){
  const c=businessCommon({sql,fail}),cache=new Map();let generation=0;
+ const write=(entries,cafe,user,policy='active')=>sql.batch(businessWriteEntries(entries,cafe,user,id('audit'),clock(),policy));
  const admin=user=>{c.user(user);if(user.role!=='admin')fail(403,'forbidden','Administrator required');};
  const text=(value,max,required=false)=>{if(typeof value!=='string'||value.length>max||(required&&!value.trim()))c.invalid('Invalid text');return value.trim();};
  const invalidate=cafe=>{generation++;cache.delete(cafe);};

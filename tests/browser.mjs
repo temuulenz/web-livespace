@@ -35,8 +35,11 @@ const click = selector => evaluate(`document.querySelector(${JSON.stringify(sele
 const input = (selector, value) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el.value = ${JSON.stringify(value)}; el.dispatchEvent(new Event('input', {bubbles:true})); })()`);
 try {
   // Keep captures reproducible offline; both revisions use the same fallback fonts.
-  await send('Network.setBlockedURLs', { urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'] });
-  await send('Page.addScriptToEvaluateOnNewDocument', { source: deterministicClock });
+  // The real map (MapLibre CDN + OpenFreeMap tiles) is blocked here, so every original check runs
+  // offline against the automatic SVG fallback. The real map has its own checks further below.
+  const FONTS = ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'], MAP_NET = ['https://unpkg.com/*', 'https://tiles.openfreemap.org/*'];
+  await send('Network.setBlockedURLs', { urls: [...FONTS, ...MAP_NET] });
+  const clockScript = await send('Page.addScriptToEvaluateOnNewDocument', { source: deterministicClock });
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   if (visual) {
     for (const [viewport, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
@@ -62,19 +65,22 @@ try {
     await evaluate(`document.querySelector('.pv').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}))`);
     await waitFor(`location.hash === '#cafe-A' && !!document.querySelector('canvas')`);
   });
-  await check('home map is a still preview and the goals sit under the search', async () => {
+  await check('home map is a still preview; home has no goal buttons, recommendations sort by seats/noise/Wi-Fi', async () => {
     await navigate('#home');
     // No pins, live pills or pulses on the home preview: the real map lives on #explore.
     assert.equal(await evaluate(`document.querySelectorAll('#miniMap .mk').length`), 0);
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('#miniMap .you')).animationName`), 'none');
     assert.equal(await evaluate(`document.body.innerText.includes('Кафе хайх эсвэл зорилгоо сонгоход')`), false);
-    assert.equal(await evaluate(`document.querySelector('#hs').nextElementSibling.classList.contains('hero-purp')`), true);
-    assert.equal(await evaluate(`document.querySelectorAll('.hero-purp [data-go-purpose]').length`), 4);
+    // The four goals (Сурах, Ажиллах, Найзуудтай, Тухтай) were removed from the home page on request.
+    assert.equal(await evaluate(`document.querySelectorAll('.hero-purp, [data-go-purpose], [data-drec-goal]').length`), 0);
+    assert.equal(await evaluate(`document.querySelectorAll('.drec [data-drec-sort]').length`), 5);
+    assert.ok(await evaluate(`document.querySelectorAll('.drec .rc').length > 0`));
     // The lamps keep their sway and glow.
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('.hero .lamp')).animationName`), 'sway');
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('.hero .lamp .cone')).animationName`), 'glow');
-    await click('[data-go-purpose="Сурах"]');
-    await waitFor(`location.hash === '#explore' && !!document.querySelector('#exMap')`);
+    // Goal filtering itself still exists on the map page.
+    await navigate('#explore');
+    await click('[data-f="purpose"][data-v="Сурах"]');
     assert.equal(await evaluate(`document.querySelectorAll('.mk:not(.dim)').length`), 7);
     // The real map shows every café with its animated pin, on green land.
     assert.equal(await evaluate(`document.querySelectorAll('#exMap .mk').length`), 12);
@@ -259,9 +265,105 @@ try {
     await click('#mfApply');
     assert.equal(await evaluate(`!!document.querySelector('[role="dialog"]')`), false);
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-    await waitFor(`!!document.querySelector('#exMap')`);
+    // Resizing can rebuild the asynchronous map after its container is mounted.
+    await waitFor(`document.querySelectorAll('#exMap .mk').length === 12`);
     assert.equal(await evaluate(`document.querySelectorAll('.mk').length`), 12);
   });
+
+  /* ---------- real map (MapLibre + OpenStreetMap tiles) ---------- */
+  await check('blocked map library falls back to the drawn SVG map automatically', async () => {
+    await navigate('#explore');
+    await waitFor(`document.querySelector('#exMap').dataset.map === 'svg'`);
+    assert.equal(await evaluate(`!!document.querySelector('#exMap .map-inner svg.base') && !document.querySelector('#exMap .map-gl')`), true);
+    assert.equal(await evaluate(`document.querySelectorAll('#exMap .mk').length`), 12);
+  });
+  // Network is needed from here on; without it these checks are reported as skipped, not passed.
+  // MapLibre needs a real clock and animation frames, so the deterministic clock is removed.
+  await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: clockScript.identifier });
+  await send('Network.setBlockedURLs', { urls: FONTS });
+  const glReady = async () => {
+    for (let n = 0; n < 120; n++) { const m = await evaluate(`document.querySelector('#exMap')?.dataset.map`); if (m === 'gl' || m === 'svg') return m === 'gl'; await delay(125); }
+    return false;
+  };
+  await navigate('#explore');
+  if (!await glReady()) console.log('SKIP real map checks: MapLibre or OpenFreeMap tiles were not reachable (the SVG fallback was used)');
+  else {
+    const M = `document.querySelector('#exMap .map-gl')._lsMap`;
+    await check('real map loads with OSM attribution and every café marker at its coordinates', async () => {
+      await waitFor(`!!document.querySelector('#exMap canvas.maplibregl-canvas')`);
+      assert.match(await evaluate(`document.querySelector('.maplibregl-ctrl-attrib').textContent`), /OpenStreetMap contributors/);
+      assert.equal(await evaluate(`document.querySelectorAll('#exMap .ml-mk .mk').length`), 12);
+      // Each marker's tip (bottom centre) sits within 2 px of the projected café coordinate.
+      const off = await evaluate(`(async () => { const { cafeLngLat } = await import('/js/map-gl.js'); const { getCafes } = await import('/js/cafes.js'); const m = ${M}, box = m.getContainer().getBoundingClientRect(); return Math.max(...getCafes().map(c => { const p = m.project(cafeLngLat(c)), r = document.querySelector('.ml-mk [data-mk="' + c.id + '"]').closest('.ml-mk').getBoundingClientRect(); return Math.hypot(r.left + r.width / 2 - box.left - p.x, r.bottom - box.top - p.y); })); })()`);
+      assert.ok(off < 2, `marker offset ${off}px`);
+      assert.equal(await evaluate(`${M}.getStyle().layers.find(l => l.id === 'land').paint['background-color']`), '#DCE6C4');
+    });
+    await check('real map: marker click opens the preview, Escape closes it, demo cafés have no real directions', async () => {
+      await click('.ml-mk [data-mk="A"]');
+      await waitFor(`document.querySelector('.pv')?.dataset.id === 'A'`);
+      assert.equal(await evaluate(`document.querySelector('.ml-mk [data-mk="A"]').classList.contains('sel')`), true);
+      assert.equal(await evaluate(`document.querySelector('.pv .pv-dir').disabled`), true);
+      assert.match(await evaluate(`document.querySelector('.pv .pv-dir').textContent`), /Чиглэл авах · ДЕМО/);
+      await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+      assert.equal(await evaluate(`!!document.querySelector('.pv')`), false);
+      assert.equal(await evaluate(`document.querySelectorAll('.ml-mk .mk.sel').length`), 0);
+    });
+    await check('real map: filters dim markers; zoom buttons, wheel and drag move the camera', async () => {
+      await click('[data-f="purpose"][data-v="Сурах"]');
+      assert.equal(await evaluate(`document.querySelectorAll('.ml-mk .mk:not(.dim)').length`), 7);
+      await click('[data-f="purpose"][data-v="Сурах"]');
+      assert.equal(await evaluate(`document.querySelectorAll('.ml-mk .mk.dim').length`), 0);
+      const z0 = await evaluate(`${M}.getZoom()`);
+      await click('.map-ctrl-gl [data-z="in"]'); await delay(450);
+      const z1 = await evaluate(`${M}.getZoom()`); assert.ok(z1 > z0 + .5, `zoom in ${z0} → ${z1}`);
+      await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 900, y: 500, deltaX: 0, deltaY: 300 }); await delay(700);
+      const z2 = await evaluate(`${M}.getZoom()`); assert.ok(z2 < z1, `wheel ${z1} → ${z2}`);
+      const c0 = await evaluate(`JSON.stringify(${M}.getCenter())`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 900, y: 450, button: 'left', clickCount: 1 });
+      for (let i = 1; i <= 6; i++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 900 - i * 25, y: 450 + i * 10, button: 'left', buttons: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 750, y: 510, button: 'left', clickCount: 1 }); await delay(400);
+      assert.notEqual(await evaluate(`JSON.stringify(${M}.getCenter())`), c0);
+      assert.equal(await evaluate(`Math.abs(${M}.getBearing())`), 0, 'rotation stays off so north stays up');
+    });
+    await check('real map: «Миний байршил» shows «Та энд» only after a tap; a refusal shows a Mongolian message', async () => {
+      assert.equal(await evaluate(`!!document.querySelector('.ml-you')`), false, 'no location before the tap');
+      await send('Browser.grantPermissions', { origin, permissions: ['geolocation'] });
+      await send('Emulation.setGeolocationOverride', { latitude: 47.9188, longitude: 106.9176, accuracy: 20 });
+      await click('.map-ctrl-gl [data-z="me"]');
+      await waitFor(`!!document.querySelector('.ml-you') && document.querySelector('.ml-you').textContent.includes('Та энд')`);
+      await delay(800);
+      const c = await evaluate(`${M}.getCenter()`);
+      assert.ok(Math.abs(c.lat - 47.9188) < .001 && Math.abs(c.lng - 106.9176) < .001, JSON.stringify(c));
+      await send('Browser.resetPermissions');
+      await send('Emulation.clearGeolocationOverride');
+      await send('Emulation.setGeolocationOverride', {});      // position unavailable
+      await click('.map-ctrl-gl [data-z="me"]');
+      await waitFor(`[...document.querySelectorAll('.toast')].some(t => /Байршил|байршил/.test(t.textContent))`);
+      await send('Emulation.clearGeolocationOverride');
+    });
+    await check('real map: selecting from the list centres the café; mobile preview and sheet still work', async () => {
+      await click('[data-card="K"]'); await delay(700);
+      assert.equal(await evaluate(`document.querySelector('.pv')?.dataset.id`), 'K');
+      await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      await navigate('#explore'); assert.equal(await glReady(), true);
+      await click('.ml-mk [data-mk="I"]');
+      await waitFor(`document.querySelector('body > .pv')?.dataset.id === 'I'`);
+      await click('#shHandle');
+      assert.equal(await evaluate(`document.querySelector('#exSide').classList.contains('full')`), true);
+      assert.equal(await evaluate(`document.documentElement.scrollWidth > innerWidth`), false);
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    });
+    await check('real map: blocked tiles fall back to SVG; navigating away removes the map', async () => {
+      await navigate('#about');
+      assert.equal(await evaluate(`document.querySelectorAll('.maplibregl-map, .maplibregl-marker, .map-ctrl-gl').length`), 0);
+      await send('Network.setBlockedURLs', { urls: [...FONTS, 'https://tiles.openfreemap.org/*'] });
+      await navigate('#explore');
+      await waitFor(`document.querySelector('#exMap').dataset.map === 'svg'`);
+      assert.equal(await evaluate(`document.querySelectorAll('.maplibregl-map').length`), 0);
+      assert.equal(await evaluate(`document.querySelectorAll('#exMap .mk').length`), 12);
+      await send('Network.setBlockedURLs', { urls: FONTS });
+    });
+  }
   const errors = events.filter(e => e.method === 'Runtime.exceptionThrown').map(e => e.params.exceptionDetails.exception?.description || e.params.exceptionDetails.text);
   // A static host answers the backend probe with 404: that is how the site detects the offline demo mode.
   const badResponses = events.filter(e => e.method === 'Network.responseReceived' && e.params.response.status >= 400 && !new URL(e.params.response.url).pathname.startsWith('/api/')).map(e => ({ url: e.params.response.url.replace(origin, ''), status: e.params.response.status }));

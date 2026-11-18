@@ -12,6 +12,7 @@ import { notifyCafe } from './browser-rooms.mjs';
 export { BrowserRoom } from './browser-rooms.mjs';
 import { PublicProfileCache } from './public-cache.mjs';
 import { createUserAccess, SUPER_ADMIN_SELECT } from '../server/services/user-access.mjs';
+import { createCafeOwnership } from '../server/services/cafe-ownership.mjs';
 import { DurableObject } from 'cloudflare:workers';
 import { ingest } from './ingest.mjs';
 import { partner } from './partner.mjs';
@@ -60,12 +61,18 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  const reviewResponse=await reviewsRoute(req,env,limit);if(reviewResponse)return reviewResponse;
  const inventoryResponse=await inventoryRoute(req,env,limit);if(inventoryResponse)return inventoryResponse;
  const menuResponse=await menuRoute(req,env,limit);if(menuResponse)return menuResponse;
+ if(p==='/api/v1/analytics/session' && m==='POST') {
+  if(env.LS_ANALYTICS_ENABLED!=='1')fail(404,'analytics_disabled','Analytics disabled');limit('analytics-session:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
+  const s=analyticsSession(req.headers.get('cookie')||'');return json({ready:true},200,s.fresh?{'Set-Cookie':analyticsCookie(s.token,u.protocol==='https:')}:{});
+ }
  if(p==='/api/v1/analytics/events' && m==='POST') {
   if(env.LS_ANALYTICS_ENABLED!=='1'||!env.ANALYTICS)fail(404,'not_found','Analytics collection disabled');
-  limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
-  const input=await body(req,16384);let valid;try{valid=validateAnalyticsBatch(input);}catch{fail(422,'invalid_analytics','Invalid analytics batch');}
+  limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),phase11Config(env).analyticsBatches,60000);
+  const input=await body(req,16384),s=analyticsSession(req.headers.get('cookie')||'');let valid;try{valid=input?.schemaVersion===2?validateBehavior(input,s.token):validateAnalyticsBatch(input);}catch{fail(422,'invalid_analytics','Invalid analytics batch');}
   const cafe=await first(db,"SELECT id FROM cafes WHERE id=? AND status='active'",valid.cafeId);if(!cafe)fail(404,'not_found','Cafe not found');
-  return json(await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input),202);
+  if(await phase11Service(env).paused(valid.cafeId))fail(503,'analytics_paused','Optional analytics paused');
+  const value=await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input,s.token);
+  return json(value,202,s.fresh?{'Set-Cookie':analyticsCookie(s.token,u.protocol==='https:')}:{});
  }
  if(p==='/api/v1/ingest/measurements' && m==='POST')return ingest(req,db,limit,env,ctx);
  if(p==='/api/v1/ready'&&m==='GET'){const ok=await databaseReady({first:q=>first(db,q)});return json(readinessPayload(ok),ok?200:503);}
@@ -102,6 +109,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  const auth=env.SENSORS.get(env.SENSORS.idFromName('auth'));
  const registerUser=(db,input,role='user')=>createUser(db,input,role,auth);
  const userAccess=createUserAccess({sql:{first:(query,...args)=>first(db,query,...args),all:(query,...args)=>all(db,query,...args),batch:entries=>batch(db,entries)},hashPassword:password=>auth.passwordHash(password),verifyPassword:(password,hash)=>auth.passwordVerify(password,hash),fail,id});
+ const cafeOwnership=createCafeOwnership({sql:{first:(query,...args)=>first(db,query,...args),batch:entries=>batch(db,entries)},fail,id});
  if(p==='/api/v1/auth/reauthenticate' && m==='POST'){limit(`reauth:${user?.id}:${req.headers.get('cf-connecting-ip')}`,10,900000);return json(await userAccess.reauthenticate(user,(await body(req)).password));}
  if(p==='/api/v1/admin/users' || /^\/api\/v1\/admin\/users\/[^/]+(?:\/password)?$/.test(p) || p==='/api/v1/admin/audit') {
   guard(user,'admin');limit(`user-management:${user.id}`,30,60000);
@@ -166,9 +174,10 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   }
   if(p==='/api/v1/admin/applications' && m==='GET')return json({applications:(await all(db,`SELECT a.id,a.cafe_id,a.created_at,a.form,a.owner_id IS NOT NULL has_owner,c.status,c.name,u.email owner_email,(SELECT COUNT(*) FROM application_photos p WHERE p.application_id=a.id) photo_count FROM applications a JOIN cafes c ON c.id=a.cafe_id LEFT JOIN users u ON u.id=a.owner_id ORDER BY a.created_at DESC`)).map(r=>({...r,has_owner:!!r.has_owner,form:parse(r.form,{})}))});
   if(p==='/api/v1/admin/cafes' && m==='GET')return json({cafes:await all(db,`SELECT c.*,u.email owner_email,(SELECT COUNT(*) FROM devices d WHERE d.cafe_id=c.id AND d.revoked_at IS NULL) device_count,(SELECT MAX(ts) FROM measurements m WHERE m.cafe_id=c.id) last_measurement_at,(SELECT id FROM applications a WHERE a.cafe_id=c.id LIMIT 1) application_id,json_extract(c.visualization,'$.status') visualization_status FROM cafes c LEFT JOIN users u ON u.id=c.owner_id ORDER BY sort_order,created_at`)});
-  a=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)(?:\/(status|visualization))?$/);
+  a=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)(?:\/(status|visualization|owner))?$/);
   if(a) {
    const row=await first(db,'SELECT * FROM cafes WHERE id=?',a[0]);if(!row)fail(404,'not_found','Cafe not found');
+   if(a[1]==='owner' && m==='PUT'){limit(`cafe-owner:${user.id}:${req.headers.get('cf-connecting-ip')}`,30,60000);return json(await cafeOwnership.setOwner(user,row.id,await body(req)));}
    if(m==='GET' && !a[1])return json({cafe:{...await ownerView(db,row),owner:row.owner_id?publicUser(await first(db,'SELECT * FROM users WHERE id=?',row.owner_id)):null,public:row.status==='active'?await cafeView(db,row):null}});
    if(m==='PATCH' && !a[1]){const x=cleanCafe(await body(req));if((x.lat!=null || x.lng!=null) && x.map_x===undefined && x.map_y===undefined){const position=projectToMap(x.lat??row.lat,x.lng??row.lng);x.map_x=position.x;x.map_y=position.y;}await update(db,'cafes',row.id,{...x,updated_at:now()});return json({ok:true});}
    if(a[1]==='visualization' && m==='PUT'){const x=await body(req);if(!['not_started','in_progress','ready'].includes(x.status))fail(400,'bad_request','Invalid visualization status');const current=parse(row.visualization,{});const layout=x.layout?sanitizeLayout(x.layout):current.layout || null;if(x.status==='ready' && !layout)fail(400,'bad_request','Ready visualization needs layout');const visualization={...current,status:x.status,layout,notes:typeof x.notes==='string'?x.notes.slice(0,2000):current.notes || '',generator:'manual',updated_at:now()};await update(db,'cafes',row.id,{visualization:JSON.stringify(visualization),updated_at:now()});return json({visualization});}
@@ -222,6 +231,21 @@ export class AppBackend extends DurableObject {
  // response or authorization decision enters the public cache.
  constructor(ctx,env) { super(ctx,env);this.ctx=ctx;this.env=env;this.cache=new Map();this.historyCache=new Map();this.pending=new Map();this.quotaUntil=0;this.generation=0;this.profiles=new PublicProfileCache({kv:env.PUBLIC_CACHE,storage:ctx.storage,enabled:env.LS_KV_PUBLIC_ENABLED==='1'}); }
  async fetch(req) {
+  const start=performance.now(),path=new URL(req.url).pathname,correlation=requestId();
+  let response;try{response=await this.fetchInternal(req);}catch(e){response=error(e);}
+  const elapsed=performance.now()-start;runtimeMetrics.record(requestCafe(path),response.status,elapsed);
+  if(this.env.LS_REQUEST_LOGS==='1'||response.status>=500)operationalLog('http_request',{request_id:correlation,route:routeGroup(path),status:response.status,duration_ms:elapsed,runtime:'cloudflare'});
+  const result=new Response(response.body,response);result.headers.set('X-Request-ID',correlation);return result;
+ }
+ async alarm(){let delay=900000;try{const result=await phase11Service(this.env).maintenance();if(result?.more_tenants)delay=1000;else if(result?.next_due)delay=Math.max(1000,Math.min(900000,Date.parse(result.next_due)-Date.now()));runtimeMetrics.job();}catch{runtimeMetrics.job(true);operationalLog('background_failure',{runtime:'cloudflare',job:'maintenance'});}finally{await this.ctx.storage.setAlarm(Date.now()+delay);}}
+ async fetchInternal(req) {
+  if(new URL(req.url).pathname==='/api/v1/ready'&&req.method==='GET'){
+   limit('readiness:'+(req.headers.get('cf-connecting-ip')||'local'),30,60000);
+   let validConfig=true;try{phase11Config(this.env);}catch{validConfig=false;}
+   const readyBindings=validConfig&&!!(this.env.DB&&this.env.SENSORS&&this.env.BACKEND)&&(! (this.env.LS_ANALYTICS_ENABLED==='1')||!!this.env.ANALYTICS)&&(!(this.env.LS_BROWSER_REALTIME_ENABLED==='1')||!!this.env.BROWSER_ROOMS)&&(!(this.env.LS_R2_MEDIA_ENABLED==='1')||!!this.env.MEDIA)&&(!(this.env.LS_KV_PUBLIC_ENABLED==='1')||!!this.env.PUBLIC_CACHE);
+   const value=await readiness({first:(q,...a)=>first(this.env.DB,q,...a)},readyBindings);return json(value,value.ready?200:503);
+  }
+  if(!this.phase11Scheduled){const options=phase11Config(this.env);await batch(this.env.DB,[["UPDATE application_limits SET value=? WHERE key='tenant_media_bytes'",options.tenantMediaBytes],["UPDATE application_limits SET value=? WHERE key='media_upload_bytes'",options.mediaBytes],["UPDATE application_limits SET value=? WHERE key='csv_rows'",options.csvRows],["UPDATE application_limits SET value=? WHERE key='csv_bytes'",options.csvBytes]]);this.phase11Scheduled=true;if(!await this.ctx.storage.getAlarm())await this.ctx.storage.setAlarm(Date.now()+30000);}
   const u=new URL(req.url),p=u.pathname;
   const publicPath=p==='/api/v1/live' || p==='/api/v1/cafes' || /^\/api\/v1\/cafes\/[^/]+$/.test(p);
   const ttl=req.method==='GET'?(p==='/api/v1/health'?60000:publicPath?5000:0):0,key=p; // public projections ignore cookies and query parameters
@@ -248,6 +272,7 @@ export class AppBackend extends DurableObject {
  }
 }
 export default {async fetch(req,env,ctx){try{
+ if(new URL(req.url).pathname==='/api/v1/ready'&&req.method==='GET'&&!env.BACKEND)return json({ready:false,api:'1'},503,{'X-Request-ID':requestId()});
  if(req.method==='GET' && new URL(req.url).pathname==='/api/v1/config' && globalThis.caches?.default){
   const cached=await caches.default.match(req);if(cached)return cached;
   const response=await env.BACKEND.get(env.BACKEND.idFromName('application')).fetch(req);

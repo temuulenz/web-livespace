@@ -22,7 +22,7 @@ export class SensorGateway extends DurableObject {
   sql.exec('CREATE TABLE IF NOT EXISTS admissions(device TEXT PRIMARY KEY,connection TEXT NOT NULL,expires INTEGER NOT NULL)');
   sql.exec('DELETE FROM admissions WHERE expires<=?',t);
   const current=[...sql.exec('SELECT connection FROM admissions WHERE device=?',device)][0];
-  if(!current && [...sql.exec('SELECT COUNT(*) n FROM admissions')][0].n>=500)return false;
+  if(!current && [...sql.exec('SELECT COUNT(*) n FROM admissions')][0].n>=Math.min(10000,Math.max(1,Number(this.env.LS_SENSOR_MAX_CONNECTIONS)||500)))return false;
   sql.exec('INSERT INTO admissions(device,connection,expires) VALUES(?,?,?) ON CONFLICT(device) DO UPDATE SET connection=excluded.connection,expires=excluded.expires',device,connection,t+90000);return true;
  }
  async release(device,connection) {this.sql.exec('DELETE FROM admissions WHERE device=? AND connection=?',device,connection);}
@@ -59,7 +59,7 @@ export class SensorGateway extends DurableObject {
    if(!d || d.token_hash!==a.hash || d.cafe_id!==a.cafe || source(d)!==a.source)fail(401,'device_assignment_changed','Device authorization changed');
    const clock=Date.now();this.sql.exec('INSERT INTO rate_window(id,started,count) VALUES(1,?,1) ON CONFLICT(id) DO UPDATE SET started=CASE WHEN started<=?-60000 THEN ? ELSE started END,count=CASE WHEN started<=?-60000 THEN 1 ELSE count+1 END',clock,clock,clock,clock);
    const rate=[...this.sql.exec('SELECT count FROM rate_window WHERE id=1')][0];
-   if(rate.count>120)fail(429,'rate_limited','Too many messages');
+   if(rate.count>Math.min(3600,Math.max(1,Number(this.env.LS_SENSOR_RATE_PER_MINUTE)||120)))fail(429,'rate_limited','Too many messages');
    if(typeof message!=='string')fail(415,'json_only','JSON text required');
    if(new TextEncoder().encode(message).length>16384){ws.close(1009,'Message too large');return;}
    let input;try{input=JSON.parse(message);}catch{fail(400,'invalid_json','Malformed JSON');}

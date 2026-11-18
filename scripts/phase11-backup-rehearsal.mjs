@@ -1,0 +1,44 @@
+// Complete offline synthetic Node data directory recovery; never accepts production paths.
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,rm,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';import {join} from 'node:path';
+import {createApp} from '../server/app.mjs';import {loadConfig} from '../server/config.mjs';
+import {createMenuService} from '../shared/business/menu.mjs';import {createMenuMedia} from '../shared/business/menu-media.mjs';
+import {createInventoryService} from '../shared/business/inventory.mjs';import {createReviewService} from '../shared/business/reviews.mjs';import {createPromotionService} from '../shared/business/promotions-service.mjs';
+import {validateBehavior} from '../shared/business/behavior.mjs';import {transaction} from '../server/lib/db.mjs';
+import {MARKER,snapshotDirectory,verifySnapshot,inventory} from './lib/phase11-backup.mjs';
+const dir=await mkdtemp(join(tmpdir(),'ls-phase11-node-recovery-'));let app;
+const config=path=>loadConfig({LS_DATA_DIR:path,LS_SEED_DEMO:'0',LS_ANALYTICS_ENABLED:'1',LS_SENSOR_EXPECTED_INTERVAL_SEC:'15'},{port:0});
+const fail=(status,code,message)=>{throw Object.assign(Error(message),{status,code});},id=p=>p+'_'+crypto.randomUUID();
+try{
+ const source=join(dir,'source');await mkdir(source,{mode:0o700});await writeFile(join(source,MARKER),JSON.stringify({kind:'livespace-phase11-synthetic',runtime:'node'}),{mode:0o600});
+ app=await createApp(config(source));const {db}=app.deps;
+ for(const [key,role] of [['owner','owner'],['customer','user'],['admin','admin']])db.prepare('INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES(?,?,?,?,?,?)').run(key,key+'@staging.invalid','unusable-synthetic-hash','SIMULATED '+key,role,new Date().toISOString());
+ db.prepare("INSERT INTO cafes(id,name,owner_id,status,data_mode,created_at,updated_at) VALUES('fixture','SIMULATED recovery','owner','active','demo',?,?)").run(new Date().toISOString(),new Date().toISOString());
+ const sql={first:(q,...a)=>db.prepare(q).get(...a),all:(q,...a)=>db.prepare(q).all(...a),batch:async entries=>transaction(db,()=>entries.map(([q,...a])=>db.prepare(q).run(...a)))};
+ const user={id:'owner',role:'owner'},menu=createMenuService({sql,fail,id}),category=await menu.create('fixture','categories',{name:'SIMULATED drinks',published:true},user),product=await menu.create('fixture','products',{name:'SIMULATED latte',category_id:category.id,base_price:5000,published:true},user);
+ const media=createMenuMedia({sql,menu,fail,id,storage:{plan:(_,key,photo)=>({file:'menu-fixture/'+key+'.'+photo.ext}),save:async(_,key,photo)=>({file:await app.deps.uploads.save('menu-fixture',key,photo)}),read:image=>app.deps.uploads.read(image.file)}});
+ await media.replace('fixture',product.id,{version:1,image:'data:image/jpeg;base64,'+(await readFile('tests/fixtures/upload-valid.jpg')).toString('base64')},user);
+ const stock=createInventoryService({sql,fail,id}),body={idempotency_key:'stable-recovery-stock',updates:[{product_id:product.id,version:0,mode:'quantity',quantity:9,reason:'restock'}]};await stock.mutate('fixture',body,user);
+ await createReviewService({sql,fail,id}).create('fixture',{taste:5,service:4,comfort:3,value:4,study:5,comment:'SIMULATED recovery'}, {id:'customer',role:'user'});
+ await createPromotionService({sql,fail,id}).create('fixture',{name:'SIMULATED offer',kind:'fixed',value:500,published:true,starts_at:new Date(Date.now()-60000).toISOString(),ends_at:new Date(Date.now()+3600000).toISOString()},user);
+ await app.deps.phase11.notifications.preferences(user,{inventory:false,promotion:false});await app.deps.phase11.notifications.maintenance();assert.ok((await app.deps.phase11.notifications.list({},user)).items.length);await app.deps.phase11.notifications.read(null,user);
+ const batch=validateBehavior({schemaVersion:2,cafeId:'fixture',events:[{id:'pending-before-backup',type:'product_view',productId:product.id}]},'synthetic-session');assert.equal(app.deps.behavior.collect(batch).accepted,1);
+ db.prepare("INSERT INTO devices(id,cafe_id,token_hash,kind,is_test,created_at) VALUES('SIM-RECOVERY','fixture','unusable-synthetic-token','simulator',1,?)").run(new Date().toISOString());
+ db.prepare("INSERT INTO measurements(cafe_id,device_id,ts,received_at,is_test,message_id,data_source,observed_people,raw) VALUES('fixture','SIM-RECOVERY',?,?,1,'stable-message','simulated',4,'{}')").run(new Date().toISOString(),new Date().toISOString());
+ db.prepare("INSERT INTO sensor_receipts VALUES('SIM-RECOVERY','stable-message','synthetic-payload',?)").run(new Date().toISOString());
+ await app.close();app=null;
+ const backupStart=performance.now(),backup=join(dir,'backup'),before=await snapshotDirectory(source,backup,{offline:true}),backupMs=performance.now()-backupStart;
+ const restoreStart=performance.now(),restored=join(dir,'restored');await verifySnapshot(backup);await snapshotDirectory(backup,restored,{offline:true});assert.deepEqual(await inventory(restored),before);const restoreMs=performance.now()-restoreStart;
+ app=await createApp(config(restored));const restoredDb=app.deps.db;
+ assert.equal(restoredDb.prepare("SELECT quantity FROM inventory WHERE cafe_id='fixture'").get().quantity,9);
+ assert.equal(restoredDb.prepare("SELECT count(*) n FROM sensor_receipts WHERE device_id='SIM-RECOVERY' AND message_id='stable-message'").get().n,1);
+ const restoredInbox=await app.deps.phase11.notifications.list({},user);assert.ok(restoredInbox.items.length);assert.equal(restoredInbox.unread,0);assert.equal((await app.deps.phase11.notifications.preferences(user)).preferences.inventory,false);
+ assert.equal(app.deps.behavior.collect(batch).duplicates,1);await app.deps.behavior.flush('fixture');assert.equal(restoredDb.prepare('SELECT sum(event_count) n FROM analytics_dimensions').get().n,1);
+ const rsql={first:(q,...a)=>restoredDb.prepare(q).get(...a),all:(q,...a)=>restoredDb.prepare(q).all(...a),batch:async entries=>transaction(restoredDb,()=>entries.map(([q,...a])=>restoredDb.prepare(q).run(...a)))};
+ assert.equal((await createInventoryService({sql:rsql,fail,id}).mutate('fixture',body,user)).duplicate,true);
+ const current=await createMenuService({sql:rsql,fail,id}).get('fixture','products',product.id,user);const image=restoredDb.prepare('SELECT file FROM menu_images WHERE id=?').get(current.image_ref);assert.ok((await app.deps.uploads.read(image.file)).length);
+ const recoveryMs=performance.now()-restoreStart;
+ const main=before.databases['livespace.db'];const report={scope:'offline_synthetic_node_not_production',backup_ms:backupMs,restore_copy_verify_ms:restoreMs,restore_through_domain_readback_ms:recoveryMs,databases:Object.keys(before.databases).length,main:{schema_version:main.user_version,indexes:main.indexes,triggers:main.triggers,schema_objects:main.schema_objects,table_counts:Object.fromEntries(Object.entries(main.tables).map(([n,t])=>[n,t.rows]))},checks:{all_files_and_record_digests_equal:true,integrity:true,foreign_keys:true,schema_indexes_constraints_equal:true,inventory_retry:true,sensor_receipt_identity:true,pending_analytics_recovered:true,media_readable:true,notification_history_read_preferences:true},limits:['offline synthetic only','sensor duplicate ACK independently covered by protocol tests','no hosted D1/DO restore','no production RTO/RPO claim']};
+ await mkdir('.artifacts',{recursive:true});await writeFile('.artifacts/phase11-node-recovery.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+}finally{await app?.close();await rm(dir,{recursive:true,force:true});}

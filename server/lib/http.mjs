@@ -46,7 +46,7 @@ export function readBody(req, limit) {
     const chunks = [];
     req.on('data', chunk => {
       size += chunk.length;
-      if (size > limit) { reject(new HttpError(413, 'payload_too_large', `Request body exceeds ${Math.round(limit / 1024)} KB`)); req.destroy(); return; }
+      if (size > limit) { reject(new HttpError(413, 'payload_too_large', `Request body exceeds ${Math.round(limit / 1024)} KB`)); req.pause(); return; }
       chunks.push(chunk);
     });
     req.on('end', () => resolveBody(Buffer.concat(chunks)));
@@ -88,6 +88,7 @@ export function sendJson(res, status, data, headers = {}) {
 export function sendError(res, error) {
   if (res.headersSent) { res.end(); return; }
   const status = error instanceof HttpError ? error.status : 500;
+  if (status === 413) { res.shouldKeepAlive = false; res.setHeader('Connection', 'close'); }
   const payload = { error: { code: error instanceof HttpError ? error.code : 'internal', message: error instanceof HttpError ? error.message : 'Internal server error' } };
   if (error instanceof HttpError && error.details) payload.error.details = error.details;
   sendJson(res, status, payload);
@@ -97,8 +98,8 @@ export const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
   'X-Frame-Options': 'SAMEORIGIN',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
+  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob: https://tiles.openfreemap.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com; script-src 'self' https://unpkg.com; worker-src 'self' blob:; connect-src 'self' https://tiles.openfreemap.org; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };

@@ -2,79 +2,122 @@
 
 # Phase 11 engineering checkpoint — 11A through 11C
 
-11A menu hardening, 11B inventory and 11C ratings/reviews are implemented for local Node SQLite and Cloudflare D1 integration. Phase 11 overall is incomplete: 11D promotions, 11E analytics extensions, 11F statistical datasets, 11G notifications and 11H resource monitoring/controls remain unimplemented. No other phases were started. No deployment, remote resource creation/migration, paid service, Git branch/index/commit operation, Android change or production/frontend implementation was performed by this work. Existing uncommitted teammate and Phase 7.1/7.2 work was preserved.
+Current readiness follow-up: [PHASE11_PRODUCTION_READINESS.md](PHASE11_PRODUCTION_READINESS.md) records subsequent local fixes/recovery/staging validation and the remaining production NO-GO gates. Counts/findings in this earlier report remain dated evidence.
 
-## Architecture and migrations
+Status: local backend implementation and validation complete against PHASE11_ACCEPTANCE.md. Final evidence is in PHASE11_PROGRESS.md. This report supersedes the historical A–D checkpoint and its resolved missing-policy blocker. Existing frontend work, original styles/fixtures and Android v1 wire behavior were preserved. No deployment, production database/resource change, paid service, Git branch/index/commit/push/merge operation or frontend redesign was performed.
 
-Shared native JavaScript services use thin Node and Cloudflare adapters, existing sessions/RBAC/cafe assignments, prepared SQL, atomic SQLite transactions or D1 batches and existing media/realtime abstractions. Sole runtime dependency remains ws; no frontend build step. D1 is authoritative; KV/R2 remain optional. No alternate sensor credentials/latest-state store, order/reservation, trained model or physical Android validation was introduced.
+## Completion matrix
 
-| Node / D1 migration | Change |
+| Phase | Implemented backend | Compatibility / acceptance evidence |
+|---|---|---|
+| 11A | Menu/categories/variants, publication/archive, CSV preview/confirmation, images, atomic tenant/global quotas, staged storage and bounded reference-safe reconciliation | Existing Node/D1 media, quota, maximum-menu, rollback and tenant tests remain passing |
+| 11B | Stock/status, immutable movements, permanent retries, source conflicts, cafe-scoped deltas and recovery snapshots | Atomic races/negative-stock/tenant tests, existing SSE/browser room checks |
+| 11C | Reviews/criteria, author editing, owner replies, reports, admin moderation, incremental rating aggregates/distributions | Author/owner/admin separation, aggregate race/rollback/reconciliation and privacy tests |
+| 11D | Fixed/percentage/product/category promotions, scheduled publication, local recurrence, preview and nonstacking integer prices | Node/D1 parity, price/cache transitions, quotas, concurrent versions, ownership fence and audits |
+| 11E | Validated v2 events, anonymous/authenticated pseudonymous sessions, server time, deduplication, session/tenant budgets, dimensional/cohort summaries and retention | Shared existing durable collector/monotonic flush, Node restart recovery, bounded intake, invalid metadata/reference rejection and legacy compatibility |
+| 11F | Owner/admin day/week/month reports, equal-period comparisons, cohort suppression, source-separated sensor history, favorites/reviews/current stock, safe aggregate CSV | Current authorization before cache hits, bounded indexed queries/pages, real/simulated/stale/invalid tests, explicit unavailable metrics |
+| 11G | Persistent outbox/inbox/read/preferences; all nine approved trigger families, recipient resolution, opt-in marketing, incidents/cooldowns/budgets and expiration reminders | Transactional domain triggers, concurrent delivery/dedup/admission, ownership-change fence, recipient isolation, restart and sensor-storm tests |
+| 11H | API/DB/runtime measurements, scoped usage, provider-unavailable labels, admission/configuration, atomic media/CSV protection, optional pause and threshold incidents | Tenant/platform namespace separation, independent tenant alerts, original caps/error compatibility, runtime bounds and Cloudflare integration |
+
+All phases are implemented for local Node/SQLite and Cloudflare/D1 where applicable. Required in-app notifications exist; optional external email/realtime notification delivery was not added because there is no configured provider and private polling satisfies the approved channel requirement. Existing public realtime remains unchanged except its configured connection admission.
+
+## Architecture and files
+
+Native JavaScript, built-in Node HTTP/SQLite and the custom browser framework remain. `ws` is still the sole runtime dependency; no frontend build step or new dependency was added. Shared services contain business logic; thin adapters supply prepared SQL, atomic batches, existing authentication and bounded HTTP handling.
+
+New E–H core files:
+
+- `shared/business/behavior.mjs`, `behavior-schema.mjs`, `insights.mjs` — v2 schema/authorization, aggregate storage and reports/CSV.
+- `cloudflare/behavior-store.mjs` — extension of existing per-cafe analytics durable storage; `server/services/behavior.mjs` — same collector algorithm over durable Node SQLite files with bounded handles/recovery.
+- `shared/business/notifications.mjs`, `notifications-schema.mjs` — transactional outbox, persistent recipient state and bounded delivery.
+- `shared/business/resources.mjs`, `resources-schema.mjs`, `phase11-config.mjs`, `phase11.mjs` — monitoring, controls, resource incidents/cursor and shared orchestration.
+- `server/routes/behavior.mjs`, `server/routes/phase11.mjs`, `cloudflare/phase11.mjs` — HTTP adapters.
+- `cloudflare/migrations/0014_behavior.sql`, `0015_notifications.sql`, `0016_resources.sql` — ordered additive D1 migrations.
+- `tests/phase11-analytics.test.mjs`, `phase11-notifications.test.mjs`, `phase11-resources.test.mjs`; `scripts/phase11-load.mjs`; E–H contracts/configuration/acceptance and measurement documents.
+
+Integration edits: existing analytics store/DO, Workers API/backend alarms, Cloudflare D1 measurement helper and room/sensor admission; Node assembly/config/database/realtime helpers; shared menu CSV limits/SQL error mapping; existing analytics/Cloudflare/migration tests; D1 probe. The static browser test now waits for the asynchronous map's twelve markers after resize before retaining its existing exact count assertion. No frontend component or baseline fixture changed.
+
+Previously completed A–D files/behavior remain in the checkout, including promotion migration 0013 and its shared service/adapters/tests. They were not restarted or replaced. See the feature guides for their complete file/API inventories.
+
+## Database changes and persistence
+
+| Node version / D1 migration | Change |
 |---|---|
-| 5 / 0009 (existing checkpoint) | Categories/products/variants/media and immutable business audit |
-| 6 / 0010 | Atomic tenant/global media quotas, identity/reference fences and bounded cleanup journal |
-| 7 / 0011 | Inventory, immutable movements, permanent retry receipts, cafe revisions/source constraints |
-| 8 / 0012 | Reviews/replies/reports/moderation audit, incremental rating summary/distributions |
+| 5 / 0009 | Menu entities/media and immutable business audit |
+| 6 / 0010 | Atomic quotas, durable media staging and cleanup fences |
+| 7 / 0011 | Inventory/movements/receipts/revisions |
+| 8 / 0012 | Reviews/replies/reports/moderation and incremental ratings |
+| 9 / 0013 | Tenant promotions, schedule/target relationships and capacity |
+| 10 / 0014 | Analytics dimension, session-day and cohort summaries/time indexes |
+| 11 / 0015 | Notification outbox/inbox/preferences/delivery receipts/cooldowns/budgets/incidents and domain triggers |
+| 12 / 0016 | Resource incidents/cursor, scoped optional controls and configurable lower media/CSV fences |
 
-Migrations are additive and ordered. Only disposable local databases were migrated. The frozen v1 fixture was preserved; its migration regression assertion now expects version 8. Existing production schema/data was never inspected or modified.
+Only disposable local databases were migrated during validation. Shared SQL/D1 parity and v1-fixture upgrade are tested; the frozen pre-Android fixture is unchanged. Existing AnalyticsAggregator initializes additive local collector tables on resume; no new Cloudflare namespace/bucket/service was created. Node collectors store durable pending counters under LS_DATA_DIR/analytics; accepted data survives normal process restarts and handle eviction. D1 receives bounded aggregate/member summary batches, not raw per-click event rows. Receipt/session summaries never enter owner/public responses.
 
-11A now reserves menu/media capacity inside the transaction rather than racing preflight counts. Physical storage paths are durably journaled before uploads. Trusted, cafe-scoped, dry-run-by-default reconciliation processes old unreferenced uploads with reference fences and retained late-writer tombstones. No ambiguous failed write deletes a possibly referenced object. Operational bounds and legacy pending-upload handling are documented in MENU_MANAGEMENT.md. A 100-product/2000-variant snapshot uses bounded parameters and was exercised at maximum tenant entity counts.
+## API handoff
 
-11B stock, version, movement, audit, revision and request receipt commit atomically. Quantity never becomes negative; zero is sold out. Product and variant sources cannot conflict; ordered bulk source switching preserves IDs/history. Retry keys bind canonical request plus current actor/cafe and survive restart. Public exact quantities are owner-controlled; private histories never enter events. After COMMIT, small cafe-scoped inventory deltas use Node SSE/Cloudflare browser rooms; snapshots recover missed events without full menu reloads. Inventory is never cached as authority. Existing sensor frame/ACK/persistence architecture is unchanged.
+Machine contracts contain 70 operations across 53 paths; the Postman collection has 71 requests including existing login. Full field/error/role/time/source/cache/retention semantics:
 
-11C five integer ratings generate one consistent review mean. Triggers update counts, criterion sums and six sets of five-star distribution bins atomically on create/edit/delete/hide/restore. Author-only editing/soft deletion, owner replies/reporting and admin moderation/reasons/audit are enforced independently. Public summaries are indexed, cached per cafe and never recompute history per request. Reconciliation is an explicit admin/operator maintenance scan and does not alter reviews. Display names are not verified visits; public account IDs/emails/report identities are omitted.
+- MENU_MANAGEMENT.md, INVENTORY_MANAGEMENT.md, RATINGS_AND_REVIEWS.md, PROMOTIONS.md.
+- BEHAVIOR_ANALYTICS.md: POST analytics/session and analytics/events; GET owner/admin cafe analytics and CSV; GET admin platform analytics/CSV.
+- NOTIFICATIONS.md: GET own inbox/unread count; POST individual/all read; GET/PATCH category preferences.
+- RESOURCE_CONTROLS.md: GET cafe usage/admin monitor; PATCH administrator optional-work controls; POST one bounded admin maintenance step.
 
-## API/team handoff
+Existing legacy Cloudflare hourly/ISO analytics requests remain supported separately. Date-only E/F requests use Asia/Ulaanbaatar calendar days, Monday weeks and calendar months; UTC stays the persistence boundary. All private APIs reuse current sessions and tenant/recipient checks. No researcher role, unrestricted research export, order/payment/revenue/conversion API or external sharing workflow exists. Teammate customer mock adapters/UI remain unchanged; FRONTEND_INTEGRATION_GUIDE.md explains integration.
 
-45 implemented operations across 30 paths are documented in PHASE11_API_CONTRACT.md and docs/openapi.yaml (JSON syntax valid YAML 1.2). The Postman-compatible collection includes 46 requests including existing cookie login. Full HTTP method/path/auth/ownership/body/response/errors/filter/pagination/cache/realtime contracts are in MENU_MANAGEMENT.md, INVENTORY_MANAGEMENT.md and RATINGS_AND_REVIEWS.md. FRONTEND_INTEGRATION_GUIDE.md and PHASE11_PERMISSION_MATRIX.md cover independent integration; no frontend handlers/UI were implemented.
+## Security and correctness
 
-`node scripts/phase11-menu-demo.mjs` runs a self-cleaning local API workflow with an isolated cafe marked demo, fictional menu/stock and a clearly simulated review/rating. It creates an ephemeral server/database/files and does not insert production data or expose credentials. Research export/statistical APIs await 11F; operational rating counts are not customer research, sales, revenue or verified visits.
+Strict field whitelists reject arbitrary analytics metadata/location/client timestamps; references are tenant/publication checked. Server-derived per-cafe session pseudonyms are unlinked across cafes; no raw IP/fingerprint/account identifier is persisted in analytics. Security IP windows are ephemeral. Small behavior cohorts are omitted entirely, including their product/promotion keys, and cannot appear in CSV. Unique platform visitors are explicitly unavailable rather than summing unlinkable cafe sessions as people.
 
-## Security and testing
+Domain changes and notification intents commit together. Inbox insertion atomically rechecks enabled users, ownership/admin eligibility, preferences, budget, cooldown and deduplication. Marketing requires explicit opt-in plus a current favorite; clients cannot name recipients. Scope keys distinguish platform from cafe IDs, including a cafe literally named platform. Resource alert cooldowns include tenant and severity, so one tenant cannot suppress another's warning or a warning hide a critical escalation. Sensor alerts use real enabled devices, durable incident identities and existing offline thresholds; heartbeat pongs never create telemetry or freshness.
 
-Tests cover unauthorized/foreign cafe denial; strict body/type/price/rating/quantity validation; same-origin cookie writes; current session revocation; immutable Super Admin restrictions; safe media visibility/ETags; atomic concurrent quotas; maximum snapshots; failure/reconstructed-service media recovery; conflicting stock sources; durable retry receipts; negative rejection; concurrent decrements; movement/audit rollback; post-commit cafe-scoped deltas; author uniqueness; author/owner separation; reply editing/deletion; review reporting; admin-only moderation/audit; aggregate race/rollback; public privacy; null/no-review semantics; and deliberate aggregate repair in disposable data.
+New media fences run before reservation and include the incoming bytes; unchanged default limits still use original constraints/error behavior. CSV lower bounds are enforced in addition to existing parser/confirmation/tenant rules; exports quote/neutralize formulas. Oversized Node JSON returns documented 413 before connection closure. Legacy and v2 intake share the same local tenant-day quota, closing a boundary bypass without altering legacy event-time/replay semantics. Rate, page, connection, query-range, queue/batch and retention bounds remain server-side; pause affects only optional analytics. Authoritative sensor failures still produce no successful ACK.
 
-Local validation at this checkpoint: npm ci passed, 0 audit vulnerabilities; npm test 133 passed; focused sensors 26 passed; focused quota/inventory/review suite 15 passed; local Cloudflare 26 passed; Wrangler dry-run passed (no deployment). Static Chromium 16 passed. Node browser E2E passed 13/13; original visitor visual/lifecycle checks passed all 11 checkpoints. Final Cloudflare rerun passed 26/26 after public fan-out authorization query deduplication. No original style/simulation fixtures were regenerated. The initial C Cloudflare test attempted to create an existing reply with version 0; corrected it to an actual versioned edit. D1 reconciliation initially exceeded compound SELECT limits; replaced it with bounded json_each input and reran successfully. These were fixed before the checkpoint.
+## Validation
 
-## Measured resource consumption
+All commands use disposable data. Browser environment:
 
-`scripts/phase11-d1-check.mjs` runs actual shared services against disposable local workerd D1 and optional local R2, records meta.rows_read/rows_written (including exposed index/trigger maintenance), verifies menu/inventory version races, inventory movement rollback, review edit-versus-moderation races, injected post-write rollback, ambiguous R2 recovery, tenant isolation and rating reconciliation. Exact results/plans: PHASE11_BUSINESS_D1_MEASUREMENTS.json. Fixture: 30 published products; business operations shown below. Authorization through HTTP sessions and browser-room fan-out add costs outside this direct-service probe. No production CPU/duration/billing or internet-latency claim.
+```sh
+export BROWSER_PATH=/home/temuulen/.cache/ms-playwright/chromium-1255/chrome-linux64/chrome
+export BROWSER_NO_SANDBOX=1
+export WRANGLER_SEND_METRICS=false
+```
 
-| Direct-service operation | SQL statements | D1 rows read | D1 rows written |
-|---|---:|---:|---:|
-| product create | 5 | 4 | 9 |
-| cold menu 30 products | 5 | 95 | 0 |
-| warm menu 30 products | 1 | 1 | 0 |
-| product update | 6 | 5 | 4 |
-| r2 image upload and attach | 10 | 10 | 15 |
-| inventory create | 11 | 10 | 17 |
-| inventory duplicate | 2 | 2 | 0 |
-| inventory decrement | 11 | 15 | 13 |
-| inventory public snapshot | 4 | 7 | 0 |
-| review create | 4 | 8 | 24 |
-| review edit | 4 | 22 | 20 |
-| rating summary cold | 3 | 9 | 0 |
-| rating summary warm | 1 | 1 | 0 |
-| review hide | 5 | 10 | 17 |
-| rating reconciliation | 4 | 99 | 57 |
+| Command | Result |
+|---|---|
+| `npm ci` | Passed; zero audit vulnerabilities. npm blocked dependency postinstall scripts; available Wrangler binaries worked. |
+| `npm test` | 177 passed; zero failures or skips |
+| `npm run test:sensors` | 26 passed |
+| `npm run test:browser` | 17 checks passed |
+| `npm run test:e2e` | 13 passed |
+| `npm run test:visitor-visual` | 11 original pixel/lifecycle checkpoints passed |
+| `npm run test:visual` | 17 checks passed |
+| `npm run test:cloudflare` | 29 checks passed |
+| `node scripts/phase11-d1-check.mjs` | Local D1/R2 concurrency, rollback, recovery, cohort, notification and monitoring probe passed |
+| `node scripts/phase11-menu-demo.mjs` | Ephemeral simulated menu/stock/review workflow passed |
+| `node scripts/phase11-menu-budget.mjs` | Cold menu six SQL statements, warm two; not D1 billing |
+| `node scripts/phase11-load.mjs` | All 12 cafe/browser cases and 36 nested synthetic session workload variants passed; R2/KV/analytics/replay/cold restart checks passed |
+| `npm run cf:check` | Worker bundle/dry-run passed; no deployment |
+| `node --check` on changed/new native modules; JSON contract parsing; `git diff --check` | 42 native modules passed; JSON parsed; whitespace passed |
 
-Cold menu and rating snapshots versus warm snapshots show the benefit of targeted five-second caches; inventory uses current indexed reads with revision-stability checks. Representative public join and image lookups select tenant indexes. No comparable inventory/review endpoints existed before these changes, so no invented before/after latency measurement is reported. Maintenance reconciliation is intentionally costlier and never runs per public request. Normal mutation bounds: menu bulk ten, CSV twenty, stock bulk five. DO fan-out/session/revision operations and alarm/storage writes must be budgeted separately. Menu/review caches are bounded to 128 entries; all external JSON stays no-store.
+There are no configured lint, static typecheck or production frontend build scripts. Native syntax/module tests and Wrangler dry-run are the available checks; no tool/dependency was invented to claim additional validation. Browser suites execute their existing conditional real-map skip because external MapLibre/OpenFreeMap assets were unreachable; SVG fallback checks passed. No assertion or fixture was weakened/regenerated.
 
-## Free-tier capacity and limitations
+Failures investigated during development: a full-cap media insert originally produced the new configured-cap error before the legacy CHECK; the new fence now applies only lower configured caps and original tests pass unchanged. Visual resize readiness was synchronized without changing the twelve-marker assertion. An initial burst load correctly hit report rate admission; isolated load overrides are explicit. Another trial was interrupted by dev-worker reload during concurrent edits, so the successful matrix was rerun with sources frozen. Legacy intake's hard-coded daily cap was found in the follow-up, made configurable and regression tested. A final shared-day boundary test covers both protocol versions.
 
-Official sources rechecked: [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/). D1 Free: 5 million row reads/day, 100000 writes/day, 500 MB per database within 5 GB account storage; 50 queries/invocation. Workers Free: 100000 requests/day, 10 ms HTTP CPU. Account usage and current provider limits remain authoritative. Application caps cannot guarantee zero provider charges.
+## Measured resource results and limits
 
-Existing sensor cost remains approximately ten D1 writes per accepted frame; no sensor ingestion architecture changed. Sensor-only projections (one sensor/cafe) are 57600/172800/288000/576000 writes/day for 1/3/5/10 cafes at 15 seconds, or 14400/43200/72000/144000 at 60 seconds. Business/index/audit/connection/session/retry overhead is additional. Ten sensors at 60 seconds already exceed the listed D1 write allowance; do not silently change cadence or freshness thresholds.
+Exact disposable-workerd metadata: PHASE11_EH_D1_MEASUREMENTS.json. Example fixture results (statements / rows read / rows written, including exposed index/trigger work): dimensional flush for three sessions 7/0/21; cold owner report 10/22/0; cached report authorization 1/1/0; one notification maintenance step 14/27/13; owner resource monitor 8/14/0; one tenant threshold evaluation 8/5/6. These are direct-service measurements; HTTP session checks, DO storage/alarms/fan-out and provider accounting are separate. Steady sensor persistence remains the original path; incident transitions add explicit notification work, never per-frame browsing writes or altered ACK rules.
 
-The requested full matrix of 1/3/5/10 cafes, 50/100/500 concurrent clients and 100/500/1000 daily users across ALL Phase 11 workloads has NOT been run because 11D–11H are not implemented. Prior Phase 7.2 workloads remain historical evidence, not a complete Phase 11 capacity test. No claim of sufficient headroom for all scenarios, distributed abuse resistance or production CPU guarantees is made. Measuring/protecting the complete workload is still required before a release.
+Exact workload artifact: PHASE11_LOAD_MEASUREMENTS.json. Twelve cases combine 1/3/5/10 cafes with 50/100/500 connected browsers; each also executes 100/500/1000 synthetic session workloads (19,200 session events total), catalog/inventory/rating reads and private analytics/resources/inbox reads. Domain mutation/fault/recipient cases are tested separately, not falsely presented as all possible concurrent business mixes. Isolated load overrides: 100000 tenant events/day, 1000 batches/minute, 10000 report requests/minute and 10000 authenticated API requests/minute. Checked-in defaults were not raised.
 
-## Remaining work and exact continuation
+At 10 cafes/500 browsers: hot API p95 9.62 ms, sensor-to-browser p95 627.62 ms, reconnect p95 732.00 ms; 1000-session ingest p95 205.85 ms. Hot reads/fan-out precede each synthetic ingestion segment; these are not a measured before/after causal latency comparison. Local workerd process-tree CPU totaled 284.51 seconds; allocated D1 SQLite/WAL/SHM grew from 1,429,272 to 5,701,384 bytes. This is a short same-host correctness/load trial, not 24-hour usage, provider per-request CPU/billing, Internet latency, account-wide quota headroom or a guarantee every scenario fits a free plan. Harness daily projections remain assumptions, not measured provider usage. No paid plan or provider metrics API was used.
 
-Continue with 11D promotion engine, then 11E existing analytics extension, 11F aggregate statistical APIs, 11G in-app notifications and 11H measured/estimated resource monitoring and optional-work controls. Do not duplicate the implemented A–C services, existing analytics DO or history abstractions. Update contracts and measure/test each phase before proceeding. Add the full realistic mixed workload matrix only once those operations exist. Physical Android transport/calibration/thermal validation remains outside this local checkpoint. No later unrelated phases, checkout changes or production operations are authorized.
+## Operational limitations and deployment prerequisites
 
-## Migration, rollback and future production checklist
+- Reports are eventually consistent with bounded collector flushes and a 30-second report cache. Cohort suppression and explicit unavailable metrics are intentional; no exact cross-cafe unique-person count exists. Browser events are not fraud-proof visits.
+- Current favorites, visible review cohort and current inventory are clearly labeled snapshots/defined cohorts. Historical stock availability/connection uptime, sales/revenue/conversion and absent sensor channels are null/unavailable. Sparse real sensor coverage is insufficient, and simulated observations never become real statistics.
+- Default retention is incremental and can temporarily leave older auxiliary rows during backlog. Business audits, inventory retry receipts and notification delivery receipts retain correctness references; no automatic customer-content deletion occurs. Existing media tombstone/legacy pending-object maintenance remains operator-reviewed.
+- In-app polling is implemented; no external delivery provider/UI integration was added. Runtime metrics reset on restart, tenant/global attribution is null where unavailable, and provider billing remains unavailable.
+- External live-map reachability and physical Android/calibration/thermal behavior were not established by this backend work. No trained forecasting model or hardware validation claim.
 
-Local Node startup applies additive migrations to its configured local database. Cloudflare integration tests create a temporary persistence directory and apply all twelve D1 migrations locally. Never point demonstrations/tests at default production data. Run npm ci, npm test, focused sensors and sequential browser/E2E/Cloudflare suites; BROWSER_PATH is recorded in progress. WRANGLER_SEND_METRICS=false keeps local tooling telemetry off; no remote-binding mode is used by the D1 probe.
-
-Rollback means compatible code/feature shutdown while retaining additive tables, immutable audits, media read bindings and cumulative DO migration history. Do not drop tables, reset user_version, reseed real data or apply destructive down-migrations. 0010 performs a one-time counter backfill and rejects inconsistent over-quota preexisting data rather than deleting it; inspect and prepare an authorized recovery plan before any later production migration. Tombstone pruning requires reviewed quiescent maintenance. Do not remove R2 read bindings while R2-only objects exist.
-
-Before any future authorized release: complete 11D–11H and their documentation; validate complete OpenAPI/collection and statistical/research handoff; run mixed load/row/index/DO accounting with sensor traffic; verify account-wide free quotas and flags; rehearse backups/migrations/compatible recovery locally; confirm RBAC/session revocation and media visibility; preserve Android protocol and original frontend fidelity; obtain explicit deployment authorization. This report does not authorize a deployment.
+A separate deployment review must inspect the complete preserved working-tree diff, approved backups/current remote schema, ordered additive migration/recovery rehearsal, existing cumulative DO bindings/migrations, coherent environment bounds and account-wide budgets. Apply no remote migration or deployment based solely on this report. Keep analytics disabled until an explicitly configured pilot is approved, retain media read bindings/data during rollback, and validate production monitoring/tenant policies with measured account usage. Recommended next work is separately scoped frontend adapter integration and deployment/staging review; unrelated phases were not implemented.

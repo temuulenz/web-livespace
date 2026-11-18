@@ -51,7 +51,7 @@ test('bulk inventory updates rollback on later conflict and emit only public pos
  await stock.mutate('a',{idempotency_key:'initial',updates:[mutation(product.id,0,{mode:'quantity',quantity:10})]},owner);
  const p2=await menu.create('a','products',{category_id:product.category_id,name:'Draft',base_price:1},owner);
  await stock.mutate('a',{idempotency_key:'draft',updates:[mutation(p2.id,0,{mode:'quantity',quantity:999,show_quantity:true})]},owner);
- assert.equal(events.at(-1).items.length,0);assert.ok(!JSON.stringify(events).includes('999'));
+ assert.equal(events.at(-1).items.length,0);for(const event of events)for(const item of event.items){assert.notEqual(item.product_id,p2.id);assert.equal(Object.hasOwn(item,'quantity'),false);}
  db.exec("CREATE TRIGGER fail_second BEFORE UPDATE ON inventory WHEN OLD.product_id='"+p2.id+"' BEGIN SELECT RAISE(ABORT,'injected_second_failure'); END");
  await assert.rejects(stock.mutate('a',{idempotency_key:'bulk',updates:[mutation(product.id,1,{quantity:2}),mutation(p2.id,1,{quantity:3})]},owner));
  assert.equal((await stock.list('a',{product_id:product.id},owner)).items[0].quantity,10);

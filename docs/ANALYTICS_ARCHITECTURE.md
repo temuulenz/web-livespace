@@ -1,5 +1,9 @@
 # Analytics foundation (collection disabled)
 
+Current E/F implementation (approved 2026-11-17): the existing durable collector now supports privacy-conscious v2 session/dimension aggregation, Node fallback and owner/admin local-period/CSV reports. See BEHAVIOR_ANALYTICS.md and PHASE11_ACCEPTANCE.md. Collection remains disabled by default. The original v1 foundation below is retained as historical design and backward-compatible behavior; older absent-feature statements do not describe current implementation.
+
+Current Phase 11 status (2026-11-17): menus, inventory and reviews now exist, and promotion APIs are in validation. The collector architecture below remains the existing foundation; 11E product/promotion analytics extensions and Node fallback are not implemented. No collection has been enabled.
+
 `LS_ANALYTICS_ENABLED=0` is the default. No business analytics events are wired into the UI. The optional collector and `/api/v1/analytics/events` interface are prepared for Phase 11, not activated. No orders, inventory, reviews, promotions, or purchases are implemented.
 
 Schema version 1 allows `cafe_view`, `menu_view`, `product_view`, `favorite_add`, `directions_click`, `promotion_view`, and `out_of_stock_view`. Each batch has one cafe ID, 1–32 events, and a 16 KiB actual-body cap. Events contain only a generated event ID, type and UTC timestamp (within 24 hours, no more than 60 seconds ahead). Unknown fields, visitor identities, arbitrary payloads and purchase events are rejected. Twenty batches/IP/minute and 1,000 new events/cafe/day are initial optional-work caps; public event counts are not fraud-proof even with these controls. The cafe must currently be active. No IP or session identifier is persisted with analytics.

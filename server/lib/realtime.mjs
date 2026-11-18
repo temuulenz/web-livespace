@@ -1,7 +1,8 @@
 // Server-Sent Events hub. Browsers subscribe with EventSource; the server pushes
 // a message whenever a new measurement changes a café's public live values.
 
-export function createRealtimeHub({ heartbeatMs = 25000 } = {}) {
+import {HttpError} from './http.mjs';
+export function createRealtimeHub({ heartbeatMs = 25000,maxConnections=500 } = {}) {
   const clients = new Set();
   const scopes = new Map();
   const heartbeat = setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, heartbeatMs);
@@ -9,6 +10,7 @@ export function createRealtimeHub({ heartbeatMs = 25000 } = {}) {
 
   return {
     subscribe(req, res, { retryMs = 5000, cafeId = null } = {}) {
+      if(clients.size>=maxConnections)throw new HttpError(503,'connection_limit','Realtime capacity reached');
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(`retry: ${retryMs}\n\n`);
       clients.add(res); scopes.set(res,cafeId);

@@ -12,6 +12,7 @@ import { signInPrompt } from '../account/account.js';
 import { liveTilesHTML, timelineHTML, visLabel } from '../owner-dashboard/owner-page.js';
 import { deviceDiagnosticsHTML, sensorStatusLabel, sensorSourceLabel } from '../../live/sensor-ui.js';
 import { SensorHistory } from '../sensors/sensor-history.js';
+import { MenuEditor } from '../menu/menu-editor.js';
 
 const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт']];
 const when = iso => iso ? dateTime(iso) : '—';
@@ -29,6 +30,10 @@ export class AdminPage extends Component {
       'click [data-gate-login]': (e, b) => openAuth({ reason: b.dataset.gateLogin }),
       'click [data-tab]': (e, b) => this.go(b.dataset.tab),
       'click [data-open-cafe]': (e, b) => { e.preventDefault(); this.openCafe(b.dataset.openCafe); },
+      'click [data-owner-remove]': () => { Snd.ui('click'); this.setState({ confirmOwnerRemove: true }); },
+      'click [data-owner-keep]': () => this.setState({ confirmOwnerRemove: false }),
+      'click [data-owner-remove-yes]': () => this.removeOwner(),
+      'click [data-open-menu]': async (e, b) => { e.preventDefault(); await this.openCafe(b.dataset.openMenu); this.timeout(() => this.$('[data-admin-menu]')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60); },
       'click [data-back]': () => { this.setState({ cafe: null, token: null, suggestion: null }); this.load(); },
       'click [data-refresh]': () => this.load(),
       'submit [data-form]': (e, form) => { e.preventDefault(); this[form.dataset.form](form); },
@@ -52,8 +57,17 @@ export class AdminPage extends Component {
     this.interval(() => { if (this.state.auto && !document.hidden && this.state.tab === 'measurements' && !this.state.cafe) this.load(); }, 15000);
     this.load();
   }
-  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); }
-  onUpdate() { this.syncEditor(); this.syncHistory(); }
+  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); this.menuView?.destroy(); }
+  onUpdate() { this.syncEditor(); this.syncHistory(); this.syncMenu(); }
+  // The café's menu: admins enter/correct the menu the owner sends; owners can edit it too.
+  syncMenu() {
+    const cafeId = this.state.cafe?.id, root = this.$('[data-admin-menu]');
+    if (cafeId && root && this.menuCafe === cafeId && this.menuView?.el === root) return;
+    this.menuView?.destroy(); this.menuView = null; this.menuCafe = null;
+    if (!cafeId || !root) return;
+    this.menuCafe = cafeId;
+    this.menuView = this.child(MenuEditor, root, { cafeId, editor: 'admin' });
+  }
   syncHistory() {
     const cafeId = this.state.cafe?.id || this.state.filter.cafe_id, root = this.$('[data-admin-sensor-history]');
     if (!cafeId || !root) { this.historyView?.destroy(); this.historyView = null; return; }
@@ -93,9 +107,9 @@ export class AdminPage extends Component {
 
   async openCafe(id, quiet) {
     try {
-      const [{ cafe }, { devices }, { measurements }] = await Promise.all([platform.api.get(`/admin/cafes/${id}`), platform.api.get('/admin/devices'), platform.api.get(`/admin/measurements?cafe_id=${encodeURIComponent(id)}&limit=20`)]);
+      const [{ cafe }, { devices }, { measurements }, { users: owners }] = await Promise.all([platform.api.get(`/admin/cafes/${id}`), platform.api.get('/admin/devices'), platform.api.get(`/admin/measurements?cafe_id=${encodeURIComponent(id)}&limit=20`), platform.api.get('/admin/users?role=owner').catch(() => ({ users: [] }))]);
       if (!quiet) Snd.ui('pop');
-      this.setState({ cafe: { ...cafe, devices: devices.filter(d => d.cafe_id === id), measurements } });
+      this.setState({ cafe: { ...cafe, devices: devices.filter(d => d.cafe_id === id), measurements, ownerOptions: owners.filter(u => !u.disabled_at) }, confirmOwnerRemove: false });
     } catch (error) { toast(error.message); }
   }
 
@@ -107,6 +121,16 @@ export class AdminPage extends Component {
   async saveStatus(form) {
     const { status, note } = readForm(form);
     if (await this.run(platform.api.post(`/admin/cafes/${this.state.cafe.id}/status`, { status, note }), 'Төлөв шинэчлэгдлээ')) this.openCafe(this.state.cafe.id, true);
+  }
+  // Assign or change the café's owner account (must already have the «Кафе эзэмшигч» role).
+  async saveOwner(form) {
+    const email = readForm(form).owner_email;
+    if (!email) { Snd.ui('err'); toast('Эзэмшигчийн и-мэйлийг оруулна уу'); return; }
+    const result = await this.run(platform.api.put(`/admin/cafes/${this.state.cafe.id}/owner`, { email }));
+    if (result) { toast(result.changed ? `Эзэмшигч: ${result.owner.email}` : 'Энэ хүн аль хэдийн эзэмшигч байна', true); this.openCafe(this.state.cafe.id, true); }
+  }
+  async removeOwner() {
+    if (await this.run(platform.api.put(`/admin/cafes/${this.state.cafe.id}/owner`, { email: null }), 'Эзэмшигчийг хаслаа')) this.openCafe(this.state.cafe.id, true);
   }
   async saveInfo(form) {
     const v = readForm(form), body = {};
@@ -213,7 +237,7 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
   cafesView() {
     const cafes = this.state.data.cafes || [];
     return html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>Кафе</th><th>Төлөв</th><th>Өгөгдөл</th><th>Эзэмшигч</th><th>Төхөөрөмж</th><th>Сүүлийн хэмжилт</th><th>Зураглал</th><th></th></tr></thead><tbody>
-      ${cafes.map(c => html`<tr><td><b>${c.name}</b><br><small class="muted">${c.id}</small></td><td>${statusBadge(c.status)}</td><td>${modeBadge(c.data_mode)}</td><td>${c.owner_email || '—'}</td><td class="num">${c.device_count}</td><td class="num">${when(c.last_measurement_at)}</td><td>${visLabel(c.visualization_status)}</td><td><button class="btn btn-o" data-open-cafe="${c.id}">Засах</button></td></tr>`)}</tbody></table></div>`;
+      ${cafes.map(c => html`<tr><td><b>${c.name}</b><br><small class="muted">${c.id}</small></td><td>${statusBadge(c.status)}</td><td>${modeBadge(c.data_mode)}</td><td>${c.owner_email || '—'}</td><td class="num">${c.device_count}</td><td class="num">${when(c.last_measurement_at)}</td><td>${visLabel(c.visualization_status)}</td><td><button class="btn btn-o" data-open-cafe="${c.id}">Засах</button> <button class="btn btn-g" data-open-menu="${c.id}">Цэс</button></td></tr>`)}</tbody></table></div>`;
   }
 
   async confirmUserManagement(form) {
@@ -325,6 +349,22 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
             <div class="fld full"><label>Демо утга (JSON, зөвхөн демо горимд)</label><textarea name="demo" rows="3" class="adm-mono">${c.demo ? JSON.stringify(c.demo) : ''}</textarea></div>
             <div class="fld full"><button class="btn btn-p">Хадгалах</button></div></form>
         </section>
+
+        <section class="card adm-wide adm-owner" data-key="owner"><h3>${raw(I.user)} Кафе эзэмшигч</h3>
+          ${c.owner ? html`<p class="adm-owner-now"><b>${c.owner.name || c.owner.email}</b><span class="muted">${c.owner.email}</span></p>` : html`<p class="muted adm-owner-now">Эзэмшигч оноогоогүй байна.</p>`}
+          <form class="form adm-form" data-form="saveOwner" novalidate data-key="owner-form-${c.owner?.id || 'none'}">
+            <div class="fld full"><label for="adm-owner-email">${c.owner ? 'Шинэ эзэмшигчийн и-мэйл' : 'Эзэмшигчийн и-мэйл'}</label>
+              <input id="adm-owner-email" name="owner_email" type="email" list="adm-owner-list" autocomplete="off" placeholder="owner@example.com">
+              <datalist id="adm-owner-list">${(c.ownerOptions || []).map(u => html`<option value="${u.email}">${u.name || ''}${u.cafes ? ` · ${u.cafes}` : ''}</option>`)}</datalist>
+              <small class="muted">Зөвхөн «Кафе эзэмшигч» эрхтэй бүртгэл. Шинэ бүртгэлийг <button type="button" class="linkb" data-tab="users">Хэрэглэгчид</button> хэсгээс үүсгэнэ. Өөрчлөлт аудитын бүртгэлд хадгалагдана.</small></div>
+            <div class="fld full adm-actions"><button class="btn btn-p">${c.owner ? 'Эзэмшигч солих' : 'Эзэмшигч оноох'}</button>
+              ${c.owner ? (this.state.confirmOwnerRemove
+                ? html`<span class="me-ask">Эзэмшигчийг хасах уу?</span><button type="button" class="btn btn-g me-danger" data-owner-remove-yes>Тийм</button><button type="button" class="btn btn-g" data-owner-keep>Үгүй</button>`
+                : html`<button type="button" class="btn btn-g" data-owner-remove>Эзэмшигчийг хасах</button>`) : ''}</div>
+          </form>
+        </section>
+
+        <section class="card adm-wide adm-menu" data-key="menu"><div data-admin-menu data-preserve data-key="admin-menu-${c.id}"></div></section>
 
         <section class="card adm-wide"><h3>Хөдөлгөөнт зураглал</h3>
           <div class="adm-vis">

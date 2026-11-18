@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 // Storage adapter reuses Node uploads or optional R2; D1 bytes remain the fallback.
 export function createMenuMedia({sql,menu,storage,fail,id,clock=()=>new Date().toISOString()}) {
 
+ const write=(entries,cafe,user)=>sql.batch(businessWriteEntries(entries,cafe,user,id('audit'),clock()));
  return {
   async replace(cafe,product,input,user) {
    const item=await menu.get(cafe,'products',product,user);
@@ -21,7 +22,7 @@ export function createMenuMedia({sql,menu,storage,fail,id,clock=()=>new Date().t
     try{await authorizedBatch(sql,fail,user,cafe,'owner',[
      ['UPDATE menu_images SET object_key=?,file=?,bytes=?,ready=1 WHERE id=? AND cafe_id=? AND ready=0',saved.object_key??location.object_key??null,saved.file??location.file??null,saved.bytes??null,image.id,cafe],
      ['INSERT INTO business_audit(id,cafe_id,actor_id,action,entity_id,at) VALUES(CASE WHEN changes()=1 THEN ? ELSE NULL END,?,?,?,?,?)',id('audit'),cafe,user.id,'media.persist',image.id,clock()]
-    ]);}catch(e){
+    ],cafe,user);}catch(e){
      // A GC tombstone fences late writers. Never delete after ambiguous persistence.
      if(await sql.first('SELECT id FROM menu_media_gc WHERE cafe_id=? AND id=?',cafe,image.id))await storage.remove?.({...location,...saved,id:image.id,cafe_id:cafe});
      throw e;
@@ -31,7 +32,7 @@ export function createMenuMedia({sql,menu,storage,fail,id,clock=()=>new Date().t
    await authorizedBatch(sql,fail,user,cafe,'owner',[
     ['UPDATE menu_items SET image_ref=?,version=version+1,updated_at=? WHERE cafe_id=? AND id=? AND version=?',image.id,clock(),cafe,product,item.version],
     ['INSERT INTO business_audit(id,cafe_id,actor_id,action,entity_id,at) VALUES(CASE WHEN changes()=1 THEN ? ELSE NULL END,?,?,?,?,?)',id('audit'),cafe,user.id,'products.image',product,clock()]
-   ]);
+   ],cafe,user);
    menu.invalidate(cafe);return menu.get(cafe,'products',product,user);
   },
   async remove(cafe,product,input,user) {
@@ -40,7 +41,7 @@ export function createMenuMedia({sql,menu,storage,fail,id,clock=()=>new Date().t
    await authorizedBatch(sql,fail,user,cafe,'owner',[
     ['UPDATE menu_items SET image_ref=NULL,version=version+1,updated_at=? WHERE cafe_id=? AND id=? AND version=?',clock(),cafe,product,item.version],
     ['INSERT INTO business_audit(id,cafe_id,actor_id,action,entity_id,at) VALUES(CASE WHEN changes()=1 THEN ? ELSE NULL END,?,?,?,?,?)',id('audit'),cafe,user.id,'products.image.remove',product,clock()]
-   ]);menu.invalidate(cafe);return menu.get(cafe,'products',product,user);
+   ],cafe,user);menu.invalidate(cafe);return menu.get(cafe,'products',product,user);
   },
   async read(cafe,product,user,publicOnly) {
    let item;
