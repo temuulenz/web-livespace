@@ -1,7 +1,7 @@
 import {authorizedWrite} from '../lib/authorized-write.mjs';
 // Café-owner dashboard data. Owners only ever see their own cafés.
 import { readJson, sendJson, notFound, HttpError } from '../lib/http.mjs';
-import { requireRole } from '../lib/auth.mjs';
+import { requireRole, SESSION_COOKIE } from '../lib/auth.mjs';
 import { json, now } from '../lib/db.mjs';
 import { parseHours } from '../../js/live/levels.js';
 import { deviceStatus } from '../services/sensor-state.mjs';
@@ -55,11 +55,18 @@ export function register(router, deps) {
 
   // Application photographs: visible to the café's owner and to admins only.
   router.get('/api/v1/files/photos/:id', async ctx => {
-    requireRole('owner', 'admin', 'user')(ctx);
-    const photo = db.prepare('SELECT p.*, a.owner_id FROM application_photos p JOIN applications a ON a.id = p.application_id WHERE p.id = ?').get(ctx.params.id);
-    if (!photo || (ctx.user.role !== 'admin' && photo.owner_id !== ctx.user.id)) throw notFound('Зураг олдсонгүй');
+    const lookup = db.prepare('SELECT p.*, c.owner_id FROM application_photos p JOIN applications a ON a.id = p.application_id JOIN cafes c ON c.id = a.cafe_id WHERE p.id = ?');
+    const authorizedPhoto = () => {
+      requireRole('owner', 'admin', 'user')(ctx);
+      const row = lookup.get(ctx.params.id);
+      if (!row || (ctx.user.role !== 'admin' && row.owner_id !== ctx.user.id)) throw notFound('Зураг олдсонгүй');
+      return row;
+    };
+    const photo = authorizedPhoto();
     const data = await deps.uploads.read(photo.file);
-    ctx.res.writeHead(200, { 'Content-Type': photo.mime, 'Content-Length': data.length, 'Cache-Control': 'private, max-age=3600' });
+    ctx.user = deps.sessions.user(ctx.cookies[SESSION_COOKIE]);
+    if (authorizedPhoto().file !== photo.file) throw notFound('Зураг олдсонгүй');
+    ctx.res.writeHead(200, { 'Content-Type': photo.mime, 'Content-Length': data.length, 'Cache-Control': 'private, no-store', 'Vary': 'Cookie', 'X-Content-Type-Options': 'nosniff' });
     ctx.res.end(data);
   });
 }

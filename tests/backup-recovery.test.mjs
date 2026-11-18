@@ -27,7 +27,7 @@ test('disposable SQLite and upload snapshot restores integrity and business-serv
  await mkdir(target);await copyFile(snapshot,join(target,'livespace.db'));await cp(join(source,'uploads'),join(target,'uploads'),{recursive:true});
  f.db.close();sourceOpen=false;
  restored=openDatabase(join(target,'livespace.db'));
- assert.equal(restored.prepare('PRAGMA integrity_check').get().integrity_check,'ok');assert.deepEqual(restored.prepare('PRAGMA foreign_key_check').all(),[]);assert.equal(restored.prepare('PRAGMA user_version').get().user_version,9);
+ assert.equal(restored.prepare('PRAGMA integrity_check').get().integrity_check,'ok');assert.deepEqual(restored.prepare('PRAGMA foreign_key_check').all(),[]);assert.equal(restored.prepare('PRAGMA user_version').get().user_version,10);
  const sql={first:(q,...a)=>restored.prepare(q).get(...a),all:(q,...a)=>restored.prepare(q).all(...a),batch:entries=>transaction(restored,()=>entries.map(([q,...a])=>restored.prepare(q).run(...a)))};
  assert.equal((await createMenuService({sql,fail,id}).publicMenu('a')).products[0].id,product.id);
  assert.equal((await createInventoryService({sql,fail,id}).list('a',{},f.owner)).items[0].quantity,7);

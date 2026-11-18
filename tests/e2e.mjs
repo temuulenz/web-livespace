@@ -55,6 +55,9 @@ try {
     await go('#cafe-A');
     await waitFor(`!!document.querySelector('canvas') && !!document.querySelector('#cdFresh')`);
     assert.match(await evaluate(`document.querySelector('#cdFresh').innerText`), /ДЕМО/);
+    await waitFor(`!!document.querySelector('#cafeMenu .menu-item')`);
+    assert.match(await evaluate(`document.querySelector('#cafeMenu').textContent`), /ДЕМО/);
+    assert.match(await evaluate(`document.querySelector('#cafeMenu').textContent`), /Латте/);
   });
 
   await check('saving a favourite asks to log in, then saves on the same page', async () => {

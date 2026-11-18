@@ -1,4 +1,5 @@
 import * as promotionRoutes from './routes/promotions.mjs';
+import * as analyticsRoutes from './routes/analytics.mjs';
 import {randomUUID} from 'node:crypto';
 import * as reviewRoutes from './routes/reviews.mjs';
 import * as inventoryRoutes from './routes/inventory.mjs';
@@ -40,7 +41,7 @@ export async function createApp(config) {
   };
 
   const api = createRouter();
-  for (const routes of [promotionRoutes, reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
+  for (const routes of [analyticsRoutes, promotionRoutes, reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
   const serveStatic = createStaticHandler(config.staticDir);
 
   async function handle(req, res) {
@@ -49,7 +50,9 @@ export async function createApp(config) {
     ctx.requestId=randomUUID();
     ctx.scheme=(req.socket.encrypted || config.production || (config.trustProxy && req.headers['x-forwarded-proto']==='https'))?'https':'http';
     res.setHeader('X-Request-ID',ctx.requestId);
-    ctx.ip = (config.trustProxy && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress || '';
+    // Behind a trusted proxy use the right-most X-Forwarded-For entry (the address the proxy itself saw);
+    // left-most entries are client-controlled when proxies append rather than replace.
+    ctx.ip = (config.trustProxy && req.headers['x-forwarded-for']?.split(',').at(-1).trim()) || req.socket.remoteAddress || '';
     for (const [key, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(key, value);
     try {
       if (ctx.path.startsWith('/api/')) {
@@ -69,7 +72,16 @@ export async function createApp(config) {
   const server = createServer(handle);
   deps.sensors = createSensorService(deps);
   deps.sensorGateway = createSensorGateway(server, deps);
-  const purge = setInterval(() => deps.sessions.purge(), 3600 * 1000); purge.unref();
+  const purge = setInterval(() => {
+    for (const [operation, run] of [['session_purge', deps.sessions.purge], ['analytics_purge', deps.analytics.purge]]) {
+      try {
+        run();
+      } catch {
+        console.error(JSON.stringify({timestamp: new Date().toISOString(), level: 'error', service: 'node-http', operation, category: 'maintenance_failed'}));
+      }
+    }
+  }, 3600 * 1000);
+  purge.unref();
   let closePromise;
   return {
     server, deps,

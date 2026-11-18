@@ -27,7 +27,8 @@ export async function liveSummary(db,row,staleAfterSec=30) {
  const real=await snapshot(db,row.id,'real',staleAfterSec),sim=real?null:await snapshot(db,row.id,'simulated',staleAfterSec);
  const legacy=await all(db,`SELECT * FROM measurements WHERE cafe_id=? AND is_test=? AND (available_seats IS NOT NULL OR occupied_seats IS NOT NULL OR noise_db IS NOT NULL OR wifi_quality IS NOT NULL OR wifi_down_mbps IS NOT NULL) ORDER BY ts DESC,id DESC LIMIT 30`,row.id,0);
  // Prefer real observations; use simulations only when no real measurements exist.
- const sensor=real || (legacy.length?null:sim);const rows=legacy.length?legacy:await all(db,`SELECT * FROM measurements WHERE cafe_id=? AND is_test=1 AND (available_seats IS NOT NULL OR occupied_seats IS NOT NULL OR noise_db IS NOT NULL OR wifi_quality IS NOT NULL OR wifi_down_mbps IS NOT NULL) ORDER BY ts DESC,id DESC LIMIT 30`,row.id);
+ const sensor=real || (legacy.length?null:sim);// Never let simulator rows fill gaps in a café that has real sensor observations (mirrors Node).
+ const rows=legacy.length?legacy:real?[]:await all(db,`SELECT * FROM measurements WHERE cafe_id=? AND is_test=1 AND (available_seats IS NOT NULL OR occupied_seats IS NOT NULL OR noise_db IS NOT NULL OR wifi_quality IS NOT NULL OR wifi_down_mbps IS NOT NULL) ORDER BY ts DESC,id DESC LIMIT 30`,row.id);
  if(!sensor && !rows.length)return {mode:'none',updated_at:null,stale:false};
  const seats=rows.find(r=>r.available_seats!=null || r.occupied_seats!=null),noise=rows.find(r=>r.noise_db!=null),wifi=rows.find(r=>r.wifi_quality!=null || r.wifi_down_mbps!=null);
  const updated=[sensor?.timestamp,...rows.map(r=>r.ts)].filter(Boolean).sort().at(-1);
@@ -47,4 +48,10 @@ export async function ownerView(db,row,staleAfterSec=30) {
  const devices=await all(db,'SELECT * FROM devices WHERE cafe_id=? AND revoked_at IS NULL',row.id);
  const visualization=parse(row.visualization,{status:'not_started'});
  return {...row,owner_id:undefined,demo:undefined,tags:parse(row.tags,[]),application:app?{id:app.id,created_at:app.created_at,form:parse(app.form,{}),photos:photos.map(p=>({...p,url:`/api/v1/files/photos/${p.id}`}))}:null,devices:await Promise.all(devices.map(d=>deviceView(db,d,staleAfterSec))),history:await all(db,'SELECT from_status,to_status,note,at FROM status_history WHERE cafe_id=? ORDER BY id',row.id),visualization,live:await liveSummary(db,row,staleAfterSec)};
+}
+// Owner-facing projection (parity with Node ownerCafeView): no admin visualization notes/generator, no unlisted row columns.
+const OWNER_FIELDS=['id','name','status','data_mode','category','district','address','hours','phone','contact_name','email','description','tags','total_seats','created_at','updated_at','application','devices','history','live'];
+export function ownerSafeView(view) {
+ const out=Object.fromEntries(OWNER_FIELDS.map(k=>[k,view[k]??null]));const v=view.visualization||{};
+ out.visualization={status:v.status||'not_started',layout:v.status==='ready'?v.layout||null:null,updated_at:v.updated_at||null};return out;
 }

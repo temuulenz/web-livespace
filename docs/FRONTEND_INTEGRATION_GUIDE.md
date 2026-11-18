@@ -23,3 +23,7 @@ Reviews integration (11C): use GET public /cafes/{cafe}/reviews and /ratings ind
 The isolated demonstration command now exercises menu, stock and a clearly simulated review/rating in an ephemeral cafe marked data_mode=demo; no real customer feedback or production records are inserted. All local fixture users/files/database are removed on completion. Research aggregate export endpoints remain a future 11F task. Public review/rating responses are operational summaries, not business conclusions.
 
 11D additions: PROMOTION_ENGINE.md documents owner configuration/preview, public active retrieval, informational-only types, UTC envelopes and Asia/Ulaanbaatar recurrence. Current listed menu price comes from DB; preview requests never include client prices. Overlapping rules do not stack. Handle 409 access_changed by reloading/re-authenticating; transaction-time session/ownership changes no longer commit stale writes. GET /api/v1/ready is for operators, not a replacement for discovery data or evidence of production readiness. No UI/event handlers changed.
+
+## Venue analytics
+
+Use the owner or admin analytics route for event counts. Preserve empty reports, show item truncation, and allow for Cloudflare flush lag. For downloads, use the same route with `format=csv`. See [analytics request and response details](ANALYTICS_ARCHITECTURE.md).

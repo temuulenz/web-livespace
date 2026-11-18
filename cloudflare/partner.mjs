@@ -1,7 +1,7 @@
 import {authorizedBatch} from '../shared/business/write-authorization.mjs';
 import { createMediaStorage, mediaResponse } from './media.mjs';
 import { decodeImage } from '../shared/image-validation.mjs';
-import { APIError as HttpError, all, first, run, batch, json, fail, body, now, id, token, sha, credentials, publicUser, guard, startSession } from './core.mjs';
+import { APIError as HttpError, all, first, run, batch, json, fail, body, now, id, token, sha, credentials, publicUser, guard, session, startSession } from './core.mjs';
 import { parseHours, projectToMap } from '../js/live/levels.js';
 const DISTRICTS = ['Сүхбаатар', 'Чингэлтэй', 'Баянгол', 'Хан-Уул', 'Баянзүрх', 'Сонгинохайрхан'];
 const CATEGORIES = ['Кафе', 'Коворкинг', 'Номын сан'];
@@ -64,7 +64,7 @@ export async function partner(req,db,user,createUser,limit,env={DB:db}) {
  if((p==='/api/v1/auth/register-owner' || p==='/api/v1/applications/claim') && req.method==='POST') {
   const x=await body(req);const app=typeof x.claim_token==='string'?await first(db,'SELECT * FROM applications WHERE claim_token_hash=?',sha(x.claim_token)):null;
   if(!app)fail(400,'invalid_claim','Invalid or used claim token');
-  if(p.endsWith('/register-owner')){limit(`register:${req.headers.get('cf-connecting-ip')}`,10,3600000);user=await createUser(db,x,'owner');}else guard(user);
+  if(p.endsWith('/register-owner')){limit(`register:${req.headers.get('cf-connecting-ip')}`,10,3600000);user=await createUser(db,x,'user');}else guard(user); // promotion to owner happens only inside the winning claim batch
   // Serialize claims using conditional writes in one atomic batch; a unique claim
   // reservation prevents two accounts racing the same one-time token.
   await authorizedBatch({batch:entries=>batch(db,entries)},fail,user,null,'user',[
@@ -78,10 +78,18 @@ export async function partner(req,db,user,createUser,limit,env={DB:db}) {
   return json({user:publicUser(found),cafe_id:app.cafe_id},p.endsWith('/register-owner')?201:200,p.endsWith('/register-owner')?{'Set-Cookie':await startSession(db,user.id,req)}:{});
  }
  if(p.startsWith('/api/v1/files/photos/') && req.method==='GET') {
-  guard(user,'owner','admin','user');const photoId=decodeURIComponent(p.split('/').at(-1));
-  const photo=await first(db,'SELECT p.id,p.mime,a.owner_id,m.object_key,m.visibility FROM application_photos p JOIN applications a ON a.id=p.application_id LEFT JOIN media_objects m ON m.photo_id=p.id WHERE p.id=?',photoId);
-  if(!photo || (user.role!=='admin' && photo.owner_id!==user.id))fail(404,'not_found','Photo not found');
-  return mediaResponse(req,{...photo,visibility:'private'},await createMediaStorage({...env,LS_R2_MEDIA_ENABLED:'0'}).read(photo));
+  const photoId=decodeURIComponent(p.split('/').at(-1));
+  const authorizedPhoto=async actor=>{
+   guard(actor,'owner','admin','user');
+   const photo=await first(db,'SELECT p.id,p.mime,c.owner_id,m.object_key,m.visibility FROM application_photos p JOIN applications a ON a.id=p.application_id JOIN cafes c ON c.id=a.cafe_id LEFT JOIN media_objects m ON m.photo_id=p.id WHERE p.id=?',photoId);
+   if(!photo||(actor.role!=='admin'&&photo.owner_id!==actor.id))fail(404,'not_found','Photo not found');
+   return photo;
+  };
+  const photo=await authorizedPhoto(user);
+  const bytes=await createMediaStorage({...env,LS_R2_MEDIA_ENABLED:'0'}).read(photo);
+  const current=await authorizedPhoto(await session(db,req));
+  if(current.object_key!==photo.object_key||current.mime!==photo.mime)fail(404,'not_found','Photo not found');
+  return mediaResponse(req,{...current,visibility:'private'},bytes);
  }
  return null;
 }

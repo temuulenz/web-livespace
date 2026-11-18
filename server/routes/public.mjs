@@ -30,5 +30,5 @@ export function register(router, { db, config, cafes, hub }) {
     server_time: new Date().toISOString()
   }));
 
-  router.get('/api/v1/stream', ctx => hub.subscribe(ctx.req, ctx.res));
+  router.get('/api/v1/stream', ctx => hub.subscribe(ctx.req, ctx.res, { ip: ctx.ip }));
 }

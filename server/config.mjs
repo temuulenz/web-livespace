@@ -31,7 +31,10 @@ export function loadConfig(env = process.env, overrides = {}) {
     secureCookies: env.NODE_ENV === 'production' || env.LS_SECURE_COOKIES === '1',
     trustProxy: env.LS_TRUST_PROXY === '1',
     maxPhotoBytes: int(env.LS_MAX_PHOTO_MB, 4, 1, 20) * 1024 * 1024,
-    seedDemo: env.LS_SEED_DEMO !== '0',
+    // Demo cafes seed only in development unless explicitly requested; production never seeds by default.
+    seedDemo: env.LS_SEED_DEMO ? env.LS_SEED_DEMO !== '0' : env.NODE_ENV !== 'production',
+    // Optional Phase 11E analytics intake (default off, matching Cloudflare LS_ANALYTICS_ENABLED).
+    analyticsEnabled: env.LS_ANALYTICS_ENABLED === '1',
     adminEmail: env.LS_ADMIN_EMAIL || '',
     adminPassword: env.LS_ADMIN_PASSWORD || '',
     visualizationProvider: undefined,
