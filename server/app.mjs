@@ -1,3 +1,5 @@
+import * as promotionRoutes from './routes/promotions.mjs';
+import {randomUUID} from 'node:crypto';
 import * as reviewRoutes from './routes/reviews.mjs';
 import * as inventoryRoutes from './routes/inventory.mjs';
 // Assembles the LiveSpace backend: API routes + the static website, one process.
@@ -38,12 +40,15 @@ export async function createApp(config) {
   };
 
   const api = createRouter();
-  for (const routes of [reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
+  for (const routes of [promotionRoutes, reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
   const serveStatic = createStaticHandler(config.staticDir);
 
   async function handle(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const ctx = { req, res, url, path: url.pathname, method: req.method, query: Object.fromEntries(url.searchParams), params: {}, cookies: parseCookies(req.headers.cookie) };
+    ctx.requestId=randomUUID();
+    ctx.scheme=(req.socket.encrypted || config.production || (config.trustProxy && req.headers['x-forwarded-proto']==='https'))?'https':'http';
+    res.setHeader('X-Request-ID',ctx.requestId);
     ctx.ip = (config.trustProxy && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress || '';
     for (const [key, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(key, value);
     try {
@@ -56,7 +61,7 @@ export async function createApp(config) {
       if (await serveStatic(ctx)) return;
       sendJson(res, 404, { error: { code: 'not_found', message: 'Not found' } });
     } catch (error) {
-      if (!(error instanceof HttpError)) console.error(error);
+      if (!(error instanceof HttpError)) console.error(JSON.stringify({timestamp:new Date().toISOString(),level:'error',service:'node-http',request_id:ctx.requestId,category:'internal'}));
       sendError(res, error);
     }
   }

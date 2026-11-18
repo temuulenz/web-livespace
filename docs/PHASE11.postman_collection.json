@@ -727,6 +727,130 @@
         "url": "{{baseUrl}}/api/v1/admin/cafes/{{cafe}}/reviews/{{review}}/moderation",
         "description": "Admin moderation audit history; RATINGS_AND_REVIEWS.md; local fixtures only."
       }
+    },
+    {
+      "name": "Owner promotions with state filtering",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions",
+        "description": "Owner promotions with state filtering; local fixtures only; PROMOTION_ENGINE.md."
+      }
+    },
+    {
+      "name": "Owned promotion details",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/{{id}}",
+        "description": "Owned promotion details; local fixtures only; PROMOTION_ENGINE.md."
+      }
+    },
+    {
+      "name": "Create configured promotion",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions",
+        "description": "Create configured promotion; local fixtures only; PROMOTION_ENGINE.md.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Synthetic configured rule\",\n  \"type\": \"percentage\",\n  \"discount_value\": 10,\n  \"starts_at\": \"REPLACE_WITH_UTC_START\",\n  \"ends_at\": \"REPLACE_WITH_UTC_END\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Versioned promotion edit/publish/pause",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/{{id}}",
+        "description": "Versioned promotion edit/publish/pause; local fixtures only; PROMOTION_ENGINE.md.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1,\n  \"published\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Archive promotion preserving ID",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/{{id}}",
+        "description": "Archive promotion preserving ID; local fixtures only; PROMOTION_ENGINE.md.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Authoritative integer MNT promotion preview",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/preview",
+        "description": "Authoritative integer MNT promotion preview; local fixtures only; PROMOTION_ENGINE.md.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"product_id\": \"REPLACE_PRODUCT_ID\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Currently active public promotions",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/promotions",
+        "description": "Currently active public promotions; local fixtures only; PROMOTION_ENGINE.md."
+      }
+    },
+    {
+      "name": "Implemented schema/database readiness",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/ready",
+        "description": "Implemented schema/database readiness; local fixtures only; PROMOTION_ENGINE.md."
+      }
     }
   ]
 }

@@ -1,0 +1,16 @@
+# Security/reliability findings
+
+| Severity | Finding | Implemented mitigation | Evidence / remaining scope |
+|---|---|---|---|
+| High | Stale business ownership/session/role at commit | Shared zero-write SQL assertion inside atomic batches; Node legacy authorized transactions; CF legacy owner/admin protected batches | Eight injected race cases + reauth logout case; SQLite and local D1 probes. Normal API actors include session hash; sessionless actors remain trusted operator/service inputs, never client-supplied objects |
+| Medium | Reauth returned success after session disappeared | Require exactly one updated unexpired session, including current user version | Logout-during-password-check regression |
+| Medium | Node JSON null/array/scalar roots differed from CF validation | Reject malformed object roots with 400 | HTTP regression |
+| Medium | Node same-origin check ignored scheme | Match effective scheme+host; only explicitly trusted proxy scheme or production HTTPS | Cross-scheme rejection and legitimate-origin control; production proxy configuration must be reviewed |
+| Medium | Media adapter accepted traversal paths | Resolve/constrain all file paths within private upload root | Traversal read/remove/save tests; trusted private directory must not contain attacker-managed symlinks |
+| Operational | Errors could log raw exception details | Node generated request IDs and bounded JSON error category without body/token/SQL | HTTP request-ID test; full cross-runtime metrics/correlation remains TODO |
+
+No authentication bypass, new credentials or TLS bypass added. Business writes now return 409 access_changed on transaction-time revocation. Node headers/CORS and cookie/session protections otherwise preserved. Existing sensor authorization/ACK paths untouched. Full audit of claims, favorites, private reads across asynchronous storage, all exports and later D–H APIs remains TODO; this is not a completed system-wide penetration test. Outbound source review found internal binding requests and explicit operator sensor clients, not a new arbitrary-URL web fetch API. No attacks against real services. npm ci audit found zero vulnerabilities in the installed lockfile; no major upgrades.
+
+Additional verified fixes: Node scrypt verification now rejects malformed or unsupported stored cost/length parameters before derivation, matching CF bounds. Node one-time owner claims use conditional unowned updates; signed-in application persistence/claims recheck authority atomically, CF claims preserve reservation fencing and recheck current actors. Concurrent Node registration regression has exactly one cafe owner. Limited source-pattern scan checked237 tracked/session-owned text files with no private-key/AWS/GitHub-token pattern flags; ignored credential/data/artifact files were not opened. This is not proof that no secrets exist.
+
+Rollback rerun on main additionally protects the newer shared cafe-ownership assignment service against logout/revocation after validation. Existing target-role/owner-race tests and owner_changed error contract are preserved. A new regression verifies no reassignment/audit after logout. Map CSP additions from newer main are retained unchanged.

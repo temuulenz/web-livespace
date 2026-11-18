@@ -1,3 +1,4 @@
+import {authorizedWrite} from '../lib/authorized-write.mjs';
 // Internal admin / developer API. Every route requires the admin role.
 import { readJson, sendJson, notFound, HttpError, badRequest } from '../lib/http.mjs';
 import { requireRole, newId, newToken, sha256, publicUser } from '../lib/auth.mjs';
@@ -82,7 +83,7 @@ export function register(router, deps) {
     if ((next.lat != null || next.lng != null) && next.map_x === undefined && next.map_y === undefined) {
       const p = projectToMap(next.lat ?? row.lat, next.lng ?? row.lng); next.map_x = p.x; next.map_y = p.y;
     }
-    if (Object.keys(next).length) db.prepare(`UPDATE cafes SET ${Object.keys(next).map(k => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...Object.values(next), now(), row.id);
+    if (Object.keys(next).length) authorizedWrite(db,ctx.user,null,'admin',()=>db.prepare(`UPDATE cafes SET ${Object.keys(next).map(k => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...Object.values(next), now(), row.id));
     const updated = getCafe(row.id);
     publish(updated);
     sendJson(ctx.res, 200, { ok: true });
@@ -106,7 +107,7 @@ export function register(router, deps) {
     const { status, note = '' } = await readJson(ctx);
     if (!SETUP_STATUSES.includes(status)) throw badRequest(`status must be one of ${SETUP_STATUSES.join(', ')}`);
     if (status === 'active' && row.data_mode === 'live' && row.map_x == null) throw new HttpError(422, 'missing_location', 'Идэвхжүүлэхээс өмнө газрын зураг дээрх байршлыг оруулна уу');
-    transaction(db, () => {
+    authorizedWrite(db,ctx.user,null,'admin', () => {
       db.prepare('UPDATE cafes SET status = ?, updated_at = ? WHERE id = ?').run(status, now(), row.id);
       db.prepare('INSERT INTO status_history (cafe_id, from_status, to_status, note, actor_id, at) VALUES (?, ?, ?, ?, ?, ?)').run(row.id, row.status, status, String(note).slice(0, 500), ctx.user.id, now());
     });
@@ -123,7 +124,7 @@ export function register(router, deps) {
     const layout = body.layout ? sanitizeLayout(body.layout) : current.layout || null;
     if (body.status === 'ready' && !layout) throw badRequest('A ready visualization needs a layout');
     const visualization = { ...current, status: body.status, layout, notes: typeof body.notes === 'string' ? body.notes.slice(0, 2000) : current.notes || '', generator: body.generator || 'manual', updated_at: now() };
-    db.prepare('UPDATE cafes SET visualization = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(visualization), now(), row.id);
+    authorizedWrite(db,ctx.user,null,'admin',()=>db.prepare('UPDATE cafes SET visualization = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(visualization), now(), row.id));
     publish(getCafe(row.id));
     sendJson(ctx.res, 200, { visualization });
   });
@@ -161,8 +162,8 @@ export function register(router, deps) {
     getCafe(body.cafe_id);
     if (db.prepare('SELECT 1 FROM devices WHERE id = ?').get(id)) throw new HttpError(409, 'device_exists', 'Ийм ID-тай төхөөрөмж бүртгэлтэй байна');
     const token = newToken('lsd_');
-    db.prepare('INSERT INTO devices (id, cafe_id, label, kind, is_test, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id, body.cafe_id, String(body.label || '').slice(0, 80), ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : 'sensor', body.is_test || body.kind === 'simulator' ? 1 : 0, sha256(token), now());
+    authorizedWrite(db,ctx.user,null,'admin',()=>db.prepare('INSERT INTO devices (id, cafe_id, label, kind, is_test, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, body.cafe_id, String(body.label || '').slice(0, 80), ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : 'sensor', body.is_test || body.kind === 'simulator' ? 1 : 0, sha256(token), now()));
     // The token is shown once; only its hash is stored.
     sendJson(ctx.res, 201, { device: deviceView(db.prepare('SELECT * FROM devices WHERE id = ?').get(id)), token });
   });
@@ -175,11 +176,11 @@ export function register(router, deps) {
     if (body.cafe_id) getCafe(body.cafe_id);
     const kind = ['sensor', 'camera', 'gateway', 'simulator'].includes(body.kind) ? body.kind : device.kind;
     if (body.enabled != null && typeof body.enabled !== 'boolean') throw new HttpError(422, 'validation_failed', 'enabled must be a boolean');
-    db.prepare('UPDATE devices SET label = ?, kind = ?, is_test = ?, cafe_id = ?, enabled = ? WHERE id = ?').run(
+    authorizedWrite(db,ctx.user,null,'admin',()=>db.prepare('UPDATE devices SET label = ?, kind = ?, is_test = ?, cafe_id = ?, enabled = ? WHERE id = ?').run(
       body.label != null ? String(body.label).slice(0, 80) : device.label,
       kind,
       kind === 'simulator' || (body.is_test != null ? body.is_test : device.is_test) ? 1 : 0,
-      body.cafe_id || device.cafe_id, body.enabled == null ? device.enabled : Number(body.enabled), device.id);
+      body.cafe_id || device.cafe_id, body.enabled == null ? device.enabled : Number(body.enabled), device.id));
     if (body.enabled === false || (body.cafe_id && body.cafe_id !== device.cafe_id)) deps.sensors.setStatus(device, 'offline');
     publish(getCafe(device.cafe_id));
     if (body.cafe_id && body.cafe_id !== device.cafe_id) publish(getCafe(body.cafe_id));
@@ -191,13 +192,13 @@ export function register(router, deps) {
     const device = db.prepare('SELECT * FROM devices WHERE id = ? AND revoked_at IS NULL').get(ctx.params.id);
     if (!device) throw notFound('Төхөөрөмж олдсонгүй');
     const token = newToken('lsd_');
-    db.prepare('UPDATE devices SET token_hash = ? WHERE id = ?').run(sha256(token), device.id);
+    authorizedWrite(db,ctx.user,null,'admin',()=>db.prepare('UPDATE devices SET token_hash = ? WHERE id = ?').run(sha256(token), device.id));
     sendJson(ctx.res, 200, { token });
   });
 
   router.delete('/api/v1/admin/devices/:id', ctx => {
     admin(ctx);
-    db.prepare('UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(now(), ctx.params.id);
+    authorizedWrite(db,ctx.user,null,'admin',()=>db.prepare('UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(now(), ctx.params.id));
     const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(ctx.params.id);
     if (device) deps.sensors.setStatus(device, 'offline');
     sendJson(ctx.res, 200, { ok: true });

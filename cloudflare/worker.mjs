@@ -1,3 +1,6 @@
+import {promotionsRoute} from './promotions.mjs';
+import {databaseReady,readinessPayload} from '../shared/readiness.mjs';
+import {authorizedBatch} from '../shared/business/write-authorization.mjs';
 import {reviewsRoute} from './reviews.mjs';
 import {inventoryRoute} from './inventory.mjs';
 import { menuRoute } from './menu.mjs';
@@ -54,6 +57,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  if(m!=='GET' && m!=='HEAD') {
   const origin=req.headers.get('origin');if(origin && origin!==u.origin)fail(403,'bad_origin','Cross-origin request rejected');
  }
+ const promotionResponse=await promotionsRoute(req,env,limit);if(promotionResponse)return promotionResponse;
  const reviewResponse=await reviewsRoute(req,env,limit);if(reviewResponse)return reviewResponse;
  const inventoryResponse=await inventoryRoute(req,env,limit);if(inventoryResponse)return inventoryResponse;
  const menuResponse=await menuRoute(req,env,limit);if(menuResponse)return menuResponse;
@@ -65,6 +69,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   return json(await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input),202);
  }
  if(p==='/api/v1/ingest/measurements' && m==='POST')return ingest(req,db,limit,env,ctx);
+ if(p==='/api/v1/ready'&&m==='GET'){const ok=await databaseReady({first:q=>first(db,q)});return json(readinessPayload(ok),ok?200:503);}
  if(p==='/api/v1/health') {
   try {await first(db,'SELECT id FROM devices LIMIT 1');await first(db,'SELECT message_id FROM sensor_receipts LIMIT 1');await first(db,'SELECT photo_id FROM photo_bytes LIMIT 1');return json({ok:true,api:'1',time:now(),deployment:'cloudflare',database:'d1',sensorGateway:!!env.SENSORS,transport:'polling',schema:5});}
   catch(e){if(isQuotaError(e))throw e;return json({ok:false,api:'1',deployment:'cloudflare',database:'unavailable_or_unmigrated'},503);}
@@ -83,6 +88,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  let a=routeId(p,/^\/api\/v1\/cafes\/([^/]+)$/);
  if(a && m==='GET'){const row=await first(db,"SELECT * FROM cafes WHERE id=? AND status='active'",a[0]);if(!row)fail(404,'not_found','Cafe not found');return json({cafe:await cafeView(db,row)});}
  const user=await session(db,req);
+ const update=(db,table,key,x)=>updateWithAuthorization(db,table,key,x,user,p.startsWith('/api/v1/owner/')?'owner':'admin');
  if(p==='/api/v1/admin/resources' && m==='GET') {
   guard(user,'admin');if(!user.is_super_admin)fail(403,'super_admin_required','Super Admin required');
   const stats={resources:resourceSnapshot(),cache:profiles?.metrics,features:{r2:env.LS_R2_MEDIA_ENABLED==='1',kv:env.LS_KV_PUBLIC_ENABLED==='1',analytics:env.LS_ANALYTICS_ENABLED==='1',browserRealtime:env.LS_BROWSER_REALTIME_ENABLED==='1'}};
@@ -153,6 +159,8 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  }
  if(p.startsWith('/api/v1/admin/')) {
   guard(user,'admin');
+  const secureBatch=entries=>authorizedBatch({batch:entries=>batch(db,entries)},fail,user,null,'admin',entries);
+  const secureRun=(q,...args)=>secureBatch([[q,...args]]);
   if(p==='/api/v1/admin/overview' && m==='GET') {
    const count=async(sql,...args)=>(await first(db,sql,...args)).n;
    const devices=await all(db,'SELECT * FROM devices WHERE revoked_at IS NULL');const views=await Promise.all(devices.map(d=>deviceView(db,d)));
@@ -167,7 +175,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
    if(m==='GET' && !a[1])return json({cafe:{...await ownerView(db,row),owner:row.owner_id?publicUser(await first(db,'SELECT * FROM users WHERE id=?',row.owner_id)):null,public:row.status==='active'?await cafeView(db,row):null}});
    if(m==='PATCH' && !a[1]){const x=cleanCafe(await body(req));if((x.lat!=null || x.lng!=null) && x.map_x===undefined && x.map_y===undefined){const position=projectToMap(x.lat??row.lat,x.lng??row.lng);x.map_x=position.x;x.map_y=position.y;}await update(db,'cafes',row.id,{...x,updated_at:now()});return json({ok:true});}
    if(a[1]==='visualization' && m==='PUT'){const x=await body(req);if(!['not_started','in_progress','ready'].includes(x.status))fail(400,'bad_request','Invalid visualization status');const current=parse(row.visualization,{});const layout=x.layout?sanitizeLayout(x.layout):current.layout || null;if(x.status==='ready' && !layout)fail(400,'bad_request','Ready visualization needs layout');const visualization={...current,status:x.status,layout,notes:typeof x.notes==='string'?x.notes.slice(0,2000):current.notes || '',generator:'manual',updated_at:now()};await update(db,'cafes',row.id,{visualization:JSON.stringify(visualization),updated_at:now()});return json({visualization});}
-   if(a[1]==='status' && m==='POST'){const x=await body(req);if(!SETUP_STATUSES.includes(x.status))fail(400,'bad_request','Invalid status');if(x.status==='active' && row.data_mode==='live' && row.map_x==null)fail(422,'missing_location','Map location required');await batch(db,[['UPDATE cafes SET status=?,updated_at=? WHERE id=?',x.status,now(),row.id],['INSERT INTO status_history(cafe_id,from_status,to_status,note,actor_id,at) VALUES(?,?,?,?,?,?)',row.id,row.status,x.status,String(x.note || '').slice(0,500),user.id,now()]]);return json({ok:true,status:x.status});}
+   if(a[1]==='status' && m==='POST'){const x=await body(req);if(!SETUP_STATUSES.includes(x.status))fail(400,'bad_request','Invalid status');if(x.status==='active' && row.data_mode==='live' && row.map_x==null)fail(422,'missing_location','Map location required');await secureBatch([['UPDATE cafes SET status=?,updated_at=? WHERE id=?',x.status,now(),row.id],['INSERT INTO status_history(cafe_id,from_status,to_status,note,actor_id,at) VALUES(?,?,?,?,?,?)',row.id,row.status,x.status,String(x.note || '').slice(0,500),user.id,now()]]);return json({ok:true,status:x.status});}
   }
   const suggest=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)\/visualization\/suggest$/);
   if(suggest && m==='POST'){const cafe=await first(db,'SELECT * FROM cafes WHERE id=?',suggest[0]);if(!cafe)fail(404,'not_found','Cafe not found');const app=await first(db,'SELECT form FROM applications WHERE cafe_id=? LIMIT 1',cafe.id);return json({suggestion:await ruleBasedProvider.suggest({cafe,form:parse(app?.form,{})})});}
@@ -177,7 +185,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
    const deviceId=x.id || id('dev');if(typeof deviceId!=='string' || !SENSOR_ID.test(deviceId) || !['sensor','camera','gateway','simulator'].includes(x.kind || 'sensor') || (x.is_test!=null && typeof x.is_test!=='boolean'))fail(422,'validation_failed','Invalid device');
    if(await first(db,'SELECT id FROM devices WHERE id=?',deviceId))fail(409,'device_exists','Device ID already registered');
    if(x.label!=null && (typeof x.label!=='string' || x.label.length>100))fail(422,'validation_failed','Invalid label');
-   const t=token('lsd_');await run(db,'INSERT INTO devices(id,cafe_id,label,kind,is_test,token_hash,created_at) VALUES(?,?,?,?,?,?,?)',deviceId,x.cafe_id,x.label || '',x.kind || 'sensor',x.is_test || x.kind==='simulator'?1:0,sha(t),now());return json({device:await deviceView(db,await first(db,'SELECT * FROM devices WHERE id=?',deviceId)),token:t},201);
+   const t=token('lsd_');await secureRun('INSERT INTO devices(id,cafe_id,label,kind,is_test,token_hash,created_at) VALUES(?,?,?,?,?,?,?)',deviceId,x.cafe_id,x.label || '',x.kind || 'sensor',x.is_test || x.kind==='simulator'?1:0,sha(t),now());return json({device:await deviceView(db,await first(db,'SELECT * FROM devices WHERE id=?',deviceId)),token:t},201);
   }
   a=routeId(p,/^\/api\/v1\/admin\/devices\/([^/]+)(?:\/(token))?$/);
   if(a) {
@@ -198,7 +206,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  }
  fail(404,'not_found','Endpoint not available');
 }
-async function update(db,table,key,x) {const keys=Object.keys(x);if(keys.length)await run(db,`UPDATE ${table} SET ${keys.map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(x),key);}
+async function updateWithAuthorization(db,table,key,x,actor,scope) {const keys=Object.keys(x);if(keys.length)await authorizedBatch({batch:entries=>batch(db,entries)},fail,actor,scope==='owner'?key:null,scope,[[`UPDATE ${table} SET ${keys.map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(x),key]]);}
 function cleanCafe(x) {
  const out={};const text={name:80,category:40,district:40,address:200,hours:20,phone:30,contact_name:80,email:200,description:1000};
  for(const [k,max]of Object.entries(text))if(k in x){if(typeof x[k]!=='string' || x[k].length>max || (k==='hours' && !parseHours(x[k])))fail(422,'validation_failed','Invalid '+k);out[k]=x[k].trim();}
@@ -237,7 +245,7 @@ export class AppBackend extends DurableObject {
    const deviceMutation=req.method!=='GET'?/^\/api\/v1\/admin\/devices\/([^/]+)/.exec(p):null;
    const previous=deviceMutation?await first(this.env.DB,'SELECT cafe_id FROM devices WHERE id=?',decodeURIComponent(deviceMutation[1])):null;
    const response=await handle(req,this.env,this.historyCache,this.profiles,this.ctx);
-   if(req.method!=='GET' && response.ok && !/^\/api\/v1\/(?:(?:owner|admin)\/)?cafes\/[^/]+\/(?:menu|inventory|reviews|ratings)(?:\/|$)/.test(p)){if(previous)this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,previous.cafe_id)).catch(()=>{}));this.generation++;this.cache.clear();const cafe=/^\/api\/v1\/(?:admin\/|owner\/)?cafes\/([^/]+)/.exec(p)?.[1];if(cafe){const id=decodeURIComponent(cafe);await this.profiles.invalidate(id);this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,id)).catch(()=>{}));}}
+   if(req.method!=='GET' && response.ok && !/^\/api\/v1\/(?:(?:owner|admin)\/)?cafes\/[^/]+\/(?:menu|inventory|reviews|ratings|promotions)(?:\/|$)/.test(p)){if(previous)this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,previous.cafe_id)).catch(()=>{}));this.generation++;this.cache.clear();const cafe=/^\/api\/v1\/(?:admin\/|owner\/)?cafes\/([^/]+)/.exec(p)?.[1];if(cafe){const id=decodeURIComponent(cafe);await this.profiles.invalidate(id);this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,id)).catch(()=>{}));}}
    return response;
   }catch(e){if(isQuotaError(e))this.quotaUntil=Date.now()+900000;return error(e);}
  }

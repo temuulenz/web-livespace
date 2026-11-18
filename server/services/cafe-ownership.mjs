@@ -1,3 +1,4 @@
+import {authorizedBatch} from '../../shared/business/write-authorization.mjs';
 // Shared Node/SQLite and Workers/D1 policy: a LiveSpace administrator assigns, changes or
 // removes a café's owner account. (Owners are otherwise linked through the partner
 // application's one-time claim.) Owner routes check cafes.owner_id on every request, so the
@@ -26,7 +27,7 @@ export function createCafeOwnership({ sql, fail, id, now = () => new Date().toIS
       const next = owner?.id ?? null, previous = cafe.owner_id ?? null;
       if (next === previous) return { owner: view(owner), changed: false };
       const eventId = id('audit'), at = now();
-      await sql.batch([
+      await authorizedBatch(sql,(status,code,message)=>fail(status,code==='access_changed'?'owner_changed':code,message),actor,cafe.id,'admin',[
         [`UPDATE cafes SET owner_id=?, updated_at=? WHERE id=? AND owner_id IS ?
           AND EXISTS(SELECT 1 FROM users a WHERE a.id=? AND a.role='admin' AND a.disabled_at IS NULL)
           AND (? IS NULL OR EXISTS(SELECT 1 FROM users o WHERE o.id=? AND o.role='owner' AND o.disabled_at IS NULL))`,

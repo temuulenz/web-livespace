@@ -1,3 +1,4 @@
+import {authorizedBatch} from '../shared/business/write-authorization.mjs';
 import { createMediaStorage, mediaResponse } from './media.mjs';
 import { decodeImage } from '../shared/image-validation.mjs';
 import { APIError as HttpError, all, first, run, batch, json, fail, body, now, id, token, sha, credentials, publicUser, guard, startSession } from './core.mjs';
@@ -58,7 +59,7 @@ export async function partner(req,db,user,createUser,limit,env={DB:db}) {
    else entries.push(['INSERT INTO photo_bytes(photo_id,bytes) VALUES(?,?)',photoId,photo.buffer]);
   }
   if(user?.role==='user')entries.push(["UPDATE users SET role='owner' WHERE id=?",user.id]);
-  await batch(db,entries);return json({application_id:applicationId,cafe_id:cafeId,claim_token:user?null:claimToken,status:'submitted'},201);
+  if(user)await authorizedBatch({batch:entries=>batch(db,entries)},fail,user,null,'user',entries);else await batch(db,entries);return json({application_id:applicationId,cafe_id:cafeId,claim_token:user?null:claimToken,status:'submitted'},201);
  }
  if((p==='/api/v1/auth/register-owner' || p==='/api/v1/applications/claim') && req.method==='POST') {
   const x=await body(req);const app=typeof x.claim_token==='string'?await first(db,'SELECT * FROM applications WHERE claim_token_hash=?',sha(x.claim_token)):null;
@@ -66,9 +67,10 @@ export async function partner(req,db,user,createUser,limit,env={DB:db}) {
   if(p.endsWith('/register-owner')){limit(`register:${req.headers.get('cf-connecting-ip')}`,10,3600000);user=await createUser(db,x,'owner');}else guard(user);
   // Serialize claims using conditional writes in one atomic batch; a unique claim
   // reservation prevents two accounts racing the same one-time token.
-  await batch(db,[
+  await authorizedBatch({batch:entries=>batch(db,entries)},fail,user,null,'user',[
+   ['UPDATE applications SET owner_id=?,claim_token_hash=NULL WHERE id=? AND owner_id IS NULL AND claim_token_hash=?',user.id,app.id,app.claim_token_hash],
+   ["SELECT json(CASE WHEN changes()=1 THEN '{}' ELSE 'claim_conflict' END)"],
    ['INSERT INTO claim_reservations(application_id,user_id) VALUES(?,?)',app.id,user.id],
-   ['UPDATE applications SET owner_id=?,claim_token_hash=NULL WHERE id=?',user.id,app.id],
    ['UPDATE cafes SET owner_id=?,updated_at=? WHERE id=?',user.id,now(),app.cafe_id],
    ["UPDATE users SET role=CASE WHEN role='user' THEN 'owner' ELSE role END WHERE id=?",user.id]
   ]);

@@ -44,7 +44,8 @@ export function createUserAccess({ sql, hashPassword, verifyPassword, fail, id, 
     async reauthenticate(actor, value) {
       if (!actor) fail(401,'unauthorized','Sign in required');
       if (typeof value!=='string' || value.length>200 || !await verifyPassword(value,actor.password_hash)) fail(401,'invalid_credentials','Invalid current password');
-      await sql.batch([["UPDATE sessions SET authenticated_at=? WHERE token_hash=? AND user_id=? AND user_auth_version=? AND EXISTS(SELECT 1 FROM users WHERE id=? AND auth_version=? AND disabled_at IS NULL)",now(),actor.session_token_hash,actor.id,actor.auth_version,actor.id,actor.auth_version]]);
+      const results=await sql.batch([["UPDATE sessions SET authenticated_at=? WHERE token_hash=? AND user_id=? AND user_auth_version=? AND expires_at>? AND EXISTS(SELECT 1 FROM users WHERE id=? AND auth_version=? AND disabled_at IS NULL)",now(),actor.session_token_hash,actor.id,actor.auth_version,now(),actor.id,actor.auth_version]]);
+      if((results?.[0]?.meta?.changes??results?.[0]?.changes)!==1)fail(409,'access_changed','Authentication changed; sign in again');
       return {ok:true};
     },
     async create(actor, body) {
