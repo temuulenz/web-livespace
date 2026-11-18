@@ -1,3 +1,4 @@
+import {PROMOTIONS_SCHEMA} from '../../shared/business/promotions-schema.mjs';
 import { REVIEWS_SCHEMA } from '../../shared/business/reviews-schema.mjs';
 import { INVENTORY_SCHEMA } from '../../shared/business/inventory-schema.mjs';
 import { MENU_HARDENING_SCHEMA } from '../../shared/business/menu-hardening-schema.mjs';
@@ -195,7 +196,7 @@ BEGIN
  VALUES('super-admin-bind:' || NEW.user_id,'operator-bootstrap',NEW.user_id,'super_admin.bind',NEW.bound_at,'{}');
 END;
 `
-, MENU_SCHEMA, MENU_HARDENING_SCHEMA, INVENTORY_SCHEMA, REVIEWS_SCHEMA];
+, MENU_SCHEMA, MENU_HARDENING_SCHEMA, INVENTORY_SCHEMA, REVIEWS_SCHEMA, PROMOTIONS_SCHEMA];
 
 export function openDatabase(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
@@ -212,12 +213,17 @@ export function openDatabase(file) {
   return db;
 }
 
+// Node 22.13 lacks isTransaction. Track wrapper-owned transactions as well as
+// using the native flag on newer runtimes; retain BEGIN IMMEDIATE locking.
+const ownedTransactions = new WeakSet();
 // Run `fn` in a transaction; nested calls join the outer one.
 export function transaction(db, fn) {
-  if (db.isTransaction) return fn();
+  if (db.isTransaction || ownedTransactions.has(db)) return fn();
   db.exec('BEGIN IMMEDIATE');
+  ownedTransactions.add(db);
   try { const result = fn(); db.exec('COMMIT'); return result; }
   catch (error) { db.exec('ROLLBACK'); throw error; }
+  finally { ownedTransactions.delete(db); }
 }
 
 export const now = () => new Date().toISOString();

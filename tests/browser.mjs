@@ -265,7 +265,8 @@ try {
     await click('#mfApply');
     assert.equal(await evaluate(`!!document.querySelector('[role="dialog"]')`), false);
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-    await waitFor(`!!document.querySelector('#exMap')`);
+    // Resizing can rebuild the asynchronous map after its container is mounted.
+    await waitFor(`document.querySelectorAll('#exMap .mk').length === 12`);
     assert.equal(await evaluate(`document.querySelectorAll('.mk').length`), 12);
   });
 

@@ -1,3 +1,6 @@
+import {promotionsRoute} from './promotions.mjs';
+import {databaseReady,readinessPayload} from '../shared/readiness.mjs';
+import {authorizedBatch} from '../shared/business/write-authorization.mjs';
 import {reviewsRoute} from './reviews.mjs';
 import {inventoryRoute} from './inventory.mjs';
 import { menuRoute } from './menu.mjs';
@@ -54,17 +57,25 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  if(m!=='GET' && m!=='HEAD') {
   const origin=req.headers.get('origin');if(origin && origin!==u.origin)fail(403,'bad_origin','Cross-origin request rejected');
  }
+ const promotionResponse=await promotionsRoute(req,env,limit);if(promotionResponse)return promotionResponse;
  const reviewResponse=await reviewsRoute(req,env,limit);if(reviewResponse)return reviewResponse;
  const inventoryResponse=await inventoryRoute(req,env,limit);if(inventoryResponse)return inventoryResponse;
  const menuResponse=await menuRoute(req,env,limit);if(menuResponse)return menuResponse;
+ if(p==='/api/v1/analytics/session' && m==='POST') {
+  if(env.LS_ANALYTICS_ENABLED!=='1')fail(404,'analytics_disabled','Analytics disabled');limit('analytics-session:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
+  const s=analyticsSession(req.headers.get('cookie')||'');return json({ready:true},200,s.fresh?{'Set-Cookie':analyticsCookie(s.token,u.protocol==='https:')}:{});
+ }
  if(p==='/api/v1/analytics/events' && m==='POST') {
   if(env.LS_ANALYTICS_ENABLED!=='1'||!env.ANALYTICS)fail(404,'not_found','Analytics collection disabled');
-  limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
-  const input=await body(req,16384);let valid;try{valid=validateAnalyticsBatch(input);}catch{fail(422,'invalid_analytics','Invalid analytics batch');}
+  limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),phase11Config(env).analyticsBatches,60000);
+  const input=await body(req,16384),s=analyticsSession(req.headers.get('cookie')||'');let valid;try{valid=input?.schemaVersion===2?validateBehavior(input,s.token):validateAnalyticsBatch(input);}catch{fail(422,'invalid_analytics','Invalid analytics batch');}
   const cafe=await first(db,"SELECT id FROM cafes WHERE id=? AND status='active'",valid.cafeId);if(!cafe)fail(404,'not_found','Cafe not found');
-  return json(await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input),202);
+  if(await phase11Service(env).paused(valid.cafeId))fail(503,'analytics_paused','Optional analytics paused');
+  const value=await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input,s.token);
+  return json(value,202,s.fresh?{'Set-Cookie':analyticsCookie(s.token,u.protocol==='https:')}:{});
  }
  if(p==='/api/v1/ingest/measurements' && m==='POST')return ingest(req,db,limit,env,ctx);
+ if(p==='/api/v1/ready'&&m==='GET'){const ok=await databaseReady({first:q=>first(db,q)});return json(readinessPayload(ok),ok?200:503);}
  if(p==='/api/v1/health') {
   try {await first(db,'SELECT id FROM devices LIMIT 1');await first(db,'SELECT message_id FROM sensor_receipts LIMIT 1');await first(db,'SELECT photo_id FROM photo_bytes LIMIT 1');return json({ok:true,api:'1',time:now(),deployment:'cloudflare',database:'d1',sensorGateway:!!env.SENSORS,transport:'polling',schema:5});}
   catch(e){if(isQuotaError(e))throw e;return json({ok:false,api:'1',deployment:'cloudflare',database:'unavailable_or_unmigrated'},503);}
@@ -83,6 +94,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  let a=routeId(p,/^\/api\/v1\/cafes\/([^/]+)$/);
  if(a && m==='GET'){const row=await first(db,"SELECT * FROM cafes WHERE id=? AND status='active'",a[0]);if(!row)fail(404,'not_found','Cafe not found');return json({cafe:await cafeView(db,row)});}
  const user=await session(db,req);
+ const update=(db,table,key,x)=>updateWithAuthorization(db,table,key,x,user,p.startsWith('/api/v1/owner/')?'owner':'admin');
  if(p==='/api/v1/admin/resources' && m==='GET') {
   guard(user,'admin');if(!user.is_super_admin)fail(403,'super_admin_required','Super Admin required');
   const stats={resources:resourceSnapshot(),cache:profiles?.metrics,features:{r2:env.LS_R2_MEDIA_ENABLED==='1',kv:env.LS_KV_PUBLIC_ENABLED==='1',analytics:env.LS_ANALYTICS_ENABLED==='1',browserRealtime:env.LS_BROWSER_REALTIME_ENABLED==='1'}};
@@ -153,6 +165,8 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  }
  if(p.startsWith('/api/v1/admin/')) {
   guard(user,'admin');
+  const secureBatch=entries=>authorizedBatch({batch:entries=>batch(db,entries)},fail,user,null,'admin',entries);
+  const secureRun=(q,...args)=>secureBatch([[q,...args]]);
   if(p==='/api/v1/admin/overview' && m==='GET') {
    const count=async(sql,...args)=>(await first(db,sql,...args)).n;
    const devices=await all(db,'SELECT * FROM devices WHERE revoked_at IS NULL');const views=await Promise.all(devices.map(d=>deviceView(db,d)));
@@ -167,7 +181,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
    if(m==='GET' && !a[1])return json({cafe:{...await ownerView(db,row),owner:row.owner_id?publicUser(await first(db,'SELECT * FROM users WHERE id=?',row.owner_id)):null,public:row.status==='active'?await cafeView(db,row):null}});
    if(m==='PATCH' && !a[1]){const x=cleanCafe(await body(req));if((x.lat!=null || x.lng!=null) && x.map_x===undefined && x.map_y===undefined){const position=projectToMap(x.lat??row.lat,x.lng??row.lng);x.map_x=position.x;x.map_y=position.y;}await update(db,'cafes',row.id,{...x,updated_at:now()});return json({ok:true});}
    if(a[1]==='visualization' && m==='PUT'){const x=await body(req);if(!['not_started','in_progress','ready'].includes(x.status))fail(400,'bad_request','Invalid visualization status');const current=parse(row.visualization,{});const layout=x.layout?sanitizeLayout(x.layout):current.layout || null;if(x.status==='ready' && !layout)fail(400,'bad_request','Ready visualization needs layout');const visualization={...current,status:x.status,layout,notes:typeof x.notes==='string'?x.notes.slice(0,2000):current.notes || '',generator:'manual',updated_at:now()};await update(db,'cafes',row.id,{visualization:JSON.stringify(visualization),updated_at:now()});return json({visualization});}
-   if(a[1]==='status' && m==='POST'){const x=await body(req);if(!SETUP_STATUSES.includes(x.status))fail(400,'bad_request','Invalid status');if(x.status==='active' && row.data_mode==='live' && row.map_x==null)fail(422,'missing_location','Map location required');await batch(db,[['UPDATE cafes SET status=?,updated_at=? WHERE id=?',x.status,now(),row.id],['INSERT INTO status_history(cafe_id,from_status,to_status,note,actor_id,at) VALUES(?,?,?,?,?,?)',row.id,row.status,x.status,String(x.note || '').slice(0,500),user.id,now()]]);return json({ok:true,status:x.status});}
+   if(a[1]==='status' && m==='POST'){const x=await body(req);if(!SETUP_STATUSES.includes(x.status))fail(400,'bad_request','Invalid status');if(x.status==='active' && row.data_mode==='live' && row.map_x==null)fail(422,'missing_location','Map location required');await secureBatch([['UPDATE cafes SET status=?,updated_at=? WHERE id=?',x.status,now(),row.id],['INSERT INTO status_history(cafe_id,from_status,to_status,note,actor_id,at) VALUES(?,?,?,?,?,?)',row.id,row.status,x.status,String(x.note || '').slice(0,500),user.id,now()]]);return json({ok:true,status:x.status});}
   }
   const suggest=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)\/visualization\/suggest$/);
   if(suggest && m==='POST'){const cafe=await first(db,'SELECT * FROM cafes WHERE id=?',suggest[0]);if(!cafe)fail(404,'not_found','Cafe not found');const app=await first(db,'SELECT form FROM applications WHERE cafe_id=? LIMIT 1',cafe.id);return json({suggestion:await ruleBasedProvider.suggest({cafe,form:parse(app?.form,{})})});}
@@ -177,7 +191,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
    const deviceId=x.id || id('dev');if(typeof deviceId!=='string' || !SENSOR_ID.test(deviceId) || !['sensor','camera','gateway','simulator'].includes(x.kind || 'sensor') || (x.is_test!=null && typeof x.is_test!=='boolean'))fail(422,'validation_failed','Invalid device');
    if(await first(db,'SELECT id FROM devices WHERE id=?',deviceId))fail(409,'device_exists','Device ID already registered');
    if(x.label!=null && (typeof x.label!=='string' || x.label.length>100))fail(422,'validation_failed','Invalid label');
-   const t=token('lsd_');await run(db,'INSERT INTO devices(id,cafe_id,label,kind,is_test,token_hash,created_at) VALUES(?,?,?,?,?,?,?)',deviceId,x.cafe_id,x.label || '',x.kind || 'sensor',x.is_test || x.kind==='simulator'?1:0,sha(t),now());return json({device:await deviceView(db,await first(db,'SELECT * FROM devices WHERE id=?',deviceId)),token:t},201);
+   const t=token('lsd_');await secureRun('INSERT INTO devices(id,cafe_id,label,kind,is_test,token_hash,created_at) VALUES(?,?,?,?,?,?,?)',deviceId,x.cafe_id,x.label || '',x.kind || 'sensor',x.is_test || x.kind==='simulator'?1:0,sha(t),now());return json({device:await deviceView(db,await first(db,'SELECT * FROM devices WHERE id=?',deviceId)),token:t},201);
   }
   a=routeId(p,/^\/api\/v1\/admin\/devices\/([^/]+)(?:\/(token))?$/);
   if(a) {
@@ -198,7 +212,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  }
  fail(404,'not_found','Endpoint not available');
 }
-async function update(db,table,key,x) {const keys=Object.keys(x);if(keys.length)await run(db,`UPDATE ${table} SET ${keys.map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(x),key);}
+async function updateWithAuthorization(db,table,key,x,actor,scope) {const keys=Object.keys(x);if(keys.length)await authorizedBatch({batch:entries=>batch(db,entries)},fail,actor,scope==='owner'?key:null,scope,[[`UPDATE ${table} SET ${keys.map(k=>`${k}=?`).join(',')} WHERE id=?`,...Object.values(x),key]]);}
 function cleanCafe(x) {
  const out={};const text={name:80,category:40,district:40,address:200,hours:20,phone:30,contact_name:80,email:200,description:1000};
  for(const [k,max]of Object.entries(text))if(k in x){if(typeof x[k]!=='string' || x[k].length>max || (k==='hours' && !parseHours(x[k])))fail(422,'validation_failed','Invalid '+k);out[k]=x[k].trim();}
@@ -217,6 +231,21 @@ export class AppBackend extends DurableObject {
  // response or authorization decision enters the public cache.
  constructor(ctx,env) { super(ctx,env);this.ctx=ctx;this.env=env;this.cache=new Map();this.historyCache=new Map();this.pending=new Map();this.quotaUntil=0;this.generation=0;this.profiles=new PublicProfileCache({kv:env.PUBLIC_CACHE,storage:ctx.storage,enabled:env.LS_KV_PUBLIC_ENABLED==='1'}); }
  async fetch(req) {
+  const start=performance.now(),path=new URL(req.url).pathname,correlation=requestId();
+  let response;try{response=await this.fetchInternal(req);}catch(e){response=error(e);}
+  const elapsed=performance.now()-start;runtimeMetrics.record(requestCafe(path),response.status,elapsed);
+  if(this.env.LS_REQUEST_LOGS==='1'||response.status>=500)operationalLog('http_request',{request_id:correlation,route:routeGroup(path),status:response.status,duration_ms:elapsed,runtime:'cloudflare'});
+  const result=new Response(response.body,response);result.headers.set('X-Request-ID',correlation);return result;
+ }
+ async alarm(){let delay=900000;try{const result=await phase11Service(this.env).maintenance();if(result?.more_tenants)delay=1000;else if(result?.next_due)delay=Math.max(1000,Math.min(900000,Date.parse(result.next_due)-Date.now()));runtimeMetrics.job();}catch{runtimeMetrics.job(true);operationalLog('background_failure',{runtime:'cloudflare',job:'maintenance'});}finally{await this.ctx.storage.setAlarm(Date.now()+delay);}}
+ async fetchInternal(req) {
+  if(new URL(req.url).pathname==='/api/v1/ready'&&req.method==='GET'){
+   limit('readiness:'+(req.headers.get('cf-connecting-ip')||'local'),30,60000);
+   let validConfig=true;try{phase11Config(this.env);}catch{validConfig=false;}
+   const readyBindings=validConfig&&!!(this.env.DB&&this.env.SENSORS&&this.env.BACKEND)&&(! (this.env.LS_ANALYTICS_ENABLED==='1')||!!this.env.ANALYTICS)&&(!(this.env.LS_BROWSER_REALTIME_ENABLED==='1')||!!this.env.BROWSER_ROOMS)&&(!(this.env.LS_R2_MEDIA_ENABLED==='1')||!!this.env.MEDIA)&&(!(this.env.LS_KV_PUBLIC_ENABLED==='1')||!!this.env.PUBLIC_CACHE);
+   const value=await readiness({first:(q,...a)=>first(this.env.DB,q,...a)},readyBindings);return json(value,value.ready?200:503);
+  }
+  if(!this.phase11Scheduled){const options=phase11Config(this.env);await batch(this.env.DB,[["UPDATE application_limits SET value=? WHERE key='tenant_media_bytes'",options.tenantMediaBytes],["UPDATE application_limits SET value=? WHERE key='media_upload_bytes'",options.mediaBytes],["UPDATE application_limits SET value=? WHERE key='csv_rows'",options.csvRows],["UPDATE application_limits SET value=? WHERE key='csv_bytes'",options.csvBytes]]);this.phase11Scheduled=true;if(!await this.ctx.storage.getAlarm())await this.ctx.storage.setAlarm(Date.now()+30000);}
   const u=new URL(req.url),p=u.pathname;
   const publicPath=p==='/api/v1/live' || p==='/api/v1/cafes' || /^\/api\/v1\/cafes\/[^/]+$/.test(p);
   const ttl=req.method==='GET'?(p==='/api/v1/health'?60000:publicPath?5000:0):0,key=p; // public projections ignore cookies and query parameters
@@ -237,12 +266,13 @@ export class AppBackend extends DurableObject {
    const deviceMutation=req.method!=='GET'?/^\/api\/v1\/admin\/devices\/([^/]+)/.exec(p):null;
    const previous=deviceMutation?await first(this.env.DB,'SELECT cafe_id FROM devices WHERE id=?',decodeURIComponent(deviceMutation[1])):null;
    const response=await handle(req,this.env,this.historyCache,this.profiles,this.ctx);
-   if(req.method!=='GET' && response.ok && !/^\/api\/v1\/(?:(?:owner|admin)\/)?cafes\/[^/]+\/(?:menu|inventory|reviews|ratings)(?:\/|$)/.test(p)){if(previous)this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,previous.cafe_id)).catch(()=>{}));this.generation++;this.cache.clear();const cafe=/^\/api\/v1\/(?:admin\/|owner\/)?cafes\/([^/]+)/.exec(p)?.[1];if(cafe){const id=decodeURIComponent(cafe);await this.profiles.invalidate(id);this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,id)).catch(()=>{}));}}
+   if(req.method!=='GET' && response.ok && !/^\/api\/v1\/(?:(?:owner|admin)\/)?cafes\/[^/]+\/(?:menu|inventory|reviews|ratings|promotions)(?:\/|$)/.test(p)){if(previous)this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,previous.cafe_id)).catch(()=>{}));this.generation++;this.cache.clear();const cafe=/^\/api\/v1\/(?:admin\/|owner\/)?cafes\/([^/]+)/.exec(p)?.[1];if(cafe){const id=decodeURIComponent(cafe);await this.profiles.invalidate(id);this.ctx.waitUntil(Promise.resolve(notifyCafe(this.env,id)).catch(()=>{}));}}
    return response;
   }catch(e){if(isQuotaError(e))this.quotaUntil=Date.now()+900000;return error(e);}
  }
 }
 export default {async fetch(req,env,ctx){try{
+ if(new URL(req.url).pathname==='/api/v1/ready'&&req.method==='GET'&&!env.BACKEND)return json({ready:false,api:'1'},503,{'X-Request-ID':requestId()});
  if(req.method==='GET' && new URL(req.url).pathname==='/api/v1/config' && globalThis.caches?.default){
   const cached=await caches.default.match(req);if(cached)return cached;
   const response=await env.BACKEND.get(env.BACKEND.idFromName('application')).fetch(req);

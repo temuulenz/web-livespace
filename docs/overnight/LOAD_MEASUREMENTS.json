@@ -1,0 +1,1273 @@
+{
+  "environment": "local workerd; temporary D1/R2/KV/DO; not production CPU billing",
+  "matrix": [
+    {
+      "cafes": 1,
+      "sensors": 1,
+      "browsers": 50,
+      "connectMs": {
+        "samples": 50,
+        "p50": 84.37369399999989,
+        "p95": 106.11231299999963,
+        "p99": 106.75524300000143
+      },
+      "realtimeMs": {
+        "samples": 50,
+        "p50": 552.1258710000002,
+        "p95": 553.4920230000007,
+        "p99": 553.5435900000011
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 5.280118000000584,
+        "p95": 6.47276199999942,
+        "p99": 39.920984999998836
+      },
+      "reconnectMs": {
+        "samples": 50,
+        "p50": 176.85618799999975,
+        "p95": 185.72482200000013,
+        "p99": 186.82483899999897
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 223,
+          "rowsRead": 320,
+          "rowsWritten": 64,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 2,
+            "p95": 19,
+            "p99": 19
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 111,
+          "rowsWritten": 5,
+          "operations": 111,
+          "alarmWrites": 3,
+          "connections": 50
+        },
+        "analytics": {
+          "rowsRead": 6,
+          "rowsWritten": 12,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 3,
+          "rowsWritten": 3,
+          "operations": 3,
+          "alarmWrites": 1,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 1,
+      "sensors": 1,
+      "browsers": 100,
+      "connectMs": {
+        "samples": 100,
+        "p50": 87.52060200000051,
+        "p95": 131.130083,
+        "p99": 132.293746000003
+      },
+      "realtimeMs": {
+        "samples": 100,
+        "p50": 550.5511540000007,
+        "p95": 552.704228999999,
+        "p99": 552.8746429999992
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 5.036067000000912,
+        "p95": 5.833368999999948,
+        "p99": 44.0402439999998
+      },
+      "reconnectMs": {
+        "samples": 100,
+        "p50": 185.01396400000158,
+        "p95": 193.54645799999707,
+        "p99": 203.45615800000087
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 436,
+          "rowsRead": 594,
+          "rowsWritten": 78,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 13,
+            "p95": 33,
+            "p99": 33
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 420,
+          "rowsWritten": 6,
+          "operations": 420,
+          "alarmWrites": 5,
+          "connections": 100
+        },
+        "analytics": {
+          "rowsRead": 6,
+          "rowsWritten": 12,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 7,
+          "rowsWritten": 5,
+          "operations": 7,
+          "alarmWrites": 3,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 1,
+      "sensors": 1,
+      "browsers": 500,
+      "connectMs": {
+        "samples": 500,
+        "p50": 83.9537679999994,
+        "p95": 98.64257799999905,
+        "p99": 132.13069499999983
+      },
+      "realtimeMs": {
+        "samples": 500,
+        "p50": 573.9794900000015,
+        "p95": 583.4565409999996,
+        "p99": 585.1821390000005
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 4.8309209999970335,
+        "p95": 6.387785999999323,
+        "p99": 40.42619100000229
+      },
+      "reconnectMs": {
+        "samples": 500,
+        "p50": 185.52655499999673,
+        "p95": 264.15136500000153,
+        "p99": 267.0215680000001
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 1104,
+          "rowsRead": 1326,
+          "rowsWritten": 92,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 18,
+            "p95": 23,
+            "p99": 24
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 1631,
+          "rowsWritten": 8,
+          "operations": 1631,
+          "alarmWrites": 7,
+          "connections": 500
+        },
+        "analytics": {
+          "rowsRead": 6,
+          "rowsWritten": 12,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 11,
+          "rowsWritten": 7,
+          "operations": 11,
+          "alarmWrites": 5,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 3,
+      "sensors": 3,
+      "browsers": 50,
+      "connectMs": {
+        "samples": 50,
+        "p50": 95.89262500000041,
+        "p95": 104.91893600000185,
+        "p99": 105.1446569999971
+      },
+      "realtimeMs": {
+        "samples": 50,
+        "p50": 550.4275439999983,
+        "p95": 555.3112459999975,
+        "p99": 555.4655139999959
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 5.340852000001178,
+        "p95": 31.080183999998553,
+        "p99": 42.124918000001344
+      },
+      "reconnectMs": {
+        "samples": 50,
+        "p50": 189.81309899999906,
+        "p95": 190.31219400000555,
+        "p99": 190.36922899999627
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 1765,
+          "rowsRead": 2082,
+          "rowsWritten": 128,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 18,
+            "p95": 41,
+            "p99": 42
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 2632,
+          "rowsWritten": 11,
+          "operations": 2632,
+          "alarmWrites": 9,
+          "connections": 17
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 4,
+          "rowsWritten": 2,
+          "operations": 5,
+          "alarmWrites": 2,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 3,
+      "sensors": 3,
+      "browsers": 100,
+      "connectMs": {
+        "samples": 100,
+        "p50": 86.22171200000594,
+        "p95": 95.61438500000077,
+        "p99": 96.15103300000192
+      },
+      "realtimeMs": {
+        "samples": 100,
+        "p50": 542.3414439999979,
+        "p95": 555.9006420000005,
+        "p99": 556.084087999996
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 4.765508000004047,
+        "p95": 7.33560099999886,
+        "p99": 40.468432000001485
+      },
+      "reconnectMs": {
+        "samples": 100,
+        "p50": 165.42038899999898,
+        "p95": 192.27005800000188,
+        "p99": 198.8973840000035
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 2035,
+          "rowsRead": 2458,
+          "rowsWritten": 170,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 16,
+            "p95": 36,
+            "p99": 36
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 2745,
+          "rowsWritten": 13,
+          "operations": 2745,
+          "alarmWrites": 11,
+          "connections": 34
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 8,
+          "rowsWritten": 4,
+          "operations": 9,
+          "alarmWrites": 4,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 3,
+      "sensors": 3,
+      "browsers": 500,
+      "connectMs": {
+        "samples": 500,
+        "p50": 84.06828300000052,
+        "p95": 107.67638799999986,
+        "p99": 116.01290699999663
+      },
+      "realtimeMs": {
+        "samples": 500,
+        "p50": 554.1280809999953,
+        "p95": 607.6389380000037,
+        "p99": 608.1176659999983
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 4.814021999998658,
+        "p95": 6.8959390000018175,
+        "p99": 40.45809100000042
+      },
+      "reconnectMs": {
+        "samples": 500,
+        "p50": 179.95277499999793,
+        "p95": 201.90228299998853,
+        "p99": 208.6930779999966
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 2755,
+          "rowsRead": 3284,
+          "rowsWritten": 212,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 17,
+            "p95": 20,
+            "p99": 20
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 3158,
+          "rowsWritten": 15,
+          "operations": 3158,
+          "alarmWrites": 13,
+          "connections": 167
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 12,
+          "rowsWritten": 6,
+          "operations": 13,
+          "alarmWrites": 6,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 5,
+      "sensors": 5,
+      "browsers": 50,
+      "connectMs": {
+        "samples": 50,
+        "p50": 86.71066899999278,
+        "p95": 106.39414000000397,
+        "p99": 106.52573700000357
+      },
+      "realtimeMs": {
+        "samples": 50,
+        "p50": 557.2286580000073,
+        "p95": 568.6097909999953,
+        "p99": 568.6554659999965
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 4.794511000000057,
+        "p95": 6.910058000008576,
+        "p99": 38.83813999999256
+      },
+      "reconnectMs": {
+        "samples": 50,
+        "p50": 188.8526600000041,
+        "p95": 200.5970329999982,
+        "p99": 201.7975929999957
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 3493,
+          "rowsRead": 4168,
+          "rowsWritten": 276,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 7,
+            "p95": 35,
+            "p99": 35
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 3527,
+          "rowsWritten": 19,
+          "operations": 3527,
+          "alarmWrites": 15,
+          "connections": 10
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 4,
+          "rowsWritten": 2,
+          "operations": 5,
+          "alarmWrites": 2,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 5,
+      "sensors": 5,
+      "browsers": 100,
+      "connectMs": {
+        "samples": 100,
+        "p50": 82.3954980000126,
+        "p95": 100.56707500001357,
+        "p99": 101.2410349999991
+      },
+      "realtimeMs": {
+        "samples": 100,
+        "p50": 546.275490999993,
+        "p95": 569.1366500000004,
+        "p99": 569.2754129999958
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 5.000883999993675,
+        "p95": 8.868596999993315,
+        "p99": 40.69725899999321
+      },
+      "reconnectMs": {
+        "samples": 100,
+        "p50": 169.99303500000678,
+        "p95": 2432.3597549999977,
+        "p99": 2437.2096859999874
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 3815,
+          "rowsRead": 4630,
+          "rowsWritten": 346,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 7,
+            "p95": 18,
+            "p99": 19
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 3598,
+          "rowsWritten": 21,
+          "operations": 3598,
+          "alarmWrites": 17,
+          "connections": 20
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 8,
+          "rowsWritten": 4,
+          "operations": 9,
+          "alarmWrites": 4,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 5,
+      "sensors": 5,
+      "browsers": 500,
+      "connectMs": {
+        "samples": 500,
+        "p50": 75.2800600000046,
+        "p95": 102.30028799999855,
+        "p99": 177.3757570000016
+      },
+      "realtimeMs": {
+        "samples": 500,
+        "p50": 570.4543010000052,
+        "p95": 576.8087180000002,
+        "p99": 577.559779999996
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 4.818492999998853,
+        "p95": 6.065237999995588,
+        "p99": 42.40536000000429
+      },
+      "reconnectMs": {
+        "samples": 500,
+        "p50": 167.26495300000533,
+        "p95": 899.6310620000004,
+        "p99": 900.6379499999894
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 4587,
+          "rowsRead": 5542,
+          "rowsWritten": 416,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 16,
+            "p95": 108,
+            "p99": 109
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 3849,
+          "rowsWritten": 23,
+          "operations": 3849,
+          "alarmWrites": 19,
+          "connections": 100
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 12,
+          "rowsWritten": 6,
+          "operations": 13,
+          "alarmWrites": 6,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 10,
+      "sensors": 10,
+      "browsers": 50,
+      "connectMs": {
+        "samples": 50,
+        "p50": 90.57648899999913,
+        "p95": 128.9009980000119,
+        "p99": 129.66147400000773
+      },
+      "realtimeMs": {
+        "samples": 50,
+        "p50": 551.2424809999939,
+        "p95": 569.8128880000004,
+        "p99": 569.8699819999892
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 5.103728999994928,
+        "p95": 6.209791999994195,
+        "p99": 45.522913000007975
+      },
+      "reconnectMs": {
+        "samples": 50,
+        "p50": 174.12307499999588,
+        "p95": 185.70260200000484,
+        "p99": 187.6461239999917
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 294,
+          "rowsRead": 487,
+          "rowsWritten": 114,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 7,
+            "p95": 20,
+            "p99": 21
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 18,
+          "rowsWritten": 2,
+          "operations": 19,
+          "alarmWrites": 2,
+          "connections": 5
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 2,
+          "rowsWritten": 1,
+          "operations": 3,
+          "alarmWrites": 1,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 10,
+      "sensors": 10,
+      "browsers": 100,
+      "connectMs": {
+        "samples": 100,
+        "p50": 87.01860800001305,
+        "p95": 121.54130499999155,
+        "p99": 122.06830800001626
+      },
+      "realtimeMs": {
+        "samples": 100,
+        "p50": 535.2464249999903,
+        "p95": 545.9978209999972,
+        "p99": 546.375275999977
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 5.1625280000153,
+        "p95": 6.8970550000085495,
+        "p99": 39.77550899999915
+      },
+      "reconnectMs": {
+        "samples": 100,
+        "p50": 189.66397200000938,
+        "p95": 201.2343519999995,
+        "p99": 203.82464499998605
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 746,
+          "rowsRead": 1184,
+          "rowsWritten": 254,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 7,
+            "p95": 21,
+            "p99": 22
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 28,
+          "rowsWritten": 2,
+          "operations": 29,
+          "alarmWrites": 2,
+          "connections": 10
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 2,
+          "rowsWritten": 1,
+          "operations": 3,
+          "alarmWrites": 1,
+          "connections": 1
+        }
+      }
+    },
+    {
+      "cafes": 10,
+      "sensors": 10,
+      "browsers": 500,
+      "connectMs": {
+        "samples": 500,
+        "p50": 81.1886189999932,
+        "p95": 94.89436700000078,
+        "p99": 130.13641300000018
+      },
+      "realtimeMs": {
+        "samples": 500,
+        "p50": 550.8399440000067,
+        "p95": 590.6295129999926,
+        "p99": 591.4205870000005
+      },
+      "apiHotMs": {
+        "samples": 30,
+        "p50": 5.062485000002198,
+        "p95": 7.034722000011243,
+        "p99": 40.57453600000008
+      },
+      "reconnectMs": {
+        "samples": 500,
+        "p50": 175.57784000001266,
+        "p95": 221.18216100000427,
+        "p99": 223.9718189999985
+      },
+      "resources": {
+        "resources": {
+          "scope": "ephemeral_current_isolate_not_billing",
+          "queries": 1648,
+          "rowsRead": 2331,
+          "rowsWritten": 394,
+          "failures": 0,
+          "queryLatencyMs": {
+            "p50": 7,
+            "p95": 20,
+            "p99": 22
+          },
+          "limits": {
+            "d1DailyReadsTarget": 2500000,
+            "d1DailyWritesTarget": 50000,
+            "workerRequestsTarget": 50000,
+            "doRequestsTarget": 50000,
+            "doRowsWrittenTarget": 50000
+          }
+        },
+        "cache": {
+          "hits": 0,
+          "misses": 0,
+          "kvReads": 0,
+          "kvWrites": 0,
+          "failures": 0
+        },
+        "features": {
+          "r2": true,
+          "kv": true,
+          "analytics": true,
+          "browserRealtime": true
+        },
+        "room": {
+          "rowsRead": 108,
+          "rowsWritten": 2,
+          "operations": 109,
+          "alarmWrites": 2,
+          "connections": 50
+        },
+        "analytics": {
+          "rowsRead": 0,
+          "rowsWritten": 0,
+          "operations": 5
+        },
+        "sensor": {
+          "rowsRead": 2,
+          "rowsWritten": 1,
+          "operations": 3,
+          "alarmWrites": 1,
+          "connections": 1
+        }
+      }
+    }
+  ],
+  "checks": [],
+  "projections": [
+    {
+      "cafes": 1,
+      "sensors": 1,
+      "dau": 100,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 30,
+      "sensorMessagesPerDay": 2880,
+      "oldLivePollsPerDay": 18000,
+      "newBrowserUpgradesPerDay": 330,
+      "d1TelemetryWritesPerDay": 28800,
+      "estimatedWorkerRequestsPerDay": 1334,
+      "targetD1WritesFits": true
+    },
+    {
+      "cafes": 1,
+      "sensors": 1,
+      "dau": 500,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 30,
+      "sensorMessagesPerDay": 2880,
+      "oldLivePollsPerDay": 90000,
+      "newBrowserUpgradesPerDay": 1651,
+      "d1TelemetryWritesPerDay": 28800,
+      "estimatedWorkerRequestsPerDay": 6654,
+      "targetD1WritesFits": true
+    },
+    {
+      "cafes": 1,
+      "sensors": 1,
+      "dau": 1000,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 30,
+      "sensorMessagesPerDay": 2880,
+      "oldLivePollsPerDay": 180000,
+      "newBrowserUpgradesPerDay": 3301,
+      "d1TelemetryWritesPerDay": 28800,
+      "estimatedWorkerRequestsPerDay": 13304,
+      "targetD1WritesFits": true
+    },
+    {
+      "cafes": 3,
+      "sensors": 3,
+      "dau": 100,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 4320,
+      "oldLivePollsPerDay": 18000,
+      "newBrowserUpgradesPerDay": 330,
+      "d1TelemetryWritesPerDay": 43200,
+      "estimatedWorkerRequestsPerDay": 1342,
+      "targetD1WritesFits": true
+    },
+    {
+      "cafes": 3,
+      "sensors": 3,
+      "dau": 500,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 4320,
+      "oldLivePollsPerDay": 90000,
+      "newBrowserUpgradesPerDay": 1651,
+      "d1TelemetryWritesPerDay": 43200,
+      "estimatedWorkerRequestsPerDay": 6662,
+      "targetD1WritesFits": true
+    },
+    {
+      "cafes": 3,
+      "sensors": 3,
+      "dau": 1000,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 4320,
+      "oldLivePollsPerDay": 180000,
+      "newBrowserUpgradesPerDay": 3301,
+      "d1TelemetryWritesPerDay": 43200,
+      "estimatedWorkerRequestsPerDay": 13312,
+      "targetD1WritesFits": true
+    },
+    {
+      "cafes": 5,
+      "sensors": 5,
+      "dau": 100,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 7200,
+      "oldLivePollsPerDay": 18000,
+      "newBrowserUpgradesPerDay": 330,
+      "d1TelemetryWritesPerDay": 72000,
+      "estimatedWorkerRequestsPerDay": 1350,
+      "targetD1WritesFits": false
+    },
+    {
+      "cafes": 5,
+      "sensors": 5,
+      "dau": 500,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 7200,
+      "oldLivePollsPerDay": 90000,
+      "newBrowserUpgradesPerDay": 1651,
+      "d1TelemetryWritesPerDay": 72000,
+      "estimatedWorkerRequestsPerDay": 6670,
+      "targetD1WritesFits": false
+    },
+    {
+      "cafes": 5,
+      "sensors": 5,
+      "dau": 1000,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 7200,
+      "oldLivePollsPerDay": 180000,
+      "newBrowserUpgradesPerDay": 3301,
+      "d1TelemetryWritesPerDay": 72000,
+      "estimatedWorkerRequestsPerDay": 13320,
+      "targetD1WritesFits": false
+    },
+    {
+      "cafes": 10,
+      "sensors": 10,
+      "dau": 100,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 14400,
+      "oldLivePollsPerDay": 18000,
+      "newBrowserUpgradesPerDay": 330,
+      "d1TelemetryWritesPerDay": 144000,
+      "estimatedWorkerRequestsPerDay": 1370,
+      "targetD1WritesFits": false
+    },
+    {
+      "cafes": 10,
+      "sensors": 10,
+      "dau": 500,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 14400,
+      "oldLivePollsPerDay": 90000,
+      "newBrowserUpgradesPerDay": 1651,
+      "d1TelemetryWritesPerDay": 144000,
+      "estimatedWorkerRequestsPerDay": 6690,
+      "targetD1WritesFits": false
+    },
+    {
+      "cafes": 10,
+      "sensors": 10,
+      "dau": 1000,
+      "sessionMinutes": 30,
+      "cafesSubscribedPerSession": 3,
+      "reconnectFraction": 0.1,
+      "sensorCadenceSeconds": 60,
+      "sensorMessagesPerDay": 14400,
+      "oldLivePollsPerDay": 180000,
+      "newBrowserUpgradesPerDay": 3301,
+      "d1TelemetryWritesPerDay": 144000,
+      "estimatedWorkerRequestsPerDay": 13340,
+      "targetD1WritesFits": false
+    }
+  ],
+  "ownerDashboard": {
+    "latencyMs": {
+      "samples": 10,
+      "p50": 68.49888900000951,
+      "p95": 75.60280100000091,
+      "p99": 75.60280100000091
+    }
+  },
+  "profile": {
+    "latencyMs": {
+      "samples": 100,
+      "p50": 4.879277000000002,
+      "p95": 7.296812000015052,
+      "p99": 27.767763000010746
+    },
+    "resources": {
+      "resources": {
+        "scope": "ephemeral_current_isolate_not_billing",
+        "queries": 3200,
+        "rowsRead": 4809,
+        "rowsWritten": 424,
+        "failures": 0,
+        "queryLatencyMs": {
+          "p50": 7,
+          "p95": 8,
+          "p99": 9
+        },
+        "limits": {
+          "d1DailyReadsTarget": 2500000,
+          "d1DailyWritesTarget": 50000,
+          "workerRequestsTarget": 50000,
+          "doRequestsTarget": 50000,
+          "doRowsWrittenTarget": 50000
+        }
+      },
+      "cache": {
+        "hits": 99,
+        "misses": 1,
+        "kvReads": 1,
+        "kvWrites": 1,
+        "failures": 0
+      },
+      "features": {
+        "r2": true,
+        "kv": true,
+        "analytics": true,
+        "browserRealtime": true
+      }
+    }
+  },
+  "analytics": {
+    "firstFlush": {
+      "summaries": 1,
+      "rowsRead": 0,
+      "rowsWritten": 2,
+      "pending": false
+    },
+    "repeatedFlush": {
+      "summaries": 0,
+      "rowsRead": 0,
+      "rowsWritten": 0,
+      "pending": false
+    },
+    "stats": {
+      "rowsRead": 85,
+      "rowsWritten": 134,
+      "operations": 155,
+      "alarmWrites": 1
+    }
+  },
+  "media": {
+    "bytes": 632,
+    "etagSupported": true,
+    "privateAuthorization": true,
+    "metadata": {
+      "legacy_blobs": 0,
+      "r2_pointers": 3,
+      "pending_objects": 0
+    }
+  },
+  "cpu": {
+    "localWorkerdCPUSeconds": 15.57,
+    "scope": "local workerd process tree across matrix, no per-request billing equivalence"
+  },
+  "storage": {
+    "beforeBytes": 1219152,
+    "afterBytes": 4787808,
+    "scope": "allocated local D1 SQLite/WAL/SHM file bytes; mixed fixture, not logical database or pure telemetry amplification"
+  },
+  "coldRestart": {
+    "profileMs": 285.0305159999989,
+    "kvProfileRecovered": true,
+    "snapshotRecovered": true,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "kvReads": 1,
+      "kvWrites": 0,
+      "failures": 0
+    }
+  }
+}

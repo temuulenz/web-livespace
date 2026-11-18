@@ -1,0 +1,9 @@
+# Morning brief
+
+Recovered actual clean phase7_11 checkout: A–C only, not the reported 186-test deployment review (those files are absent). Implemented and locally verified 11D promotions plus critical security fixes: transaction-time user/session/role/ownership guards across business and legacy owner/admin writes, stale reauth rejection, one-time owner-claim race prevention, strict Node JSON/origin/media-path handling and sanitized request IDs/errors. Added DB/schema readiness, safe environment example, manual-only CI and a verified disposable DB+media restore exercise. No deployment, commit/push, cloud resource, frontend/Android edit or real notification.
+
+Passed:154 Node tests,27 Cloudflare checks,26 focused sensor tests,13 E2E,12 bounded local load scenarios, D1/R2 probes and Wrangler dry-run. Executed failures fixed; no unresolved test failures. Static-only browser/visual suites skipped this session; remote CI/hardware/production not verified. Sensor cost remains ten D1 writes/frame. Authorization guards add reads; no unsupported performance improvement claim.
+
+Not complete:11E–H; full Phase12–16 audit/capacity/operational acceptance. Local development CONDITIONAL GO for implemented features; remote pilot/production NO-GO. Detailed blockers/ordered owner actions: BLOCKERS_AND_RISKS.md. Owner must authorize/verify remote schema/bindings/backups/TLS/physical sensor and provide real venue/privacy/support/pilot criteria. Frontend team must integrate documented APIs and source/freshness-aware discovery; no redesign performed.
+
+Next task: continue existing analytics foundation for11E (entity references, aggregation/flush durability, Node parity, retention/feature flags), then11F–H; preserve new transaction guards and tests. Authoritative checkpoint: ../OVERNIGHT_PROGRESS.md. Do not restart A–D or claim complete production readiness.

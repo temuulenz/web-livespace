@@ -46,7 +46,7 @@ export function readBody(req, limit) {
     const chunks = [];
     req.on('data', chunk => {
       size += chunk.length;
-      if (size > limit) { reject(new HttpError(413, 'payload_too_large', `Request body exceeds ${Math.round(limit / 1024)} KB`)); req.destroy(); return; }
+      if (size > limit) { reject(new HttpError(413, 'payload_too_large', `Request body exceeds ${Math.round(limit / 1024)} KB`)); req.pause(); return; }
       chunks.push(chunk);
     });
     req.on('end', () => resolveBody(Buffer.concat(chunks)));
@@ -58,7 +58,7 @@ export async function readJson(ctx, limit = 64 * 1024) {
   if (!/^application\/json\b/i.test(ctx.req.headers['content-type'] || '')) throw new HttpError(415, 'unsupported_media_type', 'Content-Type must be application/json');
   const buffer = await readBody(ctx.req, limit);
   if (!buffer.length) return {};
-  try { return JSON.parse(buffer.toString('utf8')); }
+  try { const value=JSON.parse(buffer.toString('utf8'));if(!value||typeof value!=='object'||Array.isArray(value))throw 0;return value; }
   catch { throw badRequest('Malformed JSON'); }
 }
 
@@ -88,6 +88,7 @@ export function sendJson(res, status, data, headers = {}) {
 export function sendError(res, error) {
   if (res.headersSent) { res.end(); return; }
   const status = error instanceof HttpError ? error.status : 500;
+  if (status === 413) { res.shouldKeepAlive = false; res.setHeader('Connection', 'close'); }
   const payload = { error: { code: error instanceof HttpError ? error.code : 'internal', message: error instanceof HttpError ? error.message : 'Internal server error' } };
   if (error instanceof HttpError && error.details) payload.error.details = error.details;
   sendJson(res, status, payload);
@@ -97,7 +98,7 @@ export const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
   'X-Frame-Options': 'SAMEORIGIN',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
   'Content-Security-Policy': "default-src 'self'; img-src 'self' data: blob: https://tiles.openfreemap.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com; script-src 'self' https://unpkg.com; worker-src 'self' blob:; connect-src 'self' https://tiles.openfreemap.org; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
 };
 

@@ -1,3 +1,4 @@
+import {authorizedBatch} from './write-authorization.mjs';
 import {businessSqlError} from './sql-errors.mjs';
 import {parseMenuCsv,previewHash} from './menu-csv.mjs';
 // Runtime-neutral service. Adapters supply prepared SQL and atomic batch writes.
@@ -8,6 +9,7 @@ const types = {
 };
 export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toISOString()}) {
  const sql={...storage,batch:async entries=>{try{return await storage.batch(entries);}catch(e){businessSqlError(e,fail);}}};
+ const commit=(cafe,user,entries)=>authorizedBatch(sql,fail,user,cafe,'owner',entries);
  const invalid=message=>fail(422,'validation_failed',message);
  async function cafe(cafeId,user,publicOnly=false) {
   if(!publicOnly){if(!user)fail(401,'unauthorized','Sign in required');if(!['owner','admin'].includes(user.role))fail(403,'forbidden','Owner role required');}
@@ -55,7 +57,7 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
   async create(cafeId,kind,input,user){
    await cafe(cafeId,user);const t=spec(kind),value=validate(kind,input);await relations(cafeId,kind,value);
    const entity=id(kind),at=clock(),keys=['id','cafe_id',...Object.keys(value),'created_at','updated_at'];
-   await sql.batch([[`INSERT INTO ${t.table}(${keys.join(',')}) VALUES(${keys.map(()=>'?').join(',')})`,entity,cafeId,...Object.values(value),at,at],audit(cafeId,user,kind+'.create',entity)]);
+   await commit(cafeId,user,[[`INSERT INTO ${t.table}(${keys.join(',')}) VALUES(${keys.map(()=>'?').join(',')})`,entity,cafeId,...Object.values(value),at,at],audit(cafeId,user,kind+'.create',entity)]);
    return get(cafeId,kind,entity);
   },
   async update(cafeId,kind,entityId,input,user){
@@ -63,7 +65,7 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
    if(!Number.isSafeInteger(input.version)||input.version!==old.version)fail(409,'version_conflict','Supply current version');
    if(!Object.keys(value).length)invalid('No changes');await relations(cafeId,kind,{...old,...value});
    // Guard statement fails the entire batch on a concurrent version change.
-   await sql.batch([[`UPDATE ${t.table} SET ${Object.keys(value).map(k=>k+'=?').join(',')}, updated_at=?,version=version+1 WHERE cafe_id=? AND id=? AND version=?`,...Object.values(value),clock(),cafeId,entityId,input.version],
+   await commit(cafeId,user,[[`UPDATE ${t.table} SET ${Object.keys(value).map(k=>k+'=?').join(',')}, updated_at=?,version=version+1 WHERE cafe_id=? AND id=? AND version=?`,...Object.values(value),clock(),cafeId,entityId,input.version],
     ['INSERT INTO business_audit(id,cafe_id,actor_id,action,entity_id,at) VALUES(CASE WHEN changes()=1 THEN ? ELSE NULL END,?,?,?,?,?)',id('audit'),cafeId,user.id,kind+'.update',entityId,clock()]]);
    return get(cafeId,kind,entityId);
   },
@@ -71,7 +73,7 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
    await cafe(cafeId,user);const old=await get(cafeId,kind,entityId);
    if(kind!=='categories')return this.update(cafeId,kind,entityId,{version:old.version,...(kind==='products'?{archived:true,published:false}:{active:false})},user);
    if(await sql.first('SELECT id FROM menu_items WHERE cafe_id=? AND category_id=? LIMIT 1',cafeId,entityId))fail(409,'category_in_use','Move products before deleting category');
-   await sql.batch([['DELETE FROM menu_categories WHERE cafe_id=? AND id=?',cafeId,entityId],audit(cafeId,user,'categories.delete',entityId)]);return {deleted:true};
+   await commit(cafeId,user,[['DELETE FROM menu_categories WHERE cafe_id=? AND id=?',cafeId,entityId],audit(cafeId,user,'categories.delete',entityId)]);return {deleted:true};
   },
   async bulk(cafeId,kind,input,user) {
    await cafe(cafeId,user);const t=spec(kind);
@@ -85,12 +87,14 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
     entries.push([`UPDATE ${t.table} SET ${Object.keys(value).map(k=>k+'=?').join(',')},updated_at=?,version=version+1 WHERE cafe_id=? AND id=? AND version=?`,...Object.values(value),clock(),cafeId,entity,patch.version]);
     entries.push(['INSERT INTO business_audit(id,cafe_id,actor_id,action,entity_id,at) VALUES(CASE WHEN changes()=1 THEN ? ELSE NULL END,?,?,?,?,?)',id('audit'),cafeId,user.id,kind+'.bulk',entity,clock()]);
    }
-   await sql.batch(entries);return {updated:input.items.length};
+   await commit(cafeId,user,entries);return {updated:input.items.length};
   },
   async importCsv(cafeId,input,user,confirm=false) {
    await cafe(cafeId,user);
    if(!input||typeof input!=='object'||Object.keys(input).some(k=>!['csv','preview_id','confirm'].includes(k)))invalid('Invalid import request');
-   const rows=parseMenuCsv(input.csv,fail);
+   const configured=Object.fromEntries((await sql.all("SELECT key,value FROM application_limits WHERE key IN('csv_rows','csv_bytes')")).map(r=>[r.key,r.value]));
+   if(typeof input.csv!=='string'||Buffer.byteLength(input.csv)>configured.csv_bytes)invalid('CSV byte limit reached');
+   const rows=parseMenuCsv(input.csv,fail);if(rows.length>configured.csv_rows)invalid('CSV row limit reached');
    for(const row of rows){validate('products',row);await relations(cafeId,'products',row);}
    const preview_id=previewHash(cafeId,user.id,input.csv);
    if(!confirm)return {preview_id,products:rows,published:false,requires_confirmation:true};
@@ -101,7 +105,7 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
    const total=await sql.first('SELECT count(*) n FROM menu_items WHERE cafe_id=?',cafeId);if(total.n+rows.length>1000)fail(409,'menu_limit','Tenant menu capacity reached');
    const entries=rows.map(row=>['INSERT INTO menu_items(id,cafe_id,category_id,name,description,base_price,discounted_price,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',id('products'),cafeId,row.category_id,row.name,row.description,row.base_price,row.discounted_price,clock(),clock()]);
    entries.push(['INSERT INTO business_audit(id,cafe_id,actor_id,action,entity_id,at) VALUES(?,?,?,?,?,?)','import:'+preview_id,cafeId,user.id,'products.import',preview_id,clock()]);
-   await sql.batch(entries);return {imported:rows.length,duplicate:false};
+   await commit(cafeId,user,entries);return {imported:rows.length,duplicate:false};
   },
   async publicMenu(cafeId,query={}) {
    await cafe(cafeId,null,true);const limit=integer(query.limit,50,1,100),offset=integer(query.offset,0,0,10000);
@@ -132,6 +136,14 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
  for(const method of ['create','update','remove','bulk','importCsv']){
   const original=service[method];service[method]=async function(cafeId,...args){const value=await original.call(service,cafeId,...args);if(method!=='importCsv'||args[2]===true){generation++;for(const [key,entry] of cache)if(entry.cafeId===cafeId)cache.delete(key);}return value;};
  }
+ // Compute time-sensitive prices after the raw snapshot cache, including cache hits.
+ const snapshot=service.publicMenu;
+ service.publicMenu=async(cafeId,query={})=>{
+  const result=await snapshot(cafeId,query),at=clock();
+  const rows=await sql.all('SELECT * FROM promotions WHERE cafe_id=? AND published=1 AND starts_at<=? AND ends_at>? ORDER BY id LIMIT 100',cafeId,at,at);
+  const promotions=rows.map(p=>({...p,recurrence:p.recurrence?JSON.parse(p.recurrence):null}));
+  return {...result,products:result.products.map(p=>({...p,...promotionPrice(p,promotions,at),variants:p.variants.map(v=>({...v,...promotionPrice({...v,base_price:v.price,id:p.id,category_id:p.category_id},promotions,at)}))}))};
+ };
  return service;
  function integer(raw,fallback,min,max){if(raw===undefined)return fallback;if(!/^\d+$/.test(String(raw))||!Number.isSafeInteger(Number(raw))||Number(raw)<min||Number(raw)>max)invalid('Invalid pagination');return Number(raw);}
 }

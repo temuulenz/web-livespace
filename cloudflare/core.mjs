@@ -1,3 +1,4 @@
+import {runtimeMetrics} from '../shared/business/resources.mjs';
 import { recordD1,d1Metrics } from './resources.mjs';
 import { accessUser, SESSION_SELECT, rejectPublicPrivilegeFields } from '../server/services/user-access.mjs';
 import { securityHeaders } from './security.mjs';
@@ -14,7 +15,7 @@ export const json = (body, status=200, headers={}) => Response.json(body,{status
 export const isQuotaError = e => /7500|daily.*(?:read|writ)|(?:read|writ).*limit.*exceed/i.test(String(e?.message || '')+' '+String(e?.cause?.message || ''));
 export const unavailable = () => json({error:{code:'d1_quota_exhausted',message:'Temporary service interruption. Please try again later.'}},503,{'Retry-After':'900'});
 export const error = e => isQuotaError(e) ? unavailable() : json({error:{code:e.code || 'internal',message:e.status ? e.message : 'Internal server error',...(e.details ? {details:e.details}: {})}},e.status || 500);
-async function measured(operation){const start=performance.now();try{return recordD1(await operation(),start);}catch(e){d1Metrics.failures++;throw e;}}
+async function measured(operation){const start=performance.now();try{const result=recordD1(await operation(),start);runtimeMetrics.db(performance.now()-start);return result;}catch(e){d1Metrics.failures++;runtimeMetrics.db(performance.now()-start,true);throw e;}}
 export const first=async(db,sql,...args)=>(await measured(()=>db.prepare(sql).bind(...args).all())).results[0]||null;
 export const all=async(db,sql,...args)=>(await measured(()=>db.prepare(sql).bind(...args).all())).results;
 export const run=(db,sql,...args)=>measured(()=>db.prepare(sql).bind(...args).run());

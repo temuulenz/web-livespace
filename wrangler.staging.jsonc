@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "livespace-phase11-staging-local",
+  "main": "cloudflare/worker.mjs",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [],
+  "assets": {"directory": ".cloudflare-assets", "binding": "ASSETS", "run_worker_first": ["/api/*", "/ws/*"]},
+  "build": {"command": "node scripts/cloudflare-assets.mjs"},
+  "d1_databases": [{"binding": "DB", "database_name": "livespace-phase11-staging-local", "database_id": "local-only-phase11-staging", "migrations_dir": "cloudflare/migrations", "remote": false}],
+  "durable_objects": {"bindings": [
+    {"name": "SENSORS", "class_name": "SensorGateway"},
+    {"name": "BACKEND", "class_name": "AppBackend"},
+    {"name": "BROWSER_ROOMS", "class_name": "BrowserRoom"},
+    {"name": "ANALYTICS", "class_name": "AnalyticsAggregator"}
+  ]},
+  "migrations": [
+    {"tag": "sensor-v1", "new_sqlite_classes": ["SensorGateway", "AppBackend"]},
+    {"tag": "browser-rooms-v1", "new_sqlite_classes": ["BrowserRoom"]},
+    {"tag": "analytics-v1", "new_sqlite_classes": ["AnalyticsAggregator"]}
+  ],
+  "vars": {
+    "LS_POLL_INTERVAL_SEC": "10", "LS_SENSOR_EXPECTED_INTERVAL_SEC": "15", "LS_SENSOR_STALE_AFTER_SEC": "30",
+    "LS_DEVICE_OFFLINE_SEC": "600", "LS_BROWSER_REALTIME_ENABLED": "1",
+    "LS_R2_MEDIA_ENABLED": "0", "LS_KV_PUBLIC_ENABLED": "0", "LS_ANALYTICS_ENABLED": "0", "LS_REQUEST_LOGS": "1"
+  },
+  "observability": {"enabled": true}
+}

@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "LiveSpace Phase 11A\u201311C backend API",
-    "version": "11C",
-    "description": "Implemented menus, inventory and ratings/reviews. Phase 11D\u201311H absent. JSON syntax is valid YAML 1.2. See feature documents for full role, data, cache and realtime semantics."
+    "title": "LiveSpace Phase 11A\u201311D backend API",
+    "version": "11D",
+    "description": "Implemented menu/inventory/reviews/promotions and readiness. E\u2013H remain incomplete. Full semantics in feature guides. Business mutations may return 409 access_changed after transactional permission recheck."
   },
   "servers": [
     {
@@ -3243,6 +3243,487 @@
           }
         }
       }
+    },
+    "/api/v1/owner/cafes/{cafe}/promotions": {
+      "get": {
+        "summary": "Owner promotions with state filtering",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "upcoming",
+                "expired",
+                "draft"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create configured promotion",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/promotions/{id}": {
+      "get": {
+        "summary": "Owned promotion details",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Versioned promotion edit/publish/pause",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Archive promotion preserving ID",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/owner/cafes/{cafe}/promotions/preview": {
+      "post": {
+        "summary": "Authoritative integer MNT promotion preview",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "product_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "product_id": {
+                    "type": "string"
+                  },
+                  "variant_id": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "promotion_id": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cafes/{cafe}/promotions": {
+      "get": {
+        "summary": "Currently active public promotions",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "upcoming",
+                "expired",
+                "draft"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ready": {
+      "get": {
+        "summary": "Implemented schema/database readiness",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4258,6 +4739,241 @@
             }
           }
         ]
+      },
+      "PromotionCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "type",
+          "starts_at",
+          "ends_at"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "terms": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "percentage",
+              "fixed_amount",
+              "product_discount",
+              "category_discount",
+              "happy_hour",
+              "student_discount",
+              "combo_announcement"
+            ]
+          },
+          "discount_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "percentage",
+              "fixed_amount",
+              null
+            ]
+          },
+          "discount_value": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schedule": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": false,
+            "required": [
+              "days",
+              "start",
+              "end"
+            ],
+            "properties": {
+              "days": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 7,
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                }
+              },
+              "start": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+              },
+              "end": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+              }
+            }
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "product_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "category_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        }
+      },
+      "PromotionPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "terms": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "percentage",
+              "fixed_amount",
+              "product_discount",
+              "category_discount",
+              "happy_hour",
+              "student_discount",
+              "combo_announcement"
+            ]
+          },
+          "discount_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "percentage",
+              "fixed_amount",
+              null
+            ]
+          },
+          "discount_value": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schedule": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": false,
+            "required": [
+              "days",
+              "start",
+              "end"
+            ],
+            "properties": {
+              "days": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 7,
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                }
+              },
+              "start": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+              },
+              "end": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+              }
+            }
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "product_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "category_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
       }
     }
   }

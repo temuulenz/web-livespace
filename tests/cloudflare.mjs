@@ -27,7 +27,7 @@ try {
  const adminSql=join(dir,'admin.sql'),h=await hashPassword('test-password-123');
  await writeFile(adminSql,`INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES('admin','admin@test.mn','${h}','Admin','admin','${new Date().toISOString()}');`,{mode:0o600});
  cli('d1','execute','livespace','--local','--file',adminSql);
- worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
+ worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',vars:{LS_ANALYTICS_ENABLED:'1',LS_ANALYTICS_MIN_COHORT:'3'},port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
  origin=`http://${worker.address}:${worker.port}`;
  await check('health, static allow-list and seeded catalog',async()=>{assert.equal((await api('/health')).data.ok,true);assert.equal((await api('/cafes')).data.cafes.length,12);assert.equal((await fetch(origin+'/server/lib/auth.mjs')).status,404);const page=await fetch(origin+'/');assert.equal(page.status,200);assert.match(page.headers.get('content-security-policy') || '',/default-src 'self'/);});
  await check('auth rejects anonymous admin and cross-origin writes',async()=>{assert.equal((await api('/admin/devices')).res.status,401);assert.equal((await fetch(origin+'/api/v1/auth/login',{method:'POST',headers:{Origin:'https://evil.invalid','Content-Type':'application/json'},body:'{}'})).status,403);});
@@ -46,9 +46,9 @@ try {
   const {readFileSync}=await import('node:fs');const image='data:image/jpeg;base64,'+readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)).toString('base64');
   result=await api(base+'/products/'+product.id+'/image','PUT',{version:product.version,image});assert.equal(result.res.status,200,JSON.stringify(result.data));product=result.data.item;
   assert.equal((await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image')).status,404);
-  const privateImage=await fetch(origin+'/api/v1'+base+'/products/'+product.id+'/image',{headers:{cookie}});assert.equal(privateImage.status,200);assert.equal(privateImage.headers.get('content-type'),'image/jpeg');
+  const privateImage=await fetch(origin+'/api/v1'+base+'/products/'+product.id+'/image',{headers:{cookie}});assert.equal(privateImage.status,200);assert.equal(privateImage.headers.get('content-type'),'image/jpeg');assert.deepEqual(Buffer.from(await privateImage.arrayBuffer()),readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)));
   assert.equal((await api(base+'/products/'+product.id,'PATCH',{version:product.version,published:true})).res.status,200);
-  assert.equal((await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image')).status,200);
+  const publicImage=await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image');assert.equal(publicImage.status,200);assert.deepEqual(Buffer.from(await publicImage.arrayBuffer()),readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)));assert.match(publicImage.headers.get('etag'),/^"d1-v2-/);const oldEtag='"'+(await import('node:crypto')).createHash('sha256').update(readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url))).digest('hex')+'"';const refreshed=await fetch(origin+'/api/v1/cafes/menu-cf/menu/products/'+product.id+'/image',{headers:{'If-None-Match':oldEtag}});assert.equal(refreshed.status,200);assert.deepEqual(Buffer.from(await refreshed.arrayBuffer()),readFileSync(new URL('./fixtures/upload-valid.jpg',import.meta.url)));
  });
  await check('Phase 11B inventory D1 retry, authorization and public browser delta',async()=>{
   const menuBase='/owner/cafes/menu-cf/menu',stock='/owner/cafes/menu-cf/inventory';
@@ -68,6 +68,21 @@ try {
    result=await api(stock+'/mutations','POST',{idempotency_key:'cf-negative',updates:[{product_id:product.id,version:1,delta:-4,reason:'waste'}]});assert.equal(result.res.status,422);
    assert.equal((await api(stock+'/movements')).data.items.length,1);
   }finally{browser.close();await new Promise(resolve=>browser.once('close',resolve));}
+ });
+ await check('Phase 11D D1 promotion publication, pricing, version and tenant isolation',async()=>{
+  const product=(await api('/cafes/menu-cf/menu')).data.products[0];
+  const base='/owner/cafes/menu-cf/promotions',at=Date.now();
+  const rule={name:'D1 discount',kind:'percentage',value:25,product_id:product.id,starts_at:new Date(at-60000).toISOString(),ends_at:new Date(at+3600000).toISOString(),published:true};
+  assert.equal((await api(base,'POST',rule,false)).res.status,401);
+  const result=await api(base,'POST',rule);assert.equal(result.res.status,201,JSON.stringify(result.data));const p=result.data.promotion;
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.promotions.length,1);
+  assert.equal((await api('/cafes/menu-cf/menu')).data.products[0].effective_price,3000);
+  assert.equal((await api(base+'/preview','POST',{promotion:rule,product_id:product.id})).data.price.effective_price,3000);
+  assert.equal((await api('/owner/cafes/B/promotions','POST',rule)).res.status,404);
+  assert.equal((await api(base+'/'+p.id,'PATCH',{version:1,published:false})).res.status,200);
+  assert.equal((await api(base+'/'+p.id,'PATCH',{version:1,published:true})).res.status,409);
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.promotions.length,0);
+  assert.equal((await api('/cafes/menu-cf/menu')).data.products[0].effective_price,4000);
  });
  await check('Phase 11C review aggregates, author/owner isolation, reply and moderation audit',async()=>{
   const adminCookie=cookie;
@@ -90,6 +105,18 @@ try {
   assert.equal((await api('/admin/cafes/menu-cf/reviews/'+review.id+'/moderation','POST',{version:review.version,action:'restore',reason:'Local appeal fixture'})).res.status,200);
   assert.equal((await api('/cafes/menu-cf/ratings')).data.review_count,1);
   cookie=adminCookie;
+ });
+ await check('Phase 11D promotion rules, tenant scope and readiness',async()=>{
+  assert.equal((await api('/ready')).res.status,200);
+  const base='/owner/cafes/menu-cf/promotions',product=(await api('/owner/cafes/menu-cf/menu/products')).data.items[0];
+  const input={title:'Local promotion fixture',type:'product_discount',discount_kind:'percentage',discount_value:25,starts_at:new Date(Date.now()-60000).toISOString(),ends_at:new Date(Date.now()+3600000).toISOString(),published:true,product_ids:[product.id]};
+  const created=await api(base,'POST',input);assert.equal(created.res.status,201,JSON.stringify(created.data));
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.items.length,1);
+  const preview=await api(base+'/preview','POST',{product_id:product.id});assert.equal(preview.res.status,200);assert.equal(preview.data.resulting_price,3000);
+  assert.equal((await api('/owner/cafes/B/promotions')).res.status,404);
+  assert.equal((await api(base,'POST',{...input,product_ids:['foreign']})).res.status,422);
+  const paused=await api(base+'/'+created.data.promotion.id,'PATCH',{version:1,published:false});assert.equal(paused.res.status,200);
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.items.length,0);
  });
  await check('Super Admin ID binding, administrator restrictions, recent auth and session revocation',async()=>{
   const regularCookie=cookie;
@@ -161,7 +188,7 @@ try {
  });
  await check('worker restart retains replay receipts',async()=>{
   s.ws.close();await new Promise(r=>s.ws.once('close',r));await worker.stop();
-  worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
+  worker=await unstable_dev('cloudflare/worker.mjs',{config:'wrangler.jsonc',vars:{LS_ANALYTICS_ENABLED:'1',LS_ANALYTICS_MIN_COHORT:'3'},port:0,local:true,persistTo:dir,logLevel:'error',experimental:{disableExperimentalWarning:true,watch:false,showInteractiveDevSession:false}});
   origin=`http://${worker.address}:${worker.port}`;s=socket(t);await s.next();s.ws.send(JSON.stringify(frame));assert.equal((await s.next()).status,'duplicate');
  });
  await check('disable invalidates an established connection',async()=>{await api('/admin/devices/CF-SIM','PATCH',{enabled:false});s.ws.send(JSON.stringify({...frame,messageId:'disabled'}));assert.equal((await s.next()).error.code,'device_assignment_changed');});
@@ -243,7 +270,15 @@ try {
   assert.equal(await rejectionStatus(openRoom('A','admin',ownerCookie)),403);
   const pub=openRoom('A','public',''),priv=openRoom('A','admin');
   try{const first=await pub.next(),privateFirst=await priv.next();assert.equal(first.type,'live.snapshot');assert.equal(first.data.id,'A');assert.ok(!('diagnostics'in first));assert.ok(Array.isArray(privateFirst.diagnostics));
-   const pong=once(pub.ws,'message');pub.ws.send('ping');assert.equal((await pong)[0].toString(),'pong');
+   // Unsolicited public snapshots may arrive while automatic pong is in flight.
+   // Require a bounded pong and validate every interleaved frame's scope/privacy.
+   const pong=new Promise((resolve,reject)=>{
+    const cleanup=()=>{clearTimeout(timer);pub.ws.off('message',onMessage);pub.ws.off('error',onError);};
+    const onError=e=>{cleanup();reject(e);};
+    const onMessage=bytes=>{try{const value=bytes.toString();if(value==='pong'){cleanup();resolve(value);return;}const snapshot=JSON.parse(value);assert.equal(snapshot.type,'live.snapshot');assert.equal(snapshot.data.id,'A');assert.ok(!('diagnostics' in snapshot));}catch(e){cleanup();reject(e);}};
+    const timer=setTimeout(()=>{cleanup();reject(Error('Automatic pong deadline'));},5000);
+    pub.ws.on('message',onMessage);pub.ws.on('error',onError);
+   });pub.ws.send('ping');assert.equal(await pong,'pong');
    const revoked=new Promise(resolve=>priv.ws.once('close',resolve));
    const hashed=(await import('../cloudflare/core.mjs')).sha(cookie.slice('ls_session='.length));
    cli('d1','execute','livespace','--local','--command',"DELETE FROM sessions WHERE token_hash='"+hashed+"'");

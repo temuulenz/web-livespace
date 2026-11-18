@@ -1,0 +1,13 @@
+# Work log
+
+- Recovered clean phase7_11 checkout; read instructions and current A–C services. Reported later deployment review absent; preserved actual state.
+- Started npm ci + full Node baseline with logs outside repository. Identified missing transaction-time authorization in business writes; selected targeted shared SQL guard rather than replacing architecture.
+- Fresh baseline: npm ci succeeded (0 audit vulnerabilities), npm test 133/133.
+- Implemented transaction-time identity/version/session/ownership/publication/admin guards in A–C business batches and legacy owner/admin writes, preserving SQLite/D1 atomicity. Eight targeted race cases initially passed; added logout-during-reauthentication regression and fixed false-success reauthentication.
+- Hardened Node JSON root validation, scheme-aware same-origin policy, media path confinement, non-sensitive error logging/request IDs. Added a separate schema/dependency readiness endpoint without changing legacy health.
+- Local SQLite + filesystem restore exercise passed with foreign keys/integrity, menu/image hash, stock/retry receipts and ratings verified after closing the source. Production restore remains unverified.
+- Added manual-only least-privilege backend CI; no workflow or deployment triggered. Added safe environment reference without credentials. No frontend/Android changes.
+- Baseline verified 133 Node tests. Added shared zero-write SQL authority assertions; protected A–C services, media finalization, legacy owner/admin mutations and reauth. Added injected revocation/ownership/publication races, HTTP root/scheme/traversal checks and sanitized request correlation.
+- Verified disposable SQLite+upload restore with source closed, integrity/FKs, persisted business data and idempotency replay. Added generic readiness and manual-only CI (remote execution not claimed).
+- Implemented documented 11D promotion backend in Node/D1 with versioned audited ownership, recurring Ulaanbaatar schedules, public association privacy and server-derived integer-MNT preview. Six focused tests and direct local D1 probe pass; final HTTP/runtime verification running. Added no dependencies and changed no frontend/Android code.
+- Final:154 Node/27 Cloudflare/26 sensors/13 E2E and12 bounded load scenarios pass. Sensor row-write probe still10/frame; dry-run and whitespace checks pass. Added one-time claim and malformed-scrypt regressions; new readiness dependency issue was fixed before final tests. Durable measurements and exact skips in TEST_RESULTS. A–D locally implemented; E–H and complete12–16 readiness remain TODO/NO-GO, with exact continuation recorded. No remote resources, production data or teammate frontend touched.
