@@ -1,4 +1,6 @@
-# Phase 11 progress — current A–C checkpoint
+> Latest evidence and next actions: [OVERNIGHT_PROGRESS.md](OVERNIGHT_PROGRESS.md). Earlier entries below are historical.
+
+# Phase 11 progress — current A–D checkpoint
 
 Local engineering checkpoint, not deployment approval. The table is current; earlier entries below retain historical checkpoint details. Current report and feature guides supersede older partial-status prose. Initial branch main; substantial uncommitted Phase 7.1/7.2 backend and teammate frontend changes were already present. Preserved those changes. No commits, branches, remote operations or frontend edits by Phase 11.
 
@@ -7,7 +9,8 @@ Local engineering checkpoint, not deployment approval. The table is current; ear
 | 11A | COMPLETE locally: menu core, atomic quotas and safe media reconciliation |
 | 11B | COMPLETE locally: inventory, atomic history/idempotency and realtime recovery |
 | 11C | COMPLETE locally: reviews/replies/moderation and incremental rating aggregates |
-| 11D–11H | Not started; next continuation begins with 11D |
+| 11D | VERIFIED locally in overnight recovery: promotions and authoritative price/schedule preview |
+| 11E–11H | TODO; authoritative continuation is docs/OVERNIGHT_PROGRESS.md |
 
 New files: shared/business/menu-schema.mjs, menu.mjs, menu-csv.mjs, menu-media.mjs; server/routes/menu.mjs; cloudflare/menu.mjs; cloudflare/migrations/0009_menu.sql; tests/menu.test.mjs; menu and Phase 11 documentation. Integration edits: server/app.mjs, server/lib/db.mjs, cloudflare/worker.mjs. Tests/sensors.test.mjs expected schema version updated from 4 to 5 without modifying the v1 fixture. tests/cloudflare.mjs adds local business checks while preserving prior local edits.
 

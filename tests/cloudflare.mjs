@@ -91,6 +91,18 @@ try {
   assert.equal((await api('/cafes/menu-cf/ratings')).data.review_count,1);
   cookie=adminCookie;
  });
+ await check('Phase 11D promotion rules, tenant scope and readiness',async()=>{
+  assert.equal((await api('/ready')).res.status,200);
+  const base='/owner/cafes/menu-cf/promotions',product=(await api('/owner/cafes/menu-cf/menu/products')).data.items[0];
+  const input={title:'Local promotion fixture',type:'product_discount',discount_kind:'percentage',discount_value:25,starts_at:new Date(Date.now()-60000).toISOString(),ends_at:new Date(Date.now()+3600000).toISOString(),published:true,product_ids:[product.id]};
+  const created=await api(base,'POST',input);assert.equal(created.res.status,201,JSON.stringify(created.data));
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.items.length,1);
+  const preview=await api(base+'/preview','POST',{product_id:product.id});assert.equal(preview.res.status,200);assert.equal(preview.data.resulting_price,3000);
+  assert.equal((await api('/owner/cafes/B/promotions')).res.status,404);
+  assert.equal((await api(base,'POST',{...input,product_ids:['foreign']})).res.status,422);
+  const paused=await api(base+'/'+created.data.promotion.id,'PATCH',{version:1,published:false});assert.equal(paused.res.status,200);
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.items.length,0);
+ });
  await check('Super Admin ID binding, administrator restrictions, recent auth and session revocation',async()=>{
   const regularCookie=cookie;
   const rootSql=join(dir,'root.sql');

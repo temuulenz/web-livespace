@@ -58,7 +58,7 @@ export async function readJson(ctx, limit = 64 * 1024) {
   if (!/^application\/json\b/i.test(ctx.req.headers['content-type'] || '')) throw new HttpError(415, 'unsupported_media_type', 'Content-Type must be application/json');
   const buffer = await readBody(ctx.req, limit);
   if (!buffer.length) return {};
-  try { return JSON.parse(buffer.toString('utf8')); }
+  try { const value=JSON.parse(buffer.toString('utf8'));if(!value||typeof value!=='object'||Array.isArray(value))throw 0;return value; }
   catch { throw badRequest('Malformed JSON'); }
 }
 

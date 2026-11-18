@@ -1,3 +1,5 @@
+import {createPromotionService} from '../shared/business/promotions.mjs';
+import {databaseReady} from '../shared/readiness.mjs';
 import {createReviewService} from '../shared/business/reviews.mjs';
 import {reconcileCafeRatings} from '../shared/business/reviews-reconcile.mjs';
 import {createInventoryService} from '../shared/business/inventory.mjs';
@@ -25,6 +27,10 @@ try{
  await sql.batch([["INSERT INTO users(id,email,password_hash,name,role,created_at) VALUES('owner','local@example.invalid','unused','','owner','2026-01-01')"],["INSERT INTO cafes(id,name,owner_id,status,data_mode,created_at,updated_at) VALUES('fixture','Isolated','owner','active','demo','2026-01-01','2026-01-01')"]]);
  const user={id:'owner',role:'owner'},menu=createMenuService({sql,fail,id});
  const category=await menu.create('fixture','categories',{name:'Cat',published:true},user);
+ const revoked=createMenuService({sql:{...sql,batch:async entries=>{await db.prepare("UPDATE cafes SET owner_id=NULL WHERE id='fixture'").run();return sql.batch(entries);}},fail,id});
+ await assert.rejects(revoked.create('fixture','categories',{name:'Denied stale owner'},user),{status:409,code:'access_changed'});
+ assert.equal((await sql.first("SELECT count(*) n FROM menu_categories WHERE name='Denied stale owner'")).n,0);
+ await db.prepare("UPDATE cafes SET owner_id='owner' WHERE id='fixture'").run();
  const measurements={};
  async function measure(name,fn){observed=[];const value=await fn();measurements[name]={statements:observed.length,rows_read:observed.reduce((n,x)=>n+x.rows_read,0),rows_written:observed.reduce((n,x)=>n+x.rows_written,0)};return value;}
  let p=await measure('product_create',()=>menu.create('fixture','products',{category_id:category.id,name:'Item',base_price:5000,published:true},user));
@@ -75,7 +81,12 @@ try{
  const reviewRace=await Promise.allSettled([reviews.edit('fixture',review.id,{version:review.version,study:5},user),reviews.moderate('fixture',review.id,{version:review.version,action:'hide',reason:'Local race fixture'},administrator)]);
  assert.equal(reviewRace.filter(x=>x.status==='fulfilled').length,1);assert.equal(reviewRace.find(x=>x.status==='rejected').reason.code,'version_conflict');
  const persistedReview=await reviews.mine('fixture',user),persistedRating=await reviews.summary('fixture');assert.equal(persistedRating.review_count,persistedReview.status==='visible'?1:0);if(persistedReview.status==='visible')assert.equal(persistedRating.overall_average,persistedReview.overall_rating);
+ const promotions=createPromotionService({sql,fail,id,clock:()=> '2026-11-18T00:30:00.000Z'});
+ const promotion=await measure('promotion_create',()=>promotions.save('fixture',{title:'Local only',type:'product_discount',discount_kind:'percentage',discount_value:20,starts_at:'2026-11-17T00:00:00Z',ends_at:'2026-11-21T00:00:00Z',product_ids:[p.id],published:true},user));
+ await measure('promotion_public_list',()=>promotions.list('fixture',{},null,true));
+ const preview=await measure('promotion_preview',()=>promotions.preview('fixture',{product_id:p.id,promotion_id:promotion.id},user));assert.equal(preview.resulting_price,4000);
+ assert.equal(await databaseReady({first:q=>sql.first(q)}),true);
  const plans={};for(const [name,query,args] of [['public_join','SELECT p.* FROM menu_items p JOIN menu_categories c ON c.id=p.category_id AND c.cafe_id=p.cafe_id WHERE p.cafe_id=? AND p.published=1 AND p.archived=0 AND c.published=1 ORDER BY p.display_order,p.id LIMIT 101',['fixture']],['image_lookup','SELECT * FROM menu_images WHERE cafe_id=? AND sha256=?',['fixture','hash']]])plans[name]=(await db.prepare('EXPLAIN QUERY PLAN '+query).bind(...args).all()).results;
- const report={source:'disposable local workerd D1 meta (includes index and trigger work); local R2',measurements,plans,checks:{version_race:true,inventory_version_race:true,inventory_movement_rollback:true,review_moderation_race:true,batch_rollback:true,r2_ambiguous_put_recovery:true,r2_no_blob:true,tenant_isolation:true},provider_billing:false};
+ const report={source:'disposable local workerd D1 meta (includes index and trigger work); local R2',measurements,plans,checks:{transaction_authorization_race:true,version_race:true,inventory_version_race:true,inventory_movement_rollback:true,review_moderation_race:true,batch_rollback:true,r2_ambiguous_put_recovery:true,r2_no_blob:true,tenant_isolation:true},promotion_rules:true,provider_billing:false};
  await mkdir('.artifacts',{recursive:true});await writeFile('.artifacts/phase11-menu-d1.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
 }finally{await proxy.dispose();await rm(dir,{recursive:true,force:true});}

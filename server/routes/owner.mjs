@@ -1,3 +1,4 @@
+import {authorizedWrite} from '../lib/authorized-write.mjs';
 // Café-owner dashboard data. Owners only ever see their own cafés.
 import { readJson, sendJson, notFound, HttpError } from '../lib/http.mjs';
 import { requireRole } from '../lib/auth.mjs';
@@ -48,7 +49,7 @@ export function register(router, deps) {
       next[key] = body[key].trim();
     }
     if (next.hours && !parseHours(next.hours)) throw new HttpError(422, 'validation_failed', 'Маягтаа шалгана уу', { hours: 'Цагийг 08:00–22:00 хэлбэрээр оруулна уу' });
-    if (Object.keys(next).length) db.prepare(`UPDATE cafes SET ${Object.keys(next).map(k => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...Object.values(next), now(), row.id);
+    if (Object.keys(next).length) authorizedWrite(db,ctx.user,row.id,'owner',()=>db.prepare(`UPDATE cafes SET ${Object.keys(next).map(k => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...Object.values(next), now(), row.id));
     sendJson(ctx.res, 200, { cafe: ownerCafeView(deps, db.prepare('SELECT * FROM cafes WHERE id = ?').get(row.id)) });
   });
 
