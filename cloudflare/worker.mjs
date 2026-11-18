@@ -7,6 +7,7 @@ import { menuRoute } from './menu.mjs';
 import { resourceSnapshot } from './resources.mjs';
 import { validateAnalyticsBatch } from '../js/services/analytics-schema.js';
 import { readAnalytics } from './analytics.mjs';
+import { analyticsCsv, analyticsCsvHeaders, analyticsItemChecks, checkAnalyticsItems } from '../shared/business/analytics.mjs';
 export { AnalyticsAggregator } from './analytics.mjs';
 import { notifyCafe } from './browser-rooms.mjs';
 export { BrowserRoom } from './browser-rooms.mjs';
@@ -18,7 +19,7 @@ import { ingest } from './ingest.mjs';
 import { partner } from './partner.mjs';
 import { sanitizeLayout, ruleBasedProvider } from '../server/services/visualization.mjs';
 import { all, first, run, batch, json, error, fail, body, credentials, hashPassword, verifyPassword, publicUser, guard, session, isQuotaError, startSession, now, id, token, sha, parse, deviceAuth } from './core.mjs';
-import { cafeView as rawCafeView, liveUpdate, ownerView as rawOwnerView, deviceView as rawDeviceView } from './views.mjs';
+import { cafeView as rawCafeView, liveUpdate, ownerView as rawOwnerView, ownerSafeView, deviceView as rawDeviceView } from './views.mjs';
 import { createSensorHistory } from './history.mjs';
 import { SENSOR_ID } from '../server/lib/telemetry-schema.mjs';
 import { parseHours, SETUP_STATUSES, projectToMap } from '../js/live/levels.js';
@@ -66,6 +67,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
   const input=await body(req,16384);let valid;try{valid=validateAnalyticsBatch(input);}catch{fail(422,'invalid_analytics','Invalid analytics batch');}
   const cafe=await first(db,"SELECT id FROM cafes WHERE id=? AND status='active'",valid.cafeId);if(!cafe)fail(404,'not_found','Cafe not found');
+  for(const {sql,params,count} of analyticsItemChecks(valid.cafeId,valid.events))checkAnalyticsItems(await all(db,sql,...params),count,fail);
   return json(await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+valid.cafeId)).collect(input),202);
  }
  if(p==='/api/v1/ingest/measurements' && m==='POST')return ingest(req,db,limit,env,ctx);
@@ -99,7 +101,20 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  const flush=routeId(p,/^\/api\/v1\/admin\/resources\/analytics-flush\/([^/]+)$/);
  if(flush&&m==='POST'){guard(user,'admin');if(!user.is_super_admin)fail(403,'super_admin_required','Super Admin required');if(env.LS_ANALYTICS_ENABLED!=='1')fail(503,'analytics_disabled','Analytics disabled');return json(await env.ANALYTICS.get(env.ANALYTICS.idFromName('analytics:'+flush[0])).flush());}
  const analyticsRead=routeId(p,/^\/api\/v1\/(owner|admin)\/cafes\/([^/]+)\/analytics$/);
- if(analyticsRead && m==='GET') {guard(user,...(analyticsRead[0]==='admin'?['admin']:['owner','admin']));const row=await first(db,'SELECT owner_id FROM cafes WHERE id=?',analyticsRead[1]);if(!row||(user.role!=='admin'&&row.owner_id!==user.id))fail(404,'not_found','Cafe not found');return json(await readAnalytics(db,analyticsRead[1],query));}
+ if(analyticsRead && m==='GET') {
+  const [scope,cafeId]=analyticsRead, roles=scope==='admin'?['admin']:['owner','admin'];
+  const authorize=async actor=>{
+   guard(actor,...roles);
+   const row=await first(db,'SELECT owner_id FROM cafes WHERE id=?',cafeId);
+   if(!row||(actor.role!=='admin'&&row.owner_id!==actor.id))fail(404,'not_found','Cafe not found');
+  };
+  await authorize(user);
+  limit(`analytics-read:${user.id}`,60,60000);
+  const summary=await readAnalytics(db,cafeId,query);
+  await authorize(await session(db,req));
+  if(query.format==='csv')return new Response(analyticsCsv(summary),{headers:analyticsCsvHeaders(summary)});
+  return json(summary);
+ }
  const auth=env.SENSORS.get(env.SENSORS.idFromName('auth'));
  const registerUser=(db,input,role='user')=>createUser(db,input,role,auth);
  const userAccess=createUserAccess({sql:{first:(query,...args)=>first(db,query,...args),all:(query,...args)=>all(db,query,...args),batch:entries=>batch(db,entries)},hashPassword:password=>auth.passwordHash(password),verifyPassword:(password,hash)=>auth.passwordVerify(password,hash),fail,id});
@@ -150,12 +165,12 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   }
   return json(await cached.promise);
  }
- if(p==='/api/v1/owner/cafes' && m==='GET'){guard(user,'owner','admin');const rows=await all(db,'SELECT * FROM cafes WHERE owner_id=? ORDER BY created_at',user.id);return json({cafes:await Promise.all(rows.map(r=>ownerView(db,r)))});}
+ if(p==='/api/v1/owner/cafes' && m==='GET'){guard(user,'owner','admin');const rows=await all(db,'SELECT * FROM cafes WHERE owner_id=? ORDER BY created_at',user.id);return json({cafes:await Promise.all(rows.map(async r=>ownerSafeView(await ownerView(db,r))))});}
  a=routeId(p,/^\/api\/v1\/owner\/cafes\/([^/]+)$/);
  if(a && m==='PATCH') {
   guard(user,'owner','admin');const row=await first(db,'SELECT * FROM cafes WHERE id=? AND owner_id=?',a[0],user.id);if(!row)fail(404,'not_found','Cafe not found');
   const x=await body(req),next={};for(const [k,max]of [['hours',20],['phone',30],['contact_name',80],['description',1000]])if(x[k]!=null){if(typeof x[k]!=='string' || x[k].length>max)fail(422,'validation_failed','Invalid '+k);next[k]=x[k].trim();}
-  if(next.hours && !parseHours(next.hours))fail(422,'validation_failed','Invalid hours');await update(db,'cafes',row.id,{...next,updated_at:now()});return json({cafe:await ownerView(db,await first(db,'SELECT * FROM cafes WHERE id=?',row.id))});
+  if(next.hours && !parseHours(next.hours))fail(422,'validation_failed','Invalid hours');await update(db,'cafes',row.id,{...next,updated_at:now()});return json({cafe:ownerSafeView(await ownerView(db,await first(db,'SELECT * FROM cafes WHERE id=?',row.id)))});
  }
  if(p.startsWith('/api/v1/admin/')) {
   guard(user,'admin');

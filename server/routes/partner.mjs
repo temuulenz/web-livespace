@@ -97,7 +97,8 @@ export function register(router, { db, config, limit, uploads, sessions }) {
     const app = findByToken(body.claim_token);
     if (!app) throw new HttpError(400, 'invalid_claim', 'Хүсэлтийн холбоос хүчингүй эсвэл аль хэдийн ашиглагдсан байна');
     const input = validateCredentials(body);
-    const user = await createUser(db, input, 'owner');
+    // Created as a plain user; only a winning atomic claim promotes it to owner (a lost race leaves no orphan owner).
+    const user = await createUser(db, input, 'user');
     claim(user, app.id);
     sendJson(ctx.res, 201, { user: publicUser({ ...user, role: 'owner' }), cafe_id: app.cafe_id }, { 'Set-Cookie': sessions.start(user.id) });
   });

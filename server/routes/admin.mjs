@@ -37,9 +37,11 @@ export function register(router, deps) {
   const deviceView = d => ({ ...d, token_hash: undefined, is_test: !!d.is_test, enabled: !!d.enabled, status: deviceStatus(db, config, d), last_status: json(d.last_status), online: deviceStatus(db, config, d) === 'online' });
 
   // Tell open browsers when the public catalogue or a café's state changed.
-  function publish(row) {
+  // Anonymous subscribers only learn about cafés that are, or just stopped being, public:
+  // non-public setup states (under review, rejected, ...) never leave the admin surface.
+  function publish(row, previousStatus = row.status) {
     if (row.status === 'active') { const cafe = cafes.publicCafe(row); hub.broadcast('cafe', cafe); }
-    hub.broadcast('catalog', { id: row.id, status: row.status });
+    if (row.status === 'active' || previousStatus === 'active') hub.broadcast('catalog', { id: row.id, status: row.status === 'active' ? 'active' : 'removed' });
   }
 
   router.get('/api/v1/admin/overview', ctx => {
@@ -111,7 +113,7 @@ export function register(router, deps) {
       db.prepare('UPDATE cafes SET status = ?, updated_at = ? WHERE id = ?').run(status, now(), row.id);
       db.prepare('INSERT INTO status_history (cafe_id, from_status, to_status, note, actor_id, at) VALUES (?, ?, ?, ?, ?, ?)').run(row.id, row.status, status, String(note).slice(0, 500), ctx.user.id, now());
     });
-    publish(getCafe(row.id));
+    publish(getCafe(row.id), row.status);
     sendJson(ctx.res, 200, { ok: true, status });
   });
 
