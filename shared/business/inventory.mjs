@@ -1,4 +1,5 @@
-import {businessCommon,payloadHash,businessWriteEntries} from './common.mjs';
+import {authorizedBatch} from './write-authorization.mjs';
+import {businessCommon,payloadHash} from './common.mjs';
 export function createInventoryService({sql,fail,id,clock=()=>new Date().toISOString(),afterCommit=async()=>{}}){
  const c=businessCommon({sql,fail});
  const reasons=['restock','manual_adjustment','correction','waste'];
@@ -31,7 +32,7 @@ export function createInventoryService({sql,fail,id,clock=()=>new Date().toISOSt
    await c.cafe(cafe,user);c.object(input,['idempotency_key','updates']);if(typeof input.idempotency_key!=='string'||! /^[A-Za-z0-9_.:-]{1,80}$/.test(input.idempotency_key)||!Array.isArray(input.updates)||input.updates.length<1||input.updates.length>5)c.invalid('Require idempotency_key and 1–5 updates');
    const hash=payloadHash(input.updates),receipt=await sql.first('SELECT * FROM inventory_receipts WHERE cafe_id=? AND request_id=?',cafe,input.idempotency_key);
    const replay=row=>{if(row.actor_id!==user.id||row.payload_hash!==hash)fail(409,'idempotency_conflict','Key already used for a different mutation');return {...JSON.parse(row.response),duplicate:true};};
-   if(receipt)return replay(receipt);
+   if(receipt){await authorizedBatch(sql,fail,user,cafe,'owner',[]);return replay(receipt);}
    const entries=[],results=[],seen=new Set(),at=clock();
    for(const update of input.updates){
     c.object(update,['product_id','variant_id','version','mode','quantity','delta','status','low_stock_threshold','show_quantity','enabled','reason']);
@@ -61,7 +62,7 @@ export function createInventoryService({sql,fail,id,clock=()=>new Date().toISOSt
    }
    const response={items:results,duplicate:false};
    entries.push(['INSERT INTO inventory_receipts(cafe_id,request_id,actor_id,payload_hash,response,at) VALUES(?,?,?,?,?,?)',cafe,input.idempotency_key,user.id,hash,JSON.stringify(response),at]);
-   try{await sql.batch(businessWriteEntries(entries,cafe,user,id('audit'),at));}catch(e){const saved=await sql.first('SELECT * FROM inventory_receipts WHERE cafe_id=? AND request_id=?',cafe,input.idempotency_key);if(saved)return replay(saved);throw e;}
+   try{await authorizedBatch(sql,fail,user,cafe,'owner',entries);}catch(e){const saved=await sql.first('SELECT * FROM inventory_receipts WHERE cafe_id=? AND request_id=?',cafe,input.idempotency_key);if(saved){await authorizedBatch(sql,fail,user,cafe,'owner',[]);return replay(saved);}throw e;}
    // Persistence and all movement/audit/receipt writes have committed before fan-out.
    try{const revision=(await sql.first('SELECT revision FROM inventory_revisions WHERE cafe_id=?',cafe))?.revision||0;const eligible=await c.cafe(cafe,null,true);if(eligible){const items=(await publicRows(cafe,{limit:'100'},results.map(({product_id,variant_id})=>({product_id,variant_id})))).items;await afterCommit({type:'inventory.changed',schemaVersion:1,cafe_id:cafe,revision,items,snapshot_url:`/api/v1/cafes/${encodeURIComponent(cafe)}/inventory`});}}catch{/* Best effort: snapshot recovery remains authoritative. */}
    return response;

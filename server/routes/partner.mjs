@@ -1,3 +1,4 @@
+import {authorizedWrite} from '../lib/authorized-write.mjs';
 // Partnership applications ("Хамтран ажиллах") and café-owner account creation.
 //
 // 1. A guest submits the application with 3–4 photos (no account needed).
@@ -56,13 +57,15 @@ export function register(router, { db, config, limit, uploads, sessions }) {
     const files = [];
     try {
       for (const [i, photo] of decoded.entries()) files.push({ id: newId('pho'), file: await uploads.save(applicationId, `photo-${i + 1}`, photo), mime: photo.mime, size: photo.buffer.length, position: i });
-      transaction(db, () => {
+      const persist=fn=>ctx.user?authorizedWrite(db,ctx.user,null,'user',fn):transaction(db,fn);
+      persist(() => {
         db.prepare(`INSERT INTO cafes (id, name, status, data_mode, category, district, address, lat, lng, map_x, map_y, hours, phone, contact_name, email, description, tags, total_seats, created_at, updated_at)
           VALUES (?, ?, 'submitted', 'live', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .run(cafeId, form.cafe_name, form.category, form.district, form.address, form.lat, form.lng, position.x, position.y, form.hours, form.phone, form.contact_name, form.email, form.description, JSON.stringify(form.purposes), form.seats, t, t);
         db.prepare('INSERT INTO applications (id, cafe_id, claim_token_hash, owner_id, form, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(applicationId, cafeId, sha256(token), null, JSON.stringify(form), t);
         const addPhoto = db.prepare('INSERT INTO application_photos (id, application_id, file, mime, size, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
         for (const f of files) addPhoto.run(f.id, applicationId, f.file, f.mime, f.size, f.position, t);
+        if(ctx.user)claim(ctx.user,applicationId);
         db.prepare("INSERT INTO status_history (cafe_id, from_status, to_status, note, actor_id, at) VALUES (?, NULL, 'submitted', 'Хүсэлт илгээгдсэн', NULL, ?)").run(cafeId, t);
       });
     } catch (error) {
@@ -70,16 +73,18 @@ export function register(router, { db, config, limit, uploads, sessions }) {
       throw error;
     }
     // A signed-in user is linked straight away; otherwise the claim token is used.
-    if (ctx.user) claim(ctx.user, applicationId);
+
     sendJson(ctx.res, 201, { application_id: applicationId, cafe_id: cafeId, claim_token: ctx.user ? null : token, status: 'submitted' });
   });
 
   function claim(user, applicationId) {
     const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(applicationId);
-    transaction(db, () => {
-      db.prepare('UPDATE applications SET owner_id = ?, claim_token_hash = NULL WHERE id = ?').run(user.id, app.id);
+    if(!app)throw new HttpError(400,'invalid_claim','Invalid claim');
+    authorizedWrite(db,user,null,'user', () => {
+      const changed=db.prepare('UPDATE applications SET owner_id = ?, claim_token_hash = NULL WHERE id = ? AND owner_id IS NULL AND claim_token_hash IS ?').run(user.id,app.id,app.claim_token_hash);
+      if(changed.changes!==1)throw new HttpError(409,'claim_conflict','Application already claimed');
       db.prepare('UPDATE cafes SET owner_id = ?, updated_at = ? WHERE id = ?').run(user.id, now(), app.cafe_id);
-      if (user.role === 'user') db.prepare("UPDATE users SET role = 'owner' WHERE id = ?").run(user.id);
+      db.prepare("UPDATE users SET role = 'owner' WHERE id = ? AND role='user'").run(user.id);
     });
   }
 

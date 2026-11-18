@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "LiveSpace Phase 11 backend API",
-    "version": "11-readiness-local",
-    "description": "Phase 11 A\u2013H backend APIs implemented and locally validated against PHASE11_ACCEPTANCE.md. Separate deployment review required; no production authorization. Full privacy, role, time, data-source and unavailable-metric semantics in feature guides. Operational readiness is locally validated; production remains NO-GO pending PHASE11_PRODUCTION_READINESS.md."
+    "title": "LiveSpace Phase 11A\u201311D backend API",
+    "version": "11D",
+    "description": "Implemented menu/inventory/reviews/promotions and readiness. E\u2013H remain incomplete. Full semantics in feature guides. Business mutations may return 409 access_changed after transactional permission recheck."
   },
   "servers": [
     {
@@ -3244,49 +3244,10 @@
         }
       }
     },
-    "/api/v1/cafes/{cafe}/promotions": {
-      "get": {
-        "summary": "Public currently active promotions",
-        "description": "PROMOTIONS.md defines targets, validation, UTC/Asia/Ulaanbaatar schedules, integer rounding, overlaps, quotas, ownership and response fields. No-store; bounded IP rate limits.",
-        "security": [],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; response schema described in PROMOTIONS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/owner/cafes/{cafe}/promotions": {
       "get": {
-        "summary": "Owner promotion list",
-        "description": "PROMOTIONS.md defines targets, validation, UTC/Asia/Ulaanbaatar schedules, integer rounding, overlaps, quotas, ownership and response fields. No-store; bounded IP rate limits.",
+        "summary": "Owner promotions with state filtering",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
         "security": [
           {
             "cookieSession": []
@@ -3307,7 +3268,8 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100
+              "maximum": 100,
+              "default": 50
             }
           },
           {
@@ -3316,13 +3278,27 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 10000
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "upcoming",
+                "expired",
+                "draft"
+              ]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Success; response schema described in PROMOTIONS.md",
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3332,7 +3308,7 @@
             }
           },
           "default": {
-            "description": "Standard sanitized error envelope",
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3344,8 +3320,8 @@
         }
       },
       "post": {
-        "summary": "Create promotion",
-        "description": "PROMOTIONS.md defines targets, validation, UTC/Asia/Ulaanbaatar schedules, integer rounding, overlaps, quotas, ownership and response fields. No-store; bounded IP rate limits.",
+        "summary": "Create configured promotion",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
         "security": [
           {
             "cookieSession": []
@@ -3363,7 +3339,7 @@
         ],
         "responses": {
           "201": {
-            "description": "Success; response schema described in PROMOTIONS.md",
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3373,7 +3349,7 @@
             }
           },
           "default": {
-            "description": "Standard sanitized error envelope",
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3388,17 +3364,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PromotionInput"
+                "$ref": "#/components/schemas/PromotionCreate"
               }
             }
           }
         }
       }
     },
-    "/api/v1/owner/cafes/{cafe}/promotions/{promotion}": {
-      "patch": {
-        "summary": "Versioned promotion edit or unpublish",
-        "description": "PROMOTIONS.md defines targets, validation, UTC/Asia/Ulaanbaatar schedules, integer rounding, overlaps, quotas, ownership and response fields. No-store; bounded IP rate limits.",
+    "/api/v1/owner/cafes/{cafe}/promotions/{id}": {
+      "get": {
+        "summary": "Owned promotion details",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
         "security": [
           {
             "cookieSession": []
@@ -3414,7 +3390,7 @@
             }
           },
           {
-            "name": "promotion",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
@@ -3424,7 +3400,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success; response schema described in PROMOTIONS.md",
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3434,7 +3410,115 @@
             }
           },
           "default": {
-            "description": "Standard sanitized error envelope",
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Versioned promotion edit/publish/pause",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionPatch"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Archive promotion preserving ID",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
+        "security": [
+          {
+            "cookieSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cafe",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3450,85 +3534,16 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "version"
+                ],
                 "additionalProperties": false,
                 "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 120
-                  },
-                  "kind": {
-                    "type": "string",
-                    "enum": [
-                      "fixed",
-                      "percentage"
-                    ]
-                  },
-                  "value": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 1000000000
-                  },
-                  "product_id": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "category_id": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "starts_at": {
-                    "type": "string",
-                    "format": "date-time"
-                  },
-                  "ends_at": {
-                    "type": "string",
-                    "format": "date-time"
-                  },
-                  "published": {
-                    "type": "boolean"
-                  },
-                  "recurrence": {
-                    "type": "object",
-                    "nullable": true,
-                    "additionalProperties": false,
-                    "required": [
-                      "days",
-                      "start_minute",
-                      "end_minute"
-                    ],
-                    "properties": {
-                      "days": {
-                        "type": "array",
-                        "minItems": 1,
-                        "maxItems": 7,
-                        "uniqueItems": true,
-                        "items": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "maximum": 7
-                        }
-                      },
-                      "start_minute": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1439
-                      },
-                      "end_minute": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1439
-                      }
-                    }
-                  },
                   "version": {
                     "type": "integer",
                     "minimum": 1
                   }
-                },
-                "required": [
-                  "version"
-                ]
+                }
               }
             }
           }
@@ -3537,8 +3552,8 @@
     },
     "/api/v1/owner/cafes/{cafe}/promotions/preview": {
       "post": {
-        "summary": "Preview promotion price without mutation",
-        "description": "PROMOTIONS.md defines targets, validation, UTC/Asia/Ulaanbaatar schedules, integer rounding, overlaps, quotas, ownership and response fields. No-store; bounded IP rate limits.",
+        "summary": "Authoritative integer MNT promotion preview",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
         "security": [
           {
             "cookieSession": []
@@ -3556,7 +3571,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success; response schema described in PROMOTIONS.md",
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3566,7 +3581,7 @@
             }
           },
           "default": {
-            "description": "Standard sanitized error envelope",
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3582,16 +3597,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
                 "required": [
-                  "promotion",
                   "product_id"
                 ],
+                "additionalProperties": false,
                 "properties": {
-                  "promotion": {
-                    "$ref": "#/components/schemas/PromotionInput"
-                  },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "variant_id": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "promotion_id": {
                     "type": "string"
                   },
                   "at": {
@@ -3605,96 +3623,11 @@
         }
       }
     },
-    "/api/v1/analytics/session": {
-      "post": {
-        "summary": "Initialize anonymous or authenticated analytics session",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
+    "/api/v1/cafes/{cafe}/promotions": {
+      "get": {
+        "summary": "Currently active public promotions",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
         "security": [],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/analytics/events": {
-      "post": {
-        "summary": "Collect bounded privacy-conscious behavior batch",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [],
-        "parameters": [],
-        "responses": {
-          "202": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BehaviorBatch"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/owner/cafes/{cafe}/analytics": {
-      "get": {
-        "summary": "owner cafe analytics",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
         "parameters": [
           {
             "name": "cafe",
@@ -3702,56 +3635,6 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "granularity",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "day",
-                "week",
-                "month"
-              ]
-            }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "real",
-                "simulated"
-              ]
-            }
-          },
-          {
-            "name": "compare",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
             }
           },
           {
@@ -3760,7 +3643,8 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100
+              "maximum": 100,
+              "default": 50
             }
           },
           {
@@ -3769,13 +3653,27 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 10000
+              "maximum": 10000,
+              "default": 0
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "upcoming",
+                "expired",
+                "draft"
+              ]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3785,1150 +3683,11 @@
             }
           },
           "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/owner/cafes/{cafe}/analytics.csv": {
-      "get": {
-        "summary": "owner cafe analytics.csv",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "granularity",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "day",
-                "week",
-                "month"
-              ]
-            }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "real",
-                "simulated"
-              ]
-            }
-          },
-          {
-            "name": "compare",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 10000
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
-            "content": {
-              "text/csv": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/owner/cafes/{cafe}/resources": {
-      "get": {
-        "summary": "owner cafe resources",
-        "description": "RESOURCE_CONTROLS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; RESOURCE_CONTROLS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/owner/cafes/{cafe}/resource-controls": {
-      "patch": {
-        "summary": "Administrator-only cafe optional-work control",
-        "description": "RESOURCE_CONTROLS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; RESOURCE_CONTROLS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "analytics_paused"
-                ],
-                "properties": {
-                  "analytics_paused": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/cafes/{cafe}/analytics": {
-      "get": {
-        "summary": "admin cafe analytics",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "granularity",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "day",
-                "week",
-                "month"
-              ]
-            }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "real",
-                "simulated"
-              ]
-            }
-          },
-          {
-            "name": "compare",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 10000
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/cafes/{cafe}/analytics.csv": {
-      "get": {
-        "summary": "admin cafe analytics.csv",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "granularity",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "day",
-                "week",
-                "month"
-              ]
-            }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "real",
-                "simulated"
-              ]
-            }
-          },
-          {
-            "name": "compare",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 10000
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
-            "content": {
-              "text/csv": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/cafes/{cafe}/resources": {
-      "get": {
-        "summary": "admin cafe resources",
-        "description": "RESOURCE_CONTROLS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; RESOURCE_CONTROLS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/cafes/{cafe}/resource-controls": {
-      "patch": {
-        "summary": "Administrator-only cafe optional-work control",
-        "description": "RESOURCE_CONTROLS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "cafe",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; RESOURCE_CONTROLS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "analytics_paused"
-                ],
-                "properties": {
-                  "analytics_paused": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/analytics": {
-      "get": {
-        "summary": "Platform analytics",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "granularity",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "day",
-                "week",
-                "month"
-              ]
-            }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "real",
-                "simulated"
-              ]
-            }
-          },
-          {
-            "name": "compare",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 10000
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/analytics.csv": {
-      "get": {
-        "summary": "Platform analytics.csv",
-        "description": "BEHAVIOR_ANALYTICS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "granularity",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "day",
-                "week",
-                "month"
-              ]
-            }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "real",
-                "simulated"
-              ]
-            }
-          },
-          {
-            "name": "compare",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 10000
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; BEHAVIOR_ANALYTICS.md",
-            "content": {
-              "text/csv": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/resources/monitor": {
-      "get": {
-        "summary": "Platform resource measurements",
-        "description": "RESOURCE_CONTROLS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Success; RESOURCE_CONTROLS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/resource-controls": {
-      "patch": {
-        "summary": "Platform optional-work control",
-        "description": "RESOURCE_CONTROLS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Success; RESOURCE_CONTROLS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "analytics_paused"
-                ],
-                "properties": {
-                  "analytics_paused": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/maintenance": {
-      "post": {
-        "summary": "One bounded administrator maintenance step",
-        "description": "RESOURCE_CONTROLS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Success; RESOURCE_CONTROLS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/me/notifications": {
-      "get": {
-        "summary": "Current recipient inbox and unread count",
-        "description": "NOTIFICATIONS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 10000
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; NOTIFICATIONS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/me/notifications/read-all": {
-      "post": {
-        "summary": "Mark current recipient inbox read",
-        "description": "NOTIFICATIONS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Success; NOTIFICATIONS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/me/notifications/{notification}/read": {
-      "post": {
-        "summary": "Mark owned notification read",
-        "description": "NOTIFICATIONS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "notification",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success; NOTIFICATIONS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/me/notification-preferences": {
-      "get": {
-        "summary": "Current category preferences",
-        "description": "NOTIFICATIONS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Success; NOTIFICATIONS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "summary": "Update current notification preferences",
-        "description": "NOTIFICATIONS.md defines complete response fields, validation, privacy, limits, retention and error behavior. Same-origin cookie writes; private outputs never shared-cache.",
-        "security": [
-          {
-            "cookieSession": []
-          }
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Success; NOTIFICATIONS.md",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Standard sanitized 400/401/403/404/409/413/415/422/429/503 error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "review_submitted": {
-                    "type": "boolean"
-                  },
-                  "review_reply": {
-                    "type": "boolean"
-                  },
-                  "inventory": {
-                    "type": "boolean"
-                  },
-                  "promotion": {
-                    "type": "boolean"
-                  },
-                  "promotion_expiry": {
-                    "type": "boolean"
-                  },
-                  "sensor_offline": {
-                    "type": "boolean"
-                  },
-                  "sensor_recovered": {
-                    "type": "boolean"
-                  },
-                  "resource": {
-                    "type": "boolean"
-                  },
-                  "moderation": {
-                    "type": "boolean"
-                  }
                 }
               }
             }
@@ -4938,64 +3697,30 @@
     },
     "/api/v1/ready": {
       "get": {
-        "summary": "Minimal uncached Phase 11 schema/binding readiness",
-        "description": "No tenant/SQL/private diagnostics. Not a full dependency, job or storage integrity check. See PHASE11_MONITORING_RUNBOOK.md. X-Request-ID is server generated.",
+        "summary": "Implemented schema/database readiness",
+        "description": "PROMOTION_ENGINE.md defines full conditional validation, response fields, schedules, errors and permissions. Body <=16 KiB; promotion routes 120/IP/minute per runtime. No-store. Readiness returns only ok or generic not_ready, not a production release decision.",
         "security": [],
+        "parameters": [],
         "responses": {
           "200": {
-            "description": "Ready",
+            "description": "See complete JSON response contract in PROMOTION_ENGINE.md; readiness {ok:true}.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "ready",
-                    "api"
-                  ],
-                  "properties": {
-                    "ready": {
-                      "type": "boolean"
-                    },
-                    "api": {
-                      "type": "string",
-                      "enum": [
-                        "1"
-                      ]
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           },
-          "503": {
-            "description": "Unavailable or missing required schema/bindings",
+          "default": {
+            "description": "400/401/403/404/409 access_changed|version_conflict|promotion_limit/413/415/422/429/503; sanitized 500. Readiness unavailable 503 not_ready.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "ready",
-                    "api"
-                  ],
-                  "properties": {
-                    "ready": {
-                      "type": "boolean"
-                    },
-                    "api": {
-                      "type": "string",
-                      "enum": [
-                        "1"
-                      ]
-                    }
-                  }
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
-          },
-          "429": {
-            "description": "Readiness probe limit: 30 requests per client IP per minute per runtime"
           }
         }
       }
@@ -6015,34 +4740,55 @@
           }
         ]
       },
-      "PromotionInput": {
+      "PromotionCreate": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "title",
+          "type",
+          "starts_at",
+          "ends_at"
+        ],
         "properties": {
-          "name": {
+          "title": {
             "type": "string",
             "minLength": 1,
             "maxLength": 120
           },
-          "kind": {
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "terms": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "type": {
             "type": "string",
             "enum": [
-              "fixed",
-              "percentage"
+              "percentage",
+              "fixed_amount",
+              "product_discount",
+              "category_discount",
+              "happy_hour",
+              "student_discount",
+              "combo_announcement"
             ]
           },
-          "value": {
+          "discount_kind": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "percentage",
+              "fixed_amount",
+              null
+            ]
+          },
+          "discount_value": {
             "type": "integer",
+            "nullable": true,
             "minimum": 1,
             "maximum": 1000000000
-          },
-          "product_id": {
-            "type": "string",
-            "nullable": true
-          },
-          "category_id": {
-            "type": "string",
-            "nullable": true
           },
           "starts_at": {
             "type": "string",
@@ -6052,17 +4798,14 @@
             "type": "string",
             "format": "date-time"
           },
-          "published": {
-            "type": "boolean"
-          },
-          "recurrence": {
+          "schedule": {
             "type": "object",
             "nullable": true,
             "additionalProperties": false,
             "required": [
               "days",
-              "start_minute",
-              "end_minute"
+              "start",
+              "end"
             ],
             "properties": {
               "days": {
@@ -6072,104 +4815,163 @@
                 "uniqueItems": true,
                 "items": {
                   "type": "integer",
-                  "minimum": 1,
-                  "maximum": 7
+                  "minimum": 0,
+                  "maximum": 6
                 }
               },
-              "start_minute": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1439
+              "start": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
               },
-              "end_minute": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1439
+              "end": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
               }
             }
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "product_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "category_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
           }
-        },
-        "required": [
-          "name",
-          "kind",
-          "value",
-          "starts_at",
-          "ends_at"
-        ]
+        }
       },
-      "BehaviorBatch": {
+      "PromotionPatch": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "schemaVersion",
-          "cafeId",
-          "events"
+          "version"
         ],
         "properties": {
-          "schemaVersion": {
-            "type": "integer",
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "terms": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "type": {
+            "type": "string",
             "enum": [
-              2
+              "percentage",
+              "fixed_amount",
+              "product_discount",
+              "category_discount",
+              "happy_hour",
+              "student_discount",
+              "combo_announcement"
             ]
           },
-          "cafeId": {
+          "discount_kind": {
             "type": "string",
-            "maxLength": 80
+            "nullable": true,
+            "enum": [
+              "percentage",
+              "fixed_amount",
+              null
+            ]
           },
-          "events": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 32,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "id",
-                "type"
-              ],
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "minLength": 8,
-                  "maxLength": 64
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "cafe_view",
-                    "cafe_search",
-                    "filter_apply",
-                    "menu_view",
-                    "product_view",
-                    "favorite_add",
-                    "favorite_remove",
-                    "promotion_view",
-                    "promotion_click",
-                    "directions_click",
-                    "review_submit",
-                    "out_of_stock_view"
-                  ]
-                },
-                "productId": {
-                  "type": "string",
-                  "maxLength": 120
-                },
-                "promotionId": {
-                  "type": "string",
-                  "maxLength": 120
-                },
-                "filter": {
-                  "type": "string",
-                  "enum": [
-                    "noise",
-                    "wifi",
-                    "availability",
-                    "goal",
-                    "district"
-                  ]
+          "discount_value": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schedule": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": false,
+            "required": [
+              "days",
+              "start",
+              "end"
+            ],
+            "properties": {
+              "days": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 7,
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
                 }
+              },
+              "start": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+              },
+              "end": {
+                "type": "string",
+                "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
               }
             }
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "product_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "category_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       }

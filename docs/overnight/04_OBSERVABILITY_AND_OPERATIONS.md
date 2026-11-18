@@ -1,0 +1,9 @@
+# Operations checkpoint
+
+Implemented: generated Node X-Request-ID, sanitized JSON unexpected-error records, and GET /api/v1/ready returning 200 {ok:true} or sanitized 503 not_ready. Ready checks required implemented A–D DB/schema using LIMIT 0; it does not certify optional R2/KV/analytics, remote migration status or full Phase 11. Legacy /health contract unchanged. Node scheme-aware writes require normal HTTPS in production; trust forwarded headers only behind a private controlled proxy.
+
+Verified locally with a quiescent synthetic fixture: disposable VACUUM INTO snapshot plus copied uploads restored into a separate directory after source closure; integrity_check, foreign_key_check, schema, menu, image SHA-256, inventory/receipt replay and rating summary passed. Never copy only a live WAL database file as a backup. This does not validate D1 export, R2 inventory, DO receipt backups, remote retention, encryption/key management, RPO/RTO or production recovery. Those remain external release gates.
+
+Added server/environment.example (no secrets; not auto-loaded) and manual-only .github/workflows/backend-verification.yml. CI is not remotely executed; workflow_dispatch only, read-only repository permission, no deployment/secrets. Browser jobs and provider-account metrics are not claimed verified there.
+
+Alert specification (not configured/sent): DB readiness sustained failure; sensor storage_failed/no ACK; last-seen beyond configured stale/offline threshold; elevated 5xx/latency relative to measured baseline; auth/rate-limit spikes; analytics dirty-flush backlog; storage/quota approach; failed scheduled backup/restore verification. Keep labels bounded and logs free of credentials/visitor identities. Owner must choose destinations/SLOs/retention and authorize production configuration. Optional workload shutdown controls await 11H; monitoring alone cannot guarantee zero charges.

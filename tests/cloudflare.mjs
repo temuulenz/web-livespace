@@ -106,25 +106,17 @@ try {
   assert.equal((await api('/cafes/menu-cf/ratings')).data.review_count,1);
   cookie=adminCookie;
  });
- await check('Phase 11E-H private analytics, cohort suppression, notification outbox and scoped monitoring',async()=>{
-  for(let i=0;i<3;i++){
-   const ready=await fetch(origin+'/api/v1/analytics/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(ready.status,200);const analyticsCookie=ready.headers.get('set-cookie').split(';')[0];
-   const payload={schemaVersion:2,cafeId:'menu-cf',events:[{id:'cf-behavior-'+i,type:'cafe_view'}]};
-   const send=()=>fetch(origin+'/api/v1/analytics/events',{method:'POST',headers:{'Content-Type':'application/json',Cookie:analyticsCookie},body:JSON.stringify(payload)});
-   let response=await send();assert.equal(response.status,202,await response.clone().text());response=await send();assert.equal((await response.json()).duplicates,1);
-  }
-  assert.equal((await api('/owner/cafes/menu-cf/analytics','GET',undefined,false)).res.status,401);
-  const report=await api('/owner/cafes/menu-cf/analytics');assert.equal(report.res.status,200,JSON.stringify(report.data));assert.equal(report.data.current.unique_sessions,3);assert.equal(report.data.current.behavior.find(e=>e.event_type==='cafe_view').count,3);
-  assert.equal((await fetch(origin+'/api/v1/owner/cafes/menu-cf/analytics.csv',{headers:{cookie}})).headers.get('content-type'),'text/csv; charset=utf-8');
-  assert.equal((await api('/admin/analytics')).res.status,200);
-  assert.equal((await api('/admin/resources/monitor')).data.provider_billing.status,'unavailable');
-  assert.equal((await api('/me/notification-preferences','PATCH',{promotion:true})).res.status,200);
-  for(let i=0;i<4;i++)await api('/admin/maintenance','POST',{});
-  assert.equal((await api('/me/notifications')).res.status,200);
-  assert.equal((await api('/me/notifications/read-all','POST',{})).res.status,200);
-  assert.equal((await api('/admin/resource-controls','PATCH',{analytics_paused:true})).res.status,200);
-  const stopped=await api('/analytics/events','POST',{schemaVersion:2,cafeId:'menu-cf',events:[{id:'cf-paused-event',type:'cafe_view'}]},false);assert.equal(stopped.res.status,503);
-  assert.equal((await api('/admin/resource-controls','PATCH',{analytics_paused:false})).res.status,200);
+ await check('Phase 11D promotion rules, tenant scope and readiness',async()=>{
+  assert.equal((await api('/ready')).res.status,200);
+  const base='/owner/cafes/menu-cf/promotions',product=(await api('/owner/cafes/menu-cf/menu/products')).data.items[0];
+  const input={title:'Local promotion fixture',type:'product_discount',discount_kind:'percentage',discount_value:25,starts_at:new Date(Date.now()-60000).toISOString(),ends_at:new Date(Date.now()+3600000).toISOString(),published:true,product_ids:[product.id]};
+  const created=await api(base,'POST',input);assert.equal(created.res.status,201,JSON.stringify(created.data));
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.items.length,1);
+  const preview=await api(base+'/preview','POST',{product_id:product.id});assert.equal(preview.res.status,200);assert.equal(preview.data.resulting_price,3000);
+  assert.equal((await api('/owner/cafes/B/promotions')).res.status,404);
+  assert.equal((await api(base,'POST',{...input,product_ids:['foreign']})).res.status,422);
+  const paused=await api(base+'/'+created.data.promotion.id,'PATCH',{version:1,published:false});assert.equal(paused.res.status,200);
+  assert.equal((await api('/cafes/menu-cf/promotions')).data.items.length,0);
  });
  await check('Super Admin ID binding, administrator restrictions, recent auth and session revocation',async()=>{
   const regularCookie=cookie;

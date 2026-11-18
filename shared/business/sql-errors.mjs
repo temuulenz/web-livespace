@@ -2,6 +2,7 @@ export function businessSqlError(e,fail){
  const message=String(e.message)+' '+String(e.cause?.message);
  if(/promotion_capacity/.test(message))fail(409,'promotion_limit','Promotion capacity reached');
  if(/business_audit.id/.test(message))fail(409,'version_conflict','Concurrent edit; retrieve current version');
+ if(/promotion_capacity/.test(message))fail(409,'promotion_limit','Promotion retention capacity reached');
  if(/menu_variant_capacity|categories BETWEEN|products BETWEEN|variants BETWEEN/.test(message))fail(409,'menu_limit','Menu capacity reached');
  if(/media_configured_limit/.test(message))fail(409,'media_budget','Configured media budget reached');
  if(/images BETWEEN|image_bytes BETWEEN|bytes BETWEEN|menu_gc_capacity/.test(message))fail(409,'media_budget','Media capacity reached');

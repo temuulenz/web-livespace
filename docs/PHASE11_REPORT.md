@@ -1,4 +1,6 @@
-# Phase 11 engineering report — A–H
+> 2026-11-18 recovery update: A–D now implemented locally. New atomic authorization/claim fences, input/media hardening, readiness and local restore are verified. Latest evidence: overnight/TEST_RESULTS.md and OVERNIGHT_PROGRESS.md; E–H and production gates remain incomplete. The A–C report below is historical.
+
+# Phase 11 engineering checkpoint — 11A through 11C
 
 Current readiness follow-up: [PHASE11_PRODUCTION_READINESS.md](PHASE11_PRODUCTION_READINESS.md) records subsequent local fixes/recovery/staging validation and the remaining production NO-GO gates. Counts/findings in this earlier report remain dated evidence.
 

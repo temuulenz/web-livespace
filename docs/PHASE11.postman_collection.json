@@ -729,27 +729,27 @@
       }
     },
     {
-      "name": "Public currently active promotions",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/promotions",
-        "description": "PROMOTIONS.md; local fixtures only; promotion validation in progress."
-      }
-    },
-    {
-      "name": "Owner promotion list",
+      "name": "Owner promotions with state filtering",
       "request": {
         "method": "GET",
         "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions",
-        "description": "PROMOTIONS.md; local fixtures only; promotion validation in progress."
+        "description": "Owner promotions with state filtering; local fixtures only; PROMOTION_ENGINE.md."
       }
     },
     {
-      "name": "Create promotion",
+      "name": "Owned promotion details",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/{{id}}",
+        "description": "Owned promotion details; local fixtures only; PROMOTION_ENGINE.md."
+      }
+    },
+    {
+      "name": "Create configured promotion",
       "request": {
         "method": "POST",
         "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions",
-        "description": "PROMOTIONS.md; local fixtures only; promotion validation in progress.",
+        "description": "Create configured promotion; local fixtures only; PROMOTION_ENGINE.md.",
         "header": [
           {
             "key": "Content-Type",
@@ -758,16 +758,21 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Morning\",\n  \"kind\": \"percentage\",\n  \"value\": 15,\n  \"starts_at\": \"2026-11-01T00:00:00Z\",\n  \"ends_at\": \"2026-12-01T00:00:00Z\",\n  \"published\": false\n}"
+          "raw": "{\n  \"title\": \"Synthetic configured rule\",\n  \"type\": \"percentage\",\n  \"discount_value\": 10,\n  \"starts_at\": \"REPLACE_WITH_UTC_START\",\n  \"ends_at\": \"REPLACE_WITH_UTC_END\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
         }
       }
     },
     {
-      "name": "Versioned promotion edit or unpublish",
+      "name": "Versioned promotion edit/publish/pause",
       "request": {
         "method": "PATCH",
-        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/{{promotion}}",
-        "description": "PROMOTIONS.md; local fixtures only; promotion validation in progress.",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/{{id}}",
+        "description": "Versioned promotion edit/publish/pause; local fixtures only; PROMOTION_ENGINE.md.",
         "header": [
           {
             "key": "Content-Type",
@@ -776,16 +781,44 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"version\": 1,\n  \"published\": false\n}"
+          "raw": "{\n  \"version\": 1,\n  \"published\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
         }
       }
     },
     {
-      "name": "Preview promotion price without mutation",
+      "name": "Archive promotion preserving ID",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/{{id}}",
+        "description": "Archive promotion preserving ID; local fixtures only; PROMOTION_ENGINE.md.",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Authoritative integer MNT promotion preview",
       "request": {
         "method": "POST",
         "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/promotions/preview",
-        "description": "PROMOTIONS.md; local fixtures only; promotion validation in progress.",
+        "description": "Authoritative integer MNT promotion preview; local fixtures only; PROMOTION_ENGINE.md.",
         "header": [
           {
             "key": "Content-Type",
@@ -794,265 +827,29 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"promotion\": {\n    \"name\": \"Morning\",\n    \"kind\": \"percentage\",\n    \"value\": 15,\n    \"starts_at\": \"2026-11-01T00:00:00Z\",\n    \"ends_at\": \"2026-12-01T00:00:00Z\",\n    \"published\": false\n  },\n  \"product_id\": \"{{product}}\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Initialize anonymous or authenticated analytics session",
-      "request": {
-        "method": "POST",
-        "url": "{{baseUrl}}/api/v1/analytics/session",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
+          "raw": "{\n  \"product_id\": \"REPLACE_PRODUCT_ID\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
           }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{}"
         }
       }
     },
     {
-      "name": "Collect bounded privacy-conscious behavior batch",
-      "request": {
-        "method": "POST",
-        "url": "{{baseUrl}}/api/v1/analytics/events",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"schemaVersion\": 2,\n  \"cafeId\": \"{{cafe}}\",\n  \"events\": [\n    {\n      \"id\": \"example-event-0001\",\n      \"type\": \"cafe_view\"\n    }\n  ]\n}"
-        }
-      }
-    },
-    {
-      "name": "owner cafe analytics",
+      "name": "Currently active public promotions",
       "request": {
         "method": "GET",
-        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/analytics",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply."
+        "url": "{{baseUrl}}/api/v1/cafes/{{cafe}}/promotions",
+        "description": "Currently active public promotions; local fixtures only; PROMOTION_ENGINE.md."
       }
     },
     {
-      "name": "owner cafe analytics.csv",
+      "name": "Implemented schema/database readiness",
       "request": {
         "method": "GET",
-        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/analytics.csv",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "owner cafe resources",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/resources",
-        "description": "RESOURCE_CONTROLS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "Administrator-only cafe optional-work control",
-      "request": {
-        "method": "PATCH",
-        "url": "{{baseUrl}}/api/v1/owner/cafes/{{cafe}}/resource-controls",
-        "description": "RESOURCE_CONTROLS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"analytics_paused\": false\n}"
-        }
-      }
-    },
-    {
-      "name": "admin cafe analytics",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/admin/cafes/{{cafe}}/analytics",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "admin cafe analytics.csv",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/admin/cafes/{{cafe}}/analytics.csv",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "admin cafe resources",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/admin/cafes/{{cafe}}/resources",
-        "description": "RESOURCE_CONTROLS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "Administrator-only cafe optional-work control",
-      "request": {
-        "method": "PATCH",
-        "url": "{{baseUrl}}/api/v1/admin/cafes/{{cafe}}/resource-controls",
-        "description": "RESOURCE_CONTROLS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"analytics_paused\": false\n}"
-        }
-      }
-    },
-    {
-      "name": "Platform analytics",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/admin/analytics",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "Platform analytics.csv",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/admin/analytics.csv",
-        "description": "BEHAVIOR_ANALYTICS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "Platform resource measurements",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/admin/resources/monitor",
-        "description": "RESOURCE_CONTROLS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "Platform optional-work control",
-      "request": {
-        "method": "PATCH",
-        "url": "{{baseUrl}}/api/v1/admin/resource-controls",
-        "description": "RESOURCE_CONTROLS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"analytics_paused\": false\n}"
-        }
-      }
-    },
-    {
-      "name": "One bounded administrator maintenance step",
-      "request": {
-        "method": "POST",
-        "url": "{{baseUrl}}/api/v1/admin/maintenance",
-        "description": "RESOURCE_CONTROLS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{}"
-        }
-      }
-    },
-    {
-      "name": "Current recipient inbox and unread count",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/me/notifications",
-        "description": "NOTIFICATIONS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "Mark current recipient inbox read",
-      "request": {
-        "method": "POST",
-        "url": "{{baseUrl}}/api/v1/me/notifications/read-all",
-        "description": "NOTIFICATIONS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{}"
-        }
-      }
-    },
-    {
-      "name": "Mark owned notification read",
-      "request": {
-        "method": "POST",
-        "url": "{{baseUrl}}/api/v1/me/notifications/{{notification}}/read",
-        "description": "NOTIFICATIONS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{}"
-        }
-      }
-    },
-    {
-      "name": "Current category preferences",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/me/notification-preferences",
-        "description": "NOTIFICATIONS.md; local fixtures only. Required cookie and tenant policies apply."
-      }
-    },
-    {
-      "name": "Update current notification preferences",
-      "request": {
-        "method": "PATCH",
-        "url": "{{baseUrl}}/api/v1/me/notification-preferences",
-        "description": "NOTIFICATIONS.md; local fixtures only. Required cookie and tenant policies apply.",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"promotion\": false\n}"
-        }
-      }
-    },
-    {
-      "name": "Minimal operational readiness (local)",
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/api/v1/ready"
+        "url": "{{baseUrl}}/api/v1/ready",
+        "description": "Implemented schema/database readiness; local fixtures only; PROMOTION_ENGINE.md."
       }
     }
   ]

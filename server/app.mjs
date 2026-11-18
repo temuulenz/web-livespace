@@ -1,12 +1,5 @@
-import {operationalLog,requestId,routeGroup,readiness} from '../shared/operations.mjs';
-import * as phase11Routes from './routes/phase11.mjs';
-import {createPhase11} from '../shared/business/phase11.mjs';
-import {createRuntimeMetrics,requestCafe,protectRequest} from '../shared/business/resources.mjs';
-import {transaction} from './lib/db.mjs';
-import {newId} from './lib/auth.mjs';
-import * as behaviorRoutes from './routes/behavior.mjs';
-import {createBehaviorBackend} from './services/behavior.mjs';
 import * as promotionRoutes from './routes/promotions.mjs';
+import {randomUUID} from 'node:crypto';
 import * as reviewRoutes from './routes/reviews.mjs';
 import * as inventoryRoutes from './routes/inventory.mjs';
 // Assembles the LiveSpace backend: API routes + the static website, one process.
@@ -53,12 +46,15 @@ export async function createApp(config) {
   deps.phase11=createPhase11({sql,fail:(...a)=>{throw new HttpError(...a);},id:newId,options:config.phase11,metrics,runtime:()=>({sse:deps.hub.size,sensor_websockets:deps.sensorGateway?.size??null,sqlite_database_bytes:db.prepare('PRAGMA page_count').get().page_count*db.prepare('PRAGMA page_size').get().page_size})});
   for(const [key,value] of [['tenant_media_bytes',config.phase11.tenantMediaBytes],['media_upload_bytes',config.phase11.mediaBytes],['csv_rows',config.phase11.csvRows],['csv_bytes',config.phase11.csvBytes]])db.prepare('UPDATE application_limits SET value=? WHERE key=?').run(value,key);
   const api = createRouter();
-  for (const routes of [phase11Routes, behaviorRoutes, promotionRoutes, reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
+  for (const routes of [promotionRoutes, reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
   const serveStatic = createStaticHandler(config.staticDir);
 
   async function handle(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const ctx = { req, res, url, path: url.pathname, method: req.method, query: Object.fromEntries(url.searchParams), params: {}, cookies: parseCookies(req.headers.cookie) };
+    ctx.requestId=randomUUID();
+    ctx.scheme=(req.socket.encrypted || config.production || (config.trustProxy && req.headers['x-forwarded-proto']==='https'))?'https':'http';
+    res.setHeader('X-Request-ID',ctx.requestId);
     ctx.ip = (config.trustProxy && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress || '';
     for (const [key, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(key, value);
     const requestStart=performance.now(),correlation=requestId();res.setHeader('X-Request-ID',correlation);
@@ -75,6 +71,7 @@ export async function createApp(config) {
       if (await serveStatic(ctx)) return;
       sendJson(res, 404, { error: { code: 'not_found', message: 'Not found' } });
     } catch (error) {
+      if (!(error instanceof HttpError)) console.error(JSON.stringify({timestamp:new Date().toISOString(),level:'error',service:'node-http',request_id:ctx.requestId,category:'internal'}));
       sendError(res, error);
     }
   }

@@ -1,6 +1,6 @@
 # Phase 11 API contract — A–H
 
-All eight backend subphases are implemented locally against PHASE11_ACCEPTANCE.md. No deployment is authorized. Existing Android v1 and legacy HTTP ingestion remain compatible.
+Implemented locally: 11A menus, 11B inventory, 11C ratings/reviews, 11D promotions. 11E–11H are not implemented and have no advertised new endpoints.
 
 | Contract | Responsibility |
 |---|---|
@@ -13,8 +13,8 @@ All eight backend subphases are implemented locally against PHASE11_ACCEPTANCE.m
 | [PHASE11_MONITORING_RUNBOOK.md](PHASE11_MONITORING_RUNBOOK.md) | Minimal readiness/correlation and operational metric semantics |
 | [RESOURCE_CONTROLS.md](RESOURCE_CONTROLS.md) | Cafe/admin usage, measured/unavailable diagnostics, configuration, optional-work pause and bounded maintenance |
 
-[openapi.yaml](openapi.yaml) uses JSON syntax valid as YAML 1.2 and contains 71 operations across 54 paths. [PHASE11.postman_collection.json](PHASE11.postman_collection.json) contains 72 requests including existing login, with local fixture placeholders. The linked feature guides define full request/response/role/error/source/cache/retention semantics and examples.
+Import [openapi.yaml](openapi.yaml) (JSON syntax, valid YAML 1.2): 53 operations including promotions/readiness. [Postman collection](PHASE11.postman_collection.json): 54 requests including existing cookie login, using local fixture placeholders. Full response field/role/error/realtime semantics are specified in the feature guides; no UI implementation is required. Node SSE inventory stream is explicitly transport-specific; Cloudflare uses the existing browser room.
 
-Private APIs reuse current cookie sessions and authoritative cafe/author/admin/recipient checks. Same-origin writes, prepared SQL, strict payload whitelists, bounded bodies/rates/pages and atomic version/audit/idempotency guards remain server-side. No client-provided actor/ownership/recipient is trusted. Public projections omit credentials, private diagnostics and individual behavior; low analytics cohorts/keys never enter CSV. No researcher role/raw behavior export, orders/payments/sales conversion API or external messaging provider was introduced.
+All new mutations use existing session revocation, same-origin checks, authoritative cafe/author/role checks, prepared SQL, bounded JSON and per-runtime IP limiting. No client-controlled actor IDs, ownership or authoritative prices. No new analytics event collection or statistical dataset should be inferred from menu, inventory or review usage.
 
-Node inventory realtime uses its existing scoped SSE endpoint; Cloudflare uses cafe browser rooms. Private notifications use HTTP polling and never public SSE. Frontend integration remains separate; see FRONTEND_INTEGRATION_GUIDE.md. Local schema/migration/testing/deployment prerequisites are in PHASE11_REPORT.md and PHASE11_MIGRATIONS.md.
+Overnight recovery addition: Phase 11D promotions are implemented; see PROMOTION_ENGINE.md for seven endpoints and authoritative unit-price/schedule semantics. GET /api/v1/ready is an additive DB/implemented-schema check, not release approval. Business mutations now recheck role, account version/disabled status, expiry/revoked session and applicable ownership inside the atomic transaction; 409 access_changed requires reload/re-authentication rather than a blind new mutation. Node JSON roots must be objects and same-origin includes effective scheme. No frontend changes required for existing valid requests. E–H remain unimplemented.

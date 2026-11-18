@@ -1,0 +1,14 @@
+# Reference only: the server does not auto-load this file. Export selected values.
+NODE_ENV=development
+HOST=127.0.0.1
+PORT=8080
+LS_DATA_DIR=/absolute/path/to/isolated-development-data
+LS_SEED_DEMO=0
+LS_TRUST_PROXY=0
+LS_SENSOR_EXPECTED_INTERVAL_SEC=15
+LS_SENSOR_STALE_AFTER_SEC=30
+# Provision an operator account privately; never put credentials in this file.
+# Production requires HTTPS/WSS and normal certificate verification.
+# Trust proxy headers only when the backend is private and the proxy replaces them.
+# Optional Cloudflare R2/KV/analytics bindings/flags are separate; keep disabled
+# until their documented integrations, policy and quota review are approved.

@@ -21,9 +21,10 @@ export async function hashPassword(password) {
 
 export async function verifyPassword(password, stored) {
   const [scheme, N, r, p, salt, hash] = String(stored).split('$');
-  if (scheme !== 'scrypt') return false;
-  const expected = Buffer.from(hash, 'base64');
-  const key = await scrypt(password, Buffer.from(salt, 'base64'), expected.length, { N: +N, r: +r, p: +p });
+  if (scheme !== 'scrypt' || +N!==16384 || +r!==8 || +p!==1 || typeof password!=='string' || password.length>200) return false;
+  const expected = Buffer.from(hash || '', 'base64'), saltBytes=Buffer.from(salt || '', 'base64');
+  if(expected.length!==64 || saltBytes.length!==16)return false;
+  const key = await scrypt(password, saltBytes, expected.length, { N: +N, r: +r, p: +p });
   return timingSafeEqual(key, expected);
 }
 
@@ -74,7 +75,7 @@ export function sameOrigin(ctx) {
   const origin = ctx.req.headers.origin;
   if (!origin) return;
   const host = ctx.req.headers.host;
-  try { if (new URL(origin).host === host) return; } catch { /* fall through */ }
+  try { const value=new URL(origin);if(value.origin===`${ctx.scheme||'http'}://${host}`)return; } catch { /* fall through */ }
   throw new HttpError(403, 'bad_origin', 'Cross-origin request rejected');
 }
 
