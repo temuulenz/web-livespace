@@ -29,6 +29,10 @@ async function navigate(hash) {
   await waitFor(`document.querySelector('#app')?.children.length > 0`);
   await evaluate(`document.fonts.ready`);
   if (hash === '#cafe-A' || hash === '#staff') await waitFor(`!!document.querySelector('canvas')`);
+  if (hash === '#cafe-A' || hash === '#cafe-O') {
+    await waitFor(`!!document.querySelector('.cd-title h1') && !document.querySelector('.cd-head .skel')`);
+    await waitFor(`!!document.querySelector('#cafeMenu .menu-note, #cafeMenu .menu-item, #cafeMenu [role=alert], #cafeMenu > .muted:not(.skel)')`);
+  }
   await delay(100);
 }
 const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
@@ -52,6 +56,26 @@ try {
         const { data } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
         await writeFile(join(output, `${viewport}-${route}.png`), Buffer.from(data, 'base64'));
         console.log(`Captured ${viewport} ${route}${snapshot.overflow ? ' (existing overflow)' : ''}`);
+        if (route === 'cafe-O') {
+          await evaluate(`document.querySelector('#cafeMenu').scrollIntoView({block:'start'})`);
+          await delay(250);
+          const { data: menuData } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+          await writeFile(join(output, `${viewport}-cafe-menu.png`), Buffer.from(menuData, 'base64'));
+          await evaluate(`scrollTo(0,0)`);
+        }
+        if (route === 'home') {
+          await evaluate(`document.querySelector('.home-spotlight').scrollIntoView({block:'center'})`);
+          await delay(200);
+          const { data: firstSlide } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+          await writeFile(join(output, `${viewport}-home-slide-0.png`), Buffer.from(firstSlide, 'base64'));
+          for (let slide = 1; slide <= 2; slide++) {
+            await click('.home-spotlight [data-spot-next]');
+            await delay(280);
+            const { data: slideData } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+            await writeFile(join(output, `${viewport}-home-slide-${slide}.png`), Buffer.from(slideData, 'base64'));
+          }
+          await evaluate(`scrollTo(0,0)`);
+        }
       }
     }
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
@@ -230,6 +254,15 @@ try {
     assert.equal(await evaluate(`document.querySelectorAll('.ccard .olamp.on').length`), 10);
     assert.equal(await evaluate(`document.querySelectorAll('.ccard.is-closed .olamp.off').length`), 2);
     assert.equal(await evaluate(`document.querySelector('.ccard .olamp').getAttribute('aria-label')`), 'Нээлттэй');
+  });
+  await check('compact cafe cards avoid duplicate people/noise readings and label demo data', async () => {
+    await navigate('#cafes');
+    const card = await evaluate(`document.querySelector('.ccard')`);
+    assert.ok(card);
+    assert.equal(await evaluate(`!!document.querySelector('.ccard .cs-facts')`), false);
+    assert.equal(await evaluate(`!!document.querySelector('.ccard .sensor-values')`), false);
+    assert.equal(await evaluate(`document.querySelector('.ccard').innerText.includes('Демо · Жишээ өгөгдөл')`), true);
+    assert.equal(await evaluate(`document.querySelector('.ccard .meta').innerText.includes('жишээ')`), true);
   });
 
   await check('staff page: advice, plan and current state fit the first screen; temporary status below', async () => {

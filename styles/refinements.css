@@ -1758,3 +1758,18 @@
 @keyframes spot-in{from{opacity:.65;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media(max-width:700px){.spot-head{align-items:flex-start;flex-wrap:wrap}.spot-content{grid-template-columns:1fr;min-height:0}.spot-content .ccard:nth-child(n+2){display:none}.spot-controls{width:100%;justify-content:flex-end}.toasts{left:12px;right:12px;top:calc(var(--hd) + env(safe-area-inset-top,0px) + 8px);width:auto;max-width:none;transform:none;align-items:stretch}.toast{max-width:100%;box-sizing:border-box}}
 @media(prefers-reduced-motion:reduce){.spot-content .ccard{animation:none}}
+
+/* Final demo polish: make partnership copy and its existing illustration balance on wide screens. */
+.partner-hero{grid-template-columns:minmax(0,1.1fr) minmax(240px,.9fr)!important}
+.partner-art{position:relative;min-height:270px;border-radius:24px;background:radial-gradient(circle at 50% 45%,#fff8e9 0 24%,transparent 25%),linear-gradient(145deg,#f5dfb8,#edd1a2);display:grid;place-items:center;overflow:hidden}
+.partner-art::before,.partner-art::after{content:"";position:absolute;border:1px solid rgba(123,84,47,.2);border-radius:50%;width:245px;height:245px}
+.partner-art::after{width:185px;height:185px}
+.partner-art-window{position:relative;z-index:1;width:112px;height:112px;border-radius:28px;background:var(--paper);box-shadow:var(--sh);display:grid;place-items:center;color:var(--brown)}
+.partner-art-window svg{width:58px;height:58px}
+.partner-art-note,.partner-art-pin{position:absolute;z-index:2;background:var(--paper);border-radius:14px;padding:10px 14px;box-shadow:var(--sh);font-weight:800;color:var(--ink)}
+.partner-art-note{left:7%;bottom:16%}.partner-art-pin{right:9%;top:16%;padding:10px;color:var(--orange2)}.partner-art-pin svg{width:24px;height:24px;display:block}
+.nowrap{white-space:nowrap}
+.about-illustration{isolation:isolate;background:radial-gradient(ellipse at center,rgba(255,226,160,.26),transparent 68%)}
+.about-illustration::before,.about-illustration::after{content:"";position:absolute;inset:15% 12%;border:1px dashed rgba(123,84,47,.2);border-radius:50%;z-index:-1}
+.about-illustration::after{inset:27% 23%;border-style:solid;opacity:.55}
+@media(max-width:700px){.partner-hero{grid-template-columns:1fr!important;gap:14px}.partner-art{min-height:170px}.partner-art-note{left:5%;bottom:12%}.partner-art-pin{right:6%;top:10%}.ab-hero h1{font-size:clamp(29px,8vw,36px);line-height:1.12;letter-spacing:-.025em}.partner-hero h1{max-width:13ch}.nowrap{white-space:nowrap}.about-illustration{height:210px}}

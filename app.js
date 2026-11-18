@@ -59,7 +59,10 @@ const openLamp = c => { const label = openTag(c) + (!c.open && c.opens ? ` · ${
 
 // One status block in the same order everywhere: open (lamp + words) · seats & Wi-Fi · how trustworthy.
 const stale = () => platform.config.sensor_stale_after_sec ?? 30;
-const statusBlock = c => statusLinesHTML(c, { staleAfterSec: stale() }).replace('<span class="cs-open', () => `<span class="cs-lamp">${openLamp(c)}</span><span class="cs-open`);
+const statusBlock = (c, compact = false) => {
+  const lines = statusLinesHTML(c, { staleAfterSec: stale() }).replace('<span class="cs-open', () => `<span class="cs-lamp">${openLamp(c)}</span><span class="cs-open`);
+  return compact ? lines.replace(/<span class="cs-facts"[\s\S]*?<\/span>/, '') : lines;
+};
 const moreLink = c => `<a class="cs-more" href="#cafe-${c.id}" aria-label="${escapeHTML(c.name)} дэлгэрэнгүй">Дэлгэрэнгүй →</a>`;
 // Walk time comes from the sample «Та энд» point, never the visitor's real location: say so.
 const walkMeta = c => c.walk != null ? `<span title="${walkText(c)}">~${c.walk} мин алхана · жишээ</span>` : '';
@@ -228,16 +231,17 @@ document.addEventListener('click', e => { if (!e.target.closest('#sndPop,#sndBtn
 /* ================= cafe card (V1 layout, upgraded) ================= */
 function cafeCard(c) {
   const live = c.live?.sensor;
-  const verifiedSeats = live?.status === 'online' || dataMode(c) === 'demo' ? cardFreePct(c) : null;
-  const seatMeasure = measuredSeats(c), occupiedPct = dataMode(c)==='demo' ? c.occ : seatMeasure?.total ? 100-Math.round(seatMeasure.free/seatMeasure.total*100) : null;
-  const tiles = c.open ? `<div class="tile" title="Сул суудал"><div class="ti">${occupiedPct == null ? '♧' : seatRow(occupiedPct)}</div><b class="num">${verifiedSeats == null ? 'Мэдээлэлгүй' : verifiedSeats + '% сул'}</b></div>
+  const seatMeasure = measuredSeats(c), demoSeats = dataMode(c)==='demo' && !live;
+  const verifiedSeats = demoSeats ? cardFreePct(c) : live?.status === 'online' ? cardFreePct(c) : null;
+  const occupiedPct = demoSeats ? c.occ : seatMeasure?.total ? 100-Math.round(seatMeasure.free/seatMeasure.total*100) : null;
+  const tiles = c.open ? `<div class="tile" title="Сул суудал"><div class="ti">${occupiedPct == null ? 'Суудал' : seatRow(occupiedPct)}</div><b class="num">${verifiedSeats == null ? 'Хэмжилтгүй' : verifiedSeats + '% сул'}</b></div>
   <div class="tile" title="Дуу чимээ"><div class="ti">${ssGlyph(c.sound)}</div><b>${live ? (live.noise?.calibrated ? 'Тохируулсан SPL' : live.noise?.dbfs != null ? 'dBFS' : 'Мэдээлэлгүй') : (dataMode(c) === 'demo' ? SS[c.sound].short + ' · жишээ' : 'Мэдээлэлгүй')}</b></div>
   <div class="tile" title="Wi-Fi">${wifiSVG(c.wifi, 26)}<b>${dataMode(c) === 'demo' ? WIFI[c.wifi] + ' · жишээ' : c.live?.wifi_level ? WIFI[c.live.wifi_level] : 'Мэдээлэлгүй'}</b></div>`
     : `<div class="unav"><b>${closedText(c)}</b></div>`;
   return `<article class="ccard${c.open ? '' : ' is-closed'}" data-href="#cafe-${c.id}">
   ${c.image || c.photo ? `<img class="cc-image" src="${escapeHTML(c.image || c.photo)}" alt="" loading="lazy" width="640" height="360">` : ''}
   <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${walkMeta(c)}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${c.id}" aria-label="${c.name} дэлгэрэнгүй">${I.arr}</a></div></div>
-  ${statusBlock(c)}
+  ${statusBlock(c, true)}
   <div class="tags">${tagPills(c)}</div>
   <div class="tiles">${tiles}</div>${sensorPanelHTML(c, true)}
   ${moreLink(c)}
@@ -342,7 +346,7 @@ function renderHome() {
 function listCard(c, i) {
   const fp_ = freePct(c); return `<button class="lcard${c.id === selId ? ' sel' : ''}" data-card="${c.id}" style="animation-delay:${Math.min(i, 8) * 35}ms" aria-label="${c.name}">
  <div class="lc-h">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="27"')}<b>${c.name}</b><span class="muted num" title="Жишээ байршлаас">${c.dist}</span></div>
- ${statusBlock(c)}
+ ${statusBlock(c, true)}
  ${c.open ? `<div class="mrow3">${mSeat(c)}${mSound(c.sound)}${mWifi(c.wifi)}</div>` : ''}
  ${sensorPanelHTML(c, true)}<div class="lc-why">${whyLine(c)}</div><span class="cs-more" aria-hidden="true">Дэлгэрэнгүй →</span></button>`
 }
@@ -419,7 +423,7 @@ function emptyArt() { return `<svg viewBox="0 0 90 90"><ellipse cx="45" cy="76" 
 function previewHTML(c) {
   const t = tone(c);
   return `<div class="pv-h"><div><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${walkMeta(c)}</div></div><div class="pv-btns">${favBtn(c.id)}${cmpBtn(c.id)}<button class="pv-x" data-pvclose aria-label="Хаах">${I.x}</button></div></div>
- ${statusBlock(c)}
+ ${statusBlock(c, true)}
  <div class="tags">${tagPills(c)}</div>
  ${c.open ? `<div class="pv-mood ${t}">${mood(c)}</div>
  <div class="pv-ms"><div title="Сул суудал">${dataMode(c)==='demo'?seatRow(c.occ):''}<b class="num">${cardFreePct(c) == null ? 'Хэмжилтгүй' : cardFreePct(c) + '% сул'}</b><small>${dataMode(c)==='demo'?'жишээ':'суудлын хэмжилт'}</small></div><div title="Дуу чимээ"><span class="sg">${ssGlyph(c.sound)}</span><b>${c.live?.sensor?.noise?.calibrated ? 'Тохируулсан SPL' : c.live?.sensor?.noise?.dbfs != null ? 'dBFS' : dataMode(c)==='demo' ? SS[c.sound].short+' · жишээ' : 'Хэмжилтгүй'}</b><small>дуу</small></div><div title="Wi-Fi">${wifiSVG(c.wifi, 24)}<b>${dataMode(c)==='demo'?WIFI[c.wifi]+' · жишээ':c.live?.wifi_level?WIFI[c.live.wifi_level]:'Мэдээлэлгүй'}</b><small>Wi-Fi</small></div></div>` : `<div class="pv-closed"><b style="display:block;color:var(--ink)">${c.status_text || `Хаалттай · ${c.opens} нээгдэнэ`}</b></div>`}
@@ -661,8 +665,8 @@ function openReport(c) {
 /* ---------- about ---------- */
 function renderAbout() {
   app.innerHTML = `<div class="page"><div class="wrap">
- <section class="ab-hero"><div><span class="tagp">Бидний тухай</span><h1>Кафегаа очихоосоо өмнө мэдээрэй</h1><p>LiveSpace нь Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-н мэдээллийг нэг дор харуулдаг платформ юм. Сурах, ажиллах, найзуудтайгаа уулзах тохиромжтой газар хайхад зарцуулах цагийг тань хэмнэхийг зорьдог.</p><a class="btn btn-p" href="#explore">Газрын зураг үзэх →</a></div>
-  <div class="orbit" aria-hidden="true"><div class="core">${I.house}</div><span class="fl" style="left:8%;top:6%">${seatRow(40)} 60%</span><span class="fl" style="right:4%;top:14%"><span class="sg">${ssGlyph(2).replace('<svg', '<svg width="14" height="14"')}</span>${SS[2].short}</span><span class="fl" style="left:4%;bottom:12%">${wifiSVG(4, 16)} Маш сайн</span></div></section>
+ <section class="ab-hero"><div><span class="tagp">Бидний тухай</span><h1>Кафегаа очихоосоо өмнө мэдээрэй</h1><p>LiveSpace нь кафены байршил, ажиллах цаг, боломжтой үед нь суудал болон орчны хэмжилтийн мэдээллийг харуулж, өөрт тохирох газраа сонгоход тусална.</p><a class="btn btn-p" href="#explore">Газрын зураг үзэх →</a></div>
+  <div class="orbit about-illustration" aria-hidden="true"><div class="core">${I.house}</div><span class="fl" style="left:8%;top:6%">${seatRow(40)} Жишээ</span><span class="fl" style="right:4%;top:14%"><span class="sg">${ssGlyph(2).replace('<svg', '<svg width="14" height="14"')}</span>Жишээ</span><span class="fl" style="left:4%;bottom:12%">${wifiSVG(4, 16)} Жишээ</span></div></section>
  <div class="g2"><div class="icard"><span class="ic">${I.target}</span><b>Эрхэм зорилго</b><span>Хүн бүр өөрт тохирох орчныг хялбар, хурдан олох боломжийг бүрдүүлэх.</span></div><div class="icard"><span class="ic">${I.eye}</span><b>Алсын хараа</b><span>Улаанбаатарын кафе, хамтын ажлын орон зайн мэдээллийг нэг дороос, ил тод, бодит цагаар харуулдаг найдвартай эх сурвалж болох.</span></div></div>
  <section class="sec"><div class="sec-h"><h2>Хэрхэн ажилладаг вэ?</h2></div><div class="g4">${[['Газраа сонго', 'Газрын зураг эсвэл кафены жагсаалтаас ойролцоох кафегаа олоорой.'], ['Тэмдгийг хар', 'Хүмүүс, дуу чимээ, Wi-Fi-г тэмдэг дээрээс нь шууд харна.'], ['Дотор талыг хар', 'Дээрээс харсан зураглалаас сул сандал, тайван булангаа олоорой.'], ['Кафе руу', 'Очихоосоо өмнө бүгдийг мэдсэн тул цаг, зам хоёроо хэмнэнэ.']].map(([b, s], i) => `<div class="icard"><span class="stepn">${i + 1}</span><b>${b}</b><span>${s}</span></div>`).join('')}</div></section>
  <section class="sec"><div class="sec-h"><h2>Бидний харуулдаг мэдээлэл</h2><p>Тоог тайлбарлах шаардлагагүйгээр шууд ойлгогдохуйц.</p></div><div class="g4 g3">
@@ -679,9 +683,9 @@ function renderAbout() {
 let partnerCleanup = null;
 function renderPartner() {
   app.innerHTML = `<div class="page"><div class="wrap">
- <section class="ab-hero" style="grid-template-columns:1fr"><div><span class="tagp">Хамтын ажиллагаа</span><h1>Кафегаа LiveSpace-д нэгтгээрэй</h1><p>Бид Улаанбаатарын кафе, коворкинг, номын сангуудтай хамтран ажиллаж, зочдод тохирох орчноо олоход нь тусалдаг. Таны кафе газрын зураг дээр гарч, бодит цагийн мэдээллээрээ илүү олон хүнд хүрнэ.</p><a class="btn btn-p" href="#pform">Хүсэлт илгээх →</a></div></section>
- <section class="sec"><div class="sec-h"><h2>Хамтран ажилласнаар</h2></div><div class="g4">${[[I.people, 'Илүү олон хэрэглэгч', 'Сурах, ажиллах газар хайж буй хэрэглэгчдэд таны кафе газрын зураг дээр харагдана.'], [I.clock, 'Бодит цагийн мэдээлэл', 'Сул суудал, дуу чимээ, Wi-Fi-гаа хэрэглэгчиддээ шууд харуулна.'], [I.chart, 'Ачааллын тойм', 'Өдрийн аль цагт ачаалал ихтэй, тайван байдгийг харж, үйлчилгээгээ төлөвлөнө.'], [I.star, 'Брэндээ таниулах', 'Кафены онцлог, тав тухтай орчноо олон хүнд таниулна.']].map(([ic, b, s]) => `<div class="icard"><span class="ic">${ic}</span><b>${b}</b><span>${s}</span></div>`).join('')}</div>
-  <p style="text-align:center;margin-top:18px"><a class="btn btn-o" href="#staff">Ажилтны шууд хяналтыг үзэх →</a></p></section>
+ <section class="ab-hero partner-hero"><div><span class="tagp">Хамтын ажиллагаа</span><h1>Кафегаа <span class="nowrap">LiveSpace-д</span> нэгтгээрэй</h1><p>Кафены мэдээлэл болон боломжтой мэдрэгчийн хэмжилтийг тохируулж, газрын зурагт харуулна. Суулгалт, бодит цагийн мэдээлэл болон дэмжлэгийн нөхцөлийг хамтран тохирно.</p><a class="btn btn-p" href="#pform">Хүсэлт илгээх →</a></div><div class="partner-art" aria-hidden="true"><div class="partner-art-window">${I.house}</div><span class="partner-art-note">Кафены мэдээлэл</span><span class="partner-art-pin">${I.map}</span></div></section>
+ <section class="sec"><div class="sec-h"><h2>Хамтран ажилласнаар</h2></div><div class="g4">${[[I.people, 'Газрын зурагт харагдах', 'Сурах, ажиллах газар хайж буй хэрэглэгчид таны кафег олох боломжтой.'], [I.clock, 'Боломжтой хэмжилт', 'Тохирох төхөөрөмж суулгасан үед хэмжилтийн эх үүсвэр, шинэчлэгдсэн хугацаатай нь харуулна.'], [I.chart, 'Одоогийн төлөв', 'Эзэмшигчийн самбараас кафе болон төхөөрөмжийн одоогийн төлөвийг харна.'], [I.star, 'Кафены танилцуулга', 'Хаяг, ажиллах цаг, зураг болон цэсийн мэдээллээ харуулна.']].map(([ic, b, s]) => `<div class="icard"><span class="ic">${ic}</span><b>${b}</b><span>${s}</span></div>`).join('')}</div>
+  <p style="text-align:center;margin-top:18px"><a class="btn btn-o" href="#staff">Ажилтны хяналтын жишээ үзэх →</a></p></section>
  <section class="sec" id="pform"><div class="sec-h"><h2>Хамтран ажиллах хүсэлт</h2></div>
  <div id="pformBody"><div class="skel" style="height:420px"></div></div></section></div>${footer()}</div>`;
   // The application form (photos, validation, owner sign-up) loads with this page only.

@@ -15,8 +15,8 @@ export function sensorPanelHTML(cafe, compact = false, options = {}) {
   return html`<div class="sensor-panel ${compact ? 'sensor-compact' : ''}" data-sensor-panel aria-live="polite">
     <div class="sensor-meta"><span class="badge ${sensor.dataSource === 'real' ? 'b-live' : 'b-typ'}" data-sensor-source="${sensor.dataSource}">${sensorSourceLabel(sensor.dataSource)}</span>
       <span data-sensor-status="${sensor.status}">${sensorStatusLabel(sensor.status)}</span></div>
-    <div class="sensor-values"><span>Ажиглагдсан хүмүүс <b class="num" data-observed-people>${sensor.observedPeople ?? '—'}</b>${sensor.peopleStale ? ' · хуучирсан' : ''}</span>
-      <span>Дуу чимээ <b class="num" data-sensor-noise>${noiseText(sensor.noise)}</b>${sensor.noiseStale ? ' · хуучирсан' : ''}</span></div>
+    ${compact ? '' : html`<div class="sensor-values"><span>Ажиглагдсан хүмүүс <b class="num" data-observed-people>${sensor.observedPeople ?? '—'}</b>${sensor.peopleStale ? ' · хуучирсан' : ''}</span>
+      <span>Дуу чимээ <b class="num" data-sensor-noise>${noiseText(sensor.noise)}</b>${sensor.noiseStale ? ' · хуучирсан' : ''}</span></div>`}
     <small>Шинэчлэгдсэн <time datetime="${sensor.timestamp}">${sensorTime(sensor.timestamp)}</time> · UTC+8</small>
     ${compact ? '' : html`<p class="muted">${sensor.confidence == null ? 'Итгэлцлийн үнэлгээ байхгүй' : `Камерын итгэлцэл ${Math.round(sensor.confidence * 100)}%`}. ${sensor.noise?.calibrated ? 'Калибровктой SPL үнэлгээ.' : 'Калибровкгүй dBFS нь бодит дууны даралт (SPL) биш.'} Хүний тоо нь сул суудлын тоо биш.${sensor.deviceCount > 1 ? ' Олон төхөөрөмжийн тоог нэмэхгүй; хамгийн сүүлийн ажиглалтыг харуулна.' : ''}</p>`}
   </div>`;
