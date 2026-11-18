@@ -1,0 +1,37 @@
+{
+  "source": "disposable Node SQLite",
+  "products": 30,
+  "sql_statements": {
+    "cold_menu": 5,
+    "warm_menu": 1
+  },
+  "plans": {
+    "products": [
+      {
+        "id": 5,
+        "parent": 0,
+        "notused": 60,
+        "detail": "SEARCH menu_items USING INDEX menu_items_order (cafe_id=? AND archived=? AND published=?)"
+      }
+    ],
+    "variants": [
+      {
+        "id": 4,
+        "parent": 0,
+        "notused": 60,
+        "detail": "SEARCH menu_item_variants USING INDEX menu_variants_product (cafe_id=? AND product_id=? AND active=?)"
+      }
+    ],
+    "categories": [
+      {
+        "id": 5,
+        "parent": 0,
+        "notused": 61,
+        "detail": "SEARCH menu_categories USING INDEX menu_categories_order (cafe_id=? AND published=?)"
+      }
+    ]
+  },
+  "d1_rows_read": "unmeasured",
+  "d1_rows_written": "unmeasured",
+  "warning": "Statement counts exclude SQLite index maintenance and are not D1 row billing."
+}

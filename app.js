@@ -7,6 +7,7 @@ import { SS, WIFI, WIFI_S, TOTAL_SEATS, getCafes, byId } from './js/cafes.js';
 import { freePct, crowdCat, tone, mood, nowHour, profile } from './js/cafe-metrics.js';
 import { ssGlyph, ssArt, wifiSVG, seatRow, mSeat, mSound, mWifi, tagPills } from './js/components/atmosphere.js';
 import { buildMap } from './js/map.js';
+import { directionsUrl } from './js/map-gl.js';
 import { FloorPlan, ZONES } from './js/simulation/floor-plan.js';
 import { pageTasks } from './js/lifecycle.js';
 import { countUp, animNum } from './js/animations.js';
@@ -17,22 +18,51 @@ import { dataMode, freshnessHTML, modeBadge, hasMeasurements, measuredSeats } fr
 import { sensorPanelHTML, noiseText } from './js/live/sensor-ui.js';
 import { LiveNoise } from './js/features/sensors/live-noise.js';
 import { isRealMode } from './js/live/sensor-state.js';
+import { openState, seatState, wifiState, noiseState, trustState, walkText } from './js/live/status.js';
+import { statusLinesHTML, trustHTML } from './js/live/status-ui.js';
 import { SensorHistory } from './js/features/sensors/sensor-history.js';
 import { openAuth, watchAuthCancel } from './js/features/authentication/auth-modal.js';
 import { renderAccountButton, bindAccountPopover, AccountPage } from './js/features/account/account.js';
-import { partnerFormHTML, bindPartnerForm, pendingClaimHTML, openOwnerSignup } from './js/features/partner/partner-form.js';
-import { OwnerPage } from './js/features/owner-dashboard/owner-page.js';
-import { AdminPage } from './js/features/admin-dashboard/admin-page.js';
+// Pages and panels the home page never shows are loaded only when they open (smaller first load).
+const lazy = {
+  partner: () => import('./js/features/partner/partner-form.js'),
+  owner: () => import('./js/features/owner-dashboard/owner-page.js').then(m => m.OwnerPage),
+  admin: () => import('./js/features/admin-dashboard/admin-page.js').then(m => m.AdminPage),
+  menuView: () => import('./js/features/menu/menu-view.js').then(m => m.MenuSection),
+  menuEditor: () => import('./js/features/menu/menu-editor.js').then(m => m.MenuEditor),
+  going: () => import('./js/features/going/going.js').then(m => m.GoingPanel),
+  incoming: () => import('./js/features/going/incoming-orders.js').then(m => m.IncomingOrders)
+};
+let navToken = 0;   // a lazily loaded page only renders if the visitor is still on it
+const loadFailed = () => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">Энэ хэсгийг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.</p></div></div>`;
+import { mobileHomeHTML, bindMobileHome, deskRecHTML, bindDeskRec, pauseOffscreen } from './js/features/home/mobile-home.js';
+
+// Customer features (menu, «Очих», pre-orders) mounted into the original pages; released on navigation.
+let custViews = [];
+const mountCust = (load, el, props) => {
+  if (!el) return;
+  load().then(Component => { if (el.isConnected && !el.dataset.mounted) { el.dataset.mounted = '1'; custViews.push(mount(Component, el, props)) } }).catch(() => { if (el.isConnected) el.innerHTML = '<p class="muted">Энэ хэсгийг ачаалж чадсангүй.</p>' });
+};
+const dropCust = () => { custViews.forEach(v => v.destroy()); custViews = [] };
 
 const CAFES = getCafes();
 let cmpIds = [];
 let sensorHistoryView = null, liveNoiseView = null;
-let selId = null, mapCtl = null, fp = null, homeMini = null, cdCafe = null, pageComp = null;
+let selId = null, mapCtl = null, fp = null, homeMini = null, homeMobileOff = null, deskRecOff = null, homeOffscreenOff = null, cdCafe = null, pageComp = null;
+let navDepth = 0;
 // Cafés without live data yet are shown like closed ones, with an honest reason.
 const closedText = c => c.status_text || `${c.opens} нээгдэнэ`;
 const openTag = c => c.open ? 'Нээлттэй' : c.status_text ? 'Мэдээлэлгүй' : 'Хаалттай';
 // Open or closed is shown as a lamp: lit and glowing yellow when open, plain grey when closed.
 const openLamp = c => { const label = openTag(c) + (!c.open && c.opens ? ` · ${c.opens} нээгдэнэ` : ''); return `<span class="olamp ${c.open ? 'on' : 'off'}" role="img" aria-label="${label}" title="${label}">${I.lamp}</span>` };
+
+// One status block in the same order everywhere: open (lamp + words) · seats & Wi-Fi · how trustworthy.
+const stale = () => platform.config.sensor_stale_after_sec ?? 30;
+const statusBlock = c => statusLinesHTML(c, { staleAfterSec: stale() }).replace('<span class="cs-open', () => `<span class="cs-lamp">${openLamp(c)}</span><span class="cs-open`);
+const moreLink = c => `<a class="cs-more" href="#cafe-${c.id}" aria-label="${escapeHTML(c.name)} дэлгэрэнгүй">Дэлгэрэнгүй →</a>`;
+// Walk time comes from the sample «Та энд» point, never the visitor's real location: say so.
+const walkMeta = c => c.walk != null ? `<span title="${walkText(c)}">~${c.walk} мин алхана · жишээ</span>` : '';
+const emptyHTML = (style = '') => `<div class="empty"${style}>${emptyArt()}<b>Тохирох кафе олдсонгүй</b>Шүүлтүүрээ сулруулаад дахин үзээрэй.<div class="empty-acts">${F.openOnly ? '<button class="btn btn-o" data-open-off>Нээлттэй гэсэн шүүлтүүрийг арилгах</button>' : ''}<button class="btn btn-o" data-reset>Бүх шүүлтүүрийг цэвэрлэх</button></div></div>`;
 
 /* ================= filters ================= */
 const PURPOSES = [['Сурах', I.book], ['Ажиллах', I.laptop], ['Найзуудтай', I.people], ['Тухтай', I.sofa]];
@@ -88,6 +118,7 @@ document.addEventListener('click', e => {
   }
   const m = e.target.closest('[data-more]'); if (m) { F.more = !F.more; m.setAttribute('aria-expanded', F.more); m.nextElementSibling.classList.toggle('open', F.more); Snd.ui('whoosh') }
   const rm = e.target.closest('[data-rm]'); if (rm) { const [k, v] = rm.dataset.rm.split(':'); Snd.ui('click'); if (k === 'purpose') F.purpose.delete(v); else if (k === 'sound') F.sound = 0; else if (k === 'openOnly') F.openOnly = false; else F[k] = 'any'; syncFilterUI(); refreshResults() }
+  if (e.target.closest('[data-open-off]')) { F.openOnly = false; Snd.ui('click'); syncFilterUI(); refreshResults() }
   if (e.target.closest('[data-reset]')) { F.purpose.clear(); F.sound = 0; F.wifi = 'any'; F.seats = 'any'; F.openOnly = false; F.q = ''; $$('#q,#q2').forEach(i => i.value = ''); Snd.ui('whoosh'); syncFilterUI(); refreshResults() }
 });
 function activeHTML(n) {
@@ -137,8 +168,8 @@ document.addEventListener('click', e => {
   const p = e.target.closest('[data-play]'); if (p) { e.stopPropagation(); playAmb(+p.dataset.play, p) }
 }, true);
 function playAmb(l, btn) {
-  const was = btn.classList.contains('on'); $$('[data-play].on').forEach(b => { b.classList.remove('on'); b.innerHTML = I.play + ' Сонсох' }); Snd.stopAmb(); if (was) return;
-  if (!Snd.ensure()) { toast('Энэ хөтөч дуу тоглуулахыг дэмжихгүй байна'); return } btn.classList.add('on'); btn.innerHTML = I.stop + ' Зогсоох'; Snd.ambience(l, () => { btn.classList.remove('on'); btn.innerHTML = I.play + ' Сонсох' })
+  const was = btn.classList.contains('on'); $$('[data-play].on').forEach(b => { b.classList.remove('on'); b.innerHTML = b.dataset.idle || b.innerHTML }); Snd.stopAmb(); if (was) return;
+  if (!Snd.ensure()) { toast('Энэ хөтөч дуу тоглуулахыг дэмжихгүй байна'); return } btn.dataset.idle ||= btn.innerHTML; btn.classList.add('on'); btn.innerHTML = I.stop + ' Зогсоох'; Snd.ambience(l, () => { btn.classList.remove('on'); btn.innerHTML = btn.dataset.idle })
 }
 function renderTray() {
   const t = $('#cmpTray'); if (!cmpIds.length) { t.classList.remove('show'); return }
@@ -184,7 +215,7 @@ $('#sndBtn').onclick = e => {
     p.innerHTML = `<h3>Дуу ба хөдөлгөөн</h3>
  <div class="tgl-row"><div><b>Интерфэйсийн дуу</b><small>Дарах, хадгалах үеийн зөөлөн дуу</small></div><button class="sw" role="switch" id="swSnd" aria-checked="${Prefs.sound}" aria-label="Интерфэйсийн дуу"></button></div>
  <div class="tgl-row"><div><b>Хөдөлгөөн багасгах</b><small>Анимацыг зогсоож, статик дүрслэл харуулна</small></div><button class="sw" role="switch" id="swRm" aria-checked="${Prefs.reduced}" aria-label="Хөдөлгөөн багасгах"></button></div>
- <div class="tgl-row"><div><b>Орчны дуу сонсох</b><small>Кафе бүрийн «Сонсох» товчоор зөвхөн өөрөө асаана. Автоматаар тоглохгүй.</small></div></div>`;
+ <div class="tgl-row"><div><b>Орчны дуу сонсох</b><small>«Орчны дууны жишээ сонсох» товчоор зөвхөн өөрөө асаана. Автоматаар тоглохгүй.</small></div></div>`;
     $('#swSnd').onclick = () => { Prefs.sound = !Prefs.sound; store.set('sound', Prefs.sound); $('#swSnd').setAttribute('aria-checked', Prefs.sound); renderSndBtn(); if (Prefs.sound) { Snd.ensure(); Snd.ui('chime') } };
     $('#swRm').onclick = () => { Prefs.reduced = !Prefs.reduced; store.set('reduced', Prefs.reduced); $('#swRm').setAttribute('aria-checked', Prefs.reduced); document.documentElement.classList.toggle('rm', Prefs.reduced); if (fp) fp.reduced = Prefs.reduced; Snd.ui('click') }
   }
@@ -201,9 +232,11 @@ function cafeCard(c) {
   <div class="tile" title="Wi-Fi · ${WIFI_S[c.wifi]}"><div class="ti">${wifiSVG(c.wifi, 26)}</div><b>${WIFI[c.wifi]}</b></div>`
     : `<div class="unav"><b>${closedText(c)}</b></div>`;
   return `<article class="ccard${c.open ? '' : ' is-closed'}" data-href="#cafe-${c.id}">
-  <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${c.walk} мин · ${c.hours}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${c.id}" aria-label="${c.name} дэлгэрэнгүй">${I.arr}</a></div></div>
-  <div class="tags">${openLamp(c)}${tagPills(c)}</div>
+  <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${walkMeta(c)}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${c.id}" aria-label="${c.name} дэлгэрэнгүй">${I.arr}</a></div></div>
+  ${statusBlock(c)}
+  <div class="tags">${tagPills(c)}</div>
   <div class="tiles">${tiles}</div>${sensorPanelHTML(c, true)}
+  ${moreLink(c)}
  </article>`}
 document.addEventListener('click', e => { const card = e.target.closest('[data-href]'); if (card && !e.target.closest('a,button')) location.hash = card.dataset.href });
 
@@ -222,6 +255,8 @@ function plantSVG(w, flip) { return `<svg width="${w}" viewBox="0 0 120 170" sty
 function renderHome() {
   const open = CAFES.filter(c => c.open), measured = open.filter(c => freePct(c) != null); const avg = measured.length ? Math.round(measured.reduce((s, c) => s + freePct(c), 0) / measured.length) : '—'; const good = open.filter(c => c.wifi >= 3).length;
   const stat = (n, l) => `<b class="num" data-count="${n}">${n}</b><span>${l}</span>`;
+  // Phones and desktops show different home layouts (styles/livespace.css); only the visible one is built.
+  const mob = isMobile();
   app.innerHTML = `<div class="page">
  <section class="hero" aria-label="LiveSpace">
   <div class="hero-bar"></div>
@@ -229,39 +264,51 @@ function renderHome() {
   ${lamp('78%', 130, '#FFCF71', 1, `<b class="num" data-count="${avg}" data-suf="%">${avg}%</b><span>дундаж сул суудал</span>`, 'l3')}${lamp('89%', 60, '#7B542F', 2, stat(good, 'кафед Wi-Fi сайн'), 'l4')}
   <div class="arch">
    <span class="hero-kick">${I.map}Газрын зурагтай кафе хайгч</span>
-   <h1>Өнөөдөр <em>хаана</em><br>суух вэ?</h1>
+   <h1>Та суух <em>кафе</em><br>хайж байна уу?</h1>
    <form class="hsearch" id="hs" role="search"><input id="hq" placeholder="Кафе хайх, жишээ нь «Кафе A»" aria-label="Кафе хайх" autocomplete="off" enterkeyhint="search"><button class="hs-go" aria-label="Хайх" title="Хайх">${I.search}</button></form>
-   <div class="hero-purp" role="group" aria-label="Юу хийх гэж байна вэ?">${[['Сурах', I.book, 'Нам гүм'], ['Ажиллах', I.laptop, 'Хурдан Wi-Fi'], ['Найзуудтай', I.people, 'Яриатай'], ['Тухтай', I.sofa, 'Буйдантай']].map(([p, ic, d]) => `<button class="hp" data-go-purpose="${p}"><span class="hp-ic">${ic}</span><span class="hp-t"><b>${p}</b><small>${d}</small></span></button>`).join('')}</div>
    <div class="hero-map ex-map" id="miniMap" aria-label="Газрын зургийн урьдчилсан харагдац">
     <a class="hm-open" href="#explore" aria-label="Газрын зураг нээх" title="Газрын зураг нээх">${I.map}</a>
    </div>
+   <div class="arch-panes" aria-hidden="true"></div>
   </div>
   <div class="shelf"></div>
   <div class="deco" style="left:5%">${plantSVG(120)}</div><div class="deco" style="left:15%">${plantSVG(70, 1)}</div>
-  <div class="deco" style="right:6%;bottom:0"><svg width="170" viewBox="0 0 170 180"><path d="M60 30h50l-4 26H64z" fill="#fff" stroke="#3E2A17" stroke-width="5"/><path d="M110 36c14 0 14 16 0 16" stroke="#3E2A17" stroke-width="5" fill="none"/><ellipse cx="85" cy="70" rx="80" ry="12" fill="#7B542F"/><rect x="80" y="76" width="10" height="90" fill="#7B542F"/><ellipse cx="85" cy="172" rx="40" ry="8" fill="#7B542F"/></svg></div>
+  <div class="deco deco-table" style="right:6%;bottom:0"><svg width="170" viewBox="0 0 170 180"><path d="M70 38h30v12a15 15 0 0 1-30 0z" fill="#FFF9EC" stroke="#3E2A17" stroke-width="4"/><path d="M100 41h5a6 6 0 0 1 0 12h-5" fill="none" stroke="#3E2A17" stroke-width="4"/><ellipse cx="85" cy="72" rx="80" ry="13" fill="#B6771D"/><rect x="79" y="78" width="12" height="80" fill="#B6771D"/><path d="M47 180a38 20 0 0 1 76 0z" fill="#B6771D"/></svg></div>
  </section>
+ ${mob ? mobileHomeHTML({ cafes: CAFES }) : ''}
  <div class="wrap">
+  ${mob ? '' : deskRecHTML()}
   <section class="sec"><div class="sec-h"><h2>Ойролцоох кафенууд</h2><p>Танд хамгийн ойр 6 кафе</p></div>
    <div class="cgrid">${[...CAFES].sort((a, b) => parseFloat(a.dist) * (a.dist.includes('км') ? 1000 : 1) - parseFloat(b.dist) * (b.dist.includes('км') ? 1000 : 1)).slice(0, 6).map(cafeCard).join('')}</div>
    <div style="text-align:center;margin-top:28px"><a class="btn btn-o" href="#cafes">Бүх кафе харах →</a></div></section>
-  <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>«54 dB» гэхээс «цай буцлах чимээ шиг намуухан» гэвэл шууд ойлгомжтой. Сонсох товчоор жишээ дууг нь сонсоорой.</p></div>
-   <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Сонсох</button></div>`).join('')}</div></section>
+  <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Жишээ дуу — бодит бичлэг биш. Товчоор сонсоорой.</p></div>
+   <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Орчны дууны жишээ сонсох</button></div>`).join('')}</div>
+   <div class="ss-dots" aria-hidden="true">${[1, 2, 3, 4, 5].map((l, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></section>
   <div class="band"><div><h2>Кафе эзэмшигч үү?</h2><p>Кафегаа LiveSpace-д нэмж, илүү олон зочинд хүрээрэй.</p></div><a class="btn btn-y" href="#partner">Хамтран ажиллах →</a></div>
  </div>${footer()}</div>`;
   // The home map is only a preview of the illustration: the real map with its pins opens on #explore.
-  homeMini = buildMap($('#miniMap'), { interactive: false, markers: false });
+  // Phones hide the desktop hero, so its drawing (≈540 SVG nodes) is not built there.
+  if (!mob) homeMini = buildMap($('#miniMap'), { interactive: false, markers: false });
   $('#miniMap').addEventListener('click', e => { if (!e.target.closest('.hsearch')) { Snd.ui('whoosh'); location.hash = 'explore' } });
-  $$('[data-go-purpose]').forEach(b => b.onclick = () => { F.purpose.clear(); F.purpose.add(b.dataset.goPurpose); Snd.ui('pop'); location.hash = 'explore' });
-  $('#hs').onsubmit = e => { e.preventDefault(); F.q = $('#hq').value.trim(); const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
+  const search = q => { F.q = q; const res = CAFES.filter(matches); if (F.q && res.length === 1) selId = res[0].id; Snd.ui('whoosh'); location.hash = 'explore' };
+  $('#hs').onsubmit = e => { e.preventDefault(); search($('#hq').value.trim()) };
+  homeMobileOff = bindMobileHome($('.mhome'), { cafes: CAFES, onSearch: search });
+  deskRecOff = bindDeskRec($('.drec'), { cafes: CAFES });
+  // Sections scrolled out of view stop animating (no visible change; saves repaints every frame).
+  homeOffscreenOff = pauseOffscreen([$(".hero"), $(".cgrid"), $(".ss-row")]);
+  // Phones scroll the five noise cards sideways; the dots under them show which one is in view.
+  const ssRow = $('.ss-row'); let ssFrame;
+  ssRow.addEventListener('scroll', () => { if (ssFrame === undefined) ssFrame = pageTasks.frame(() => { ssFrame = undefined; const cards = $$('.ss-card', ssRow), x = ssRow.scrollLeft + 16; let k = 0; cards.forEach((c, i) => { if (Math.abs(c.offsetLeft - x) < Math.abs(cards[k].offsetLeft - x)) k = i }); if (ssRow.scrollLeft + ssRow.clientWidth >= ssRow.scrollWidth - 4) k = cards.length - 1; $$('.ss-dots i').forEach((d, i) => d.classList.toggle('on', i === k)) }) }, { passive: true });
   countUp();
 }
 
 /* ---------- explore ---------- */
 function listCard(c, i) {
   const fp_ = freePct(c); return `<button class="lcard${c.id === selId ? ' sel' : ''}" data-card="${c.id}" style="animation-delay:${Math.min(i, 8) * 35}ms" aria-label="${c.name}">
- <div class="lc-h">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="27"')}<b>${c.name}</b>${openLamp(c)}<span class="muted num">${c.dist}</span></div>
+ <div class="lc-h">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="27"')}<b>${c.name}</b><span class="muted num" title="Жишээ байршлаас">${c.dist}</span></div>
+ ${statusBlock(c)}
  ${c.open ? `<div class="mrow3">${mSeat(c)}${mSound(c.sound)}${mWifi(c.wifi)}</div>` : ''}
- ${sensorPanelHTML(c, true)}<div class="lc-why">${whyLine(c)}</div></button>`
+ ${sensorPanelHTML(c, true)}<div class="lc-why">${whyLine(c)}</div><span class="cs-more" aria-hidden="true">Дэлгэрэнгүй →</span></button>`
 }
 function renderExplore() {
   app.innerHTML = `<section class="ex page" id="ex">
@@ -269,6 +316,7 @@ function renderExplore() {
    <div class="sh-handle" id="shHandle" role="button" tabindex="0" aria-label="Жагсаалтыг томруулах"><span></span></div>
    <div class="ex-top"><h1 class="ex-h">Яг одоо ямар газар хэрэгтэй вэ?</h1>
     <div class="mrow"><label class="srch">${I.search}<input id="q2" placeholder="Кафе хайх" aria-label="Кафе хайх" value=""></label><button class="btn btn-o" id="mFilter" style="padding:10px 14px">${I.filter}<span id="mfCount"></span></button></div>
+    <div class="ex-view" role="group" aria-label="Харагдац сонгох"><button type="button" data-exview="map" aria-pressed="true">${I.map}Газрын зураг</button><button type="button" data-exview="list" aria-pressed="false">${I.grid}Жагсаалт</button></div>
     <label class="srch fdesk">${I.search}<input id="q" placeholder="Кафе хайх" aria-label="Кафе хайх"></label></div>
    <div class="fdesk fbox ex-filters">${filtersHTML(false)}</div>
    <div class="ex-active" id="exActive"></div>
@@ -289,12 +337,23 @@ function renderExplore() {
   $('#exMap').addEventListener('mouseout', e => { const m = e.target.closest('.mk'); if (m) { const c = $(`[data-card="${m.dataset.mk}"]`); c && c.classList.remove('hov') } });
   // mobile sheet
   const side = $('#exSide'), h = $('#shHandle'); let sd = null;
-  const setFull = v => { side.classList.toggle('full', v); h.setAttribute('aria-label', v ? 'Жагсаалтыг багасгах' : 'Жагсаалтыг томруулах'); Snd.ui('whoosh') };
+  // Map ⇄ list on phones only moves the sheet: search, filters and the selected café stay as they are.
+  const setFull = v => {
+    side.classList.toggle('full', v); h.setAttribute('aria-label', v ? 'Жагсаалтыг багасгах' : 'Жагсаалтыг томруулах'); Snd.ui('whoosh');
+    $$('[data-exview]', side).forEach(b => b.setAttribute('aria-pressed', (b.dataset.exview === 'list') === v));
+    if (v && selId) pageTasks.timeout(() => $(`[data-card="${selId}"]`)?.scrollIntoView({ block: 'nearest', behavior: Prefs.reduced ? 'auto' : 'smooth' }), 80);
+  };
+  $('.ex-view', side).addEventListener('click', e => { const b = e.target.closest('[data-exview]'); if (b) setFull(b.dataset.exview === 'list') });
   h.addEventListener('click', () => { if (!sd || !sd.moved) setFull(!side.classList.contains('full')) });
   h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFull(!side.classList.contains('full')) } });
   h.addEventListener('pointerdown', e => { sd = { y: e.clientY, full: side.classList.contains('full'), moved: false, h: side.offsetHeight }; h.setPointerCapture(e.pointerId) });
-  h.addEventListener('pointermove', e => { if (!sd) return; const dy = e.clientY - sd.y; if (Math.abs(dy) > 6) sd.moved = true; if (!sd.moved) return; side.classList.add('drag'); const base = sd.full ? 0 : sd.h - 236; side.style.transform = `translateY(${clamp(base + dy, 0, sd.h - 120)}px)` });
+  h.addEventListener('pointermove', e => { if (!sd) return; const dy = e.clientY - sd.y; if (Math.abs(dy) > 6) sd.moved = true; if (!sd.moved) return; side.classList.add('drag'); const base = sd.full ? 0 : sd.h - (parseFloat(getComputedStyle(side).getPropertyValue('--peek')) || 236); side.style.transform = `translateY(${clamp(base + dy, 0, sd.h - 120)}px)` });
   h.addEventListener('pointerup', e => { if (!sd) return; side.classList.remove('drag'); side.style.transform = ''; if (sd.moved) { const dy = e.clientY - sd.y; setFull(sd.full ? dy < 80 : dy < -60) } pageTasks.timeout(() => sd = null, 0) });
+  // The list scrolls vertically; while the sheet is low, an upward swipe on it first opens it.
+  let ty = null;
+  side.addEventListener('touchstart', e => { ty = side.classList.contains('full') ? null : e.touches[0].clientY }, { passive: true });
+  side.addEventListener('touchmove', e => { if (ty != null && ty - e.touches[0].clientY > 14 && !e.target.closest('#shHandle')) { ty = null; setFull(true) } }, { passive: true });
+  list.addEventListener('wheel', e => { if (e.deltaY > 0 && !side.classList.contains('full') && isMobile()) setFull(true) }, { passive: true });
   $('#mFilter').onclick = () => { Snd.ui('whoosh'); openModal(`<div class="mdl-h"><h2>Шүүлтүүр</h2><button class="pv-x" data-close aria-label="Хаах" style="margin-left:auto">${I.x}</button></div><div style="display:flex;flex-direction:column;gap:18px">${filtersHTML(true)}</div><div style="display:flex;gap:10px;margin-top:22px"><button class="btn btn-g" data-reset>Цэвэрлэх</button><button class="btn btn-p" data-close style="flex:1" id="mfApply">Үр дүн харах</button></div>`) };
   if (selId) pageTasks.timeout(() => selectCafe(selId, 'list', true), 60);
 }
@@ -315,7 +374,7 @@ function updateExplore() {
   const res = CAFES.filter(matches); const set = new Set(res.map(c => c.id));
   const list = $('#exList'); if (!list) return;
   const sorted = [...res].sort((a, b) => (b.open - a.open) || (freePct(b) - freePct(a)));
-  list.innerHTML = sorted.length ? sorted.map(listCard).join('') : `<div class="empty">${emptyArt()}<b>Тохирох кафе олдсонгүй</b>Шүүлтүүрээ сулруулаад дахин үзээрэй.<br><br><button class="btn btn-o" data-reset>Шүүлтүүр цэвэрлэх</button></div>`;
+  list.innerHTML = sorted.length ? sorted.map(listCard).join('') : emptyHTML();
   $('#exActive').innerHTML = activeHTML(res.length); const mf = $('#mfCount'); if (mf) mf.textContent = activeCount() ? ' ' + activeCount() : '';
   const ap = $('#mfApply'); if (ap) ap.textContent = `${res.length} кафе харах`;
   mapCtl && (mapCtl.dim(set), mapCtl.hits(F.q.trim() ? set : null))
@@ -323,11 +382,12 @@ function updateExplore() {
 function emptyArt() { return `<svg viewBox="0 0 90 90"><ellipse cx="45" cy="76" rx="30" ry="5" fill="#EFE3D1"/><path d="M22 34h40v18a20 20 0 0 1-20 20h0a20 20 0 0 1-20-20z" fill="#FFF9EC" stroke="#7B542F" stroke-width="3"/><path d="M62 38h5a7 7 0 0 1 0 14h-5" fill="none" stroke="#7B542F" stroke-width="3"/><circle cx="35" cy="48" r="2.5" fill="#7B542F"/><circle cx="49" cy="48" r="2.5" fill="#7B542F"/><path d="M36 60c3-3 9-3 12 0" stroke="#7B542F" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>` }
 function previewHTML(c) {
   const t = tone(c);
-  return `<div class="pv-h"><div><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${c.walk} мин · ${c.hours}</div></div><div class="pv-btns">${favBtn(c.id)}${cmpBtn(c.id)}<button class="pv-x" data-pvclose aria-label="Хаах">${I.x}</button></div></div>
+  return `<div class="pv-h"><div><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${walkMeta(c)}</div></div><div class="pv-btns">${favBtn(c.id)}${cmpBtn(c.id)}<button class="pv-x" data-pvclose aria-label="Хаах">${I.x}</button></div></div>
+ ${statusBlock(c)}
  <div class="tags">${tagPills(c)}</div>
  ${c.open ? `<div class="pv-mood ${t}">${mood(c)}</div>
  <div class="pv-ms"><div title="Сул суудал · ${crowdCat(c.occ)[0]}">${seatRow(c.occ)}<b class="num">${freePct(c) == null ? '—' : freePct(c) + '%'}</b><small>сул</small></div><div title="${SS[c.sound].t}"><span class="sg">${ssGlyph(c.sound)}</span><b>${SS[c.sound].short}</b><small>дуу</small></div><div title="${WIFI_S[c.wifi]}">${wifiSVG(c.wifi, 24)}<b>${WIFI[c.wifi]}</b><small>Wi-Fi</small></div></div>` : `<div class="pv-closed"><b style="display:block;color:var(--ink)">${c.status_text || `Хаалттай · ${c.opens} нээгдэнэ`}</b></div>`}
- ${sensorPanelHTML(c, true)}<div class="pv-go"><span>Кафе дотор харах</span>${I.arr}</div>`
+ ${sensorPanelHTML(c, true)}${dataMode(c) === 'demo' ? `<button class="pv-dir" disabled title="Демо кафе: байршил нь зохиомол">${I.walk} Чиглэл авах · ДЕМО байршил</button>` : `<a class="pv-dir" href="${directionsUrl(c)}" target="_blank" rel="noopener">${I.walk} Чиглэл авах</a>`}<div class="pv-go"><span>Кафе дотор харах</span>${I.arr}</div>`
 }
 function selectCafe(id, from, silent) {
   const ex = $('#exMap'); if (!ex) return;
@@ -360,28 +420,45 @@ function renderCafes() {
   $('#mfo').onclick = () => { $('#fpanel').classList.toggle('mopen'); Snd.ui('whoosh') };
   refreshResults = updateCafes; updateCafes()
 }
-function updateCafes() { const res = CAFES.filter(matches).sort((a, b) => (b.open - a.open) || (freePct(b) - freePct(a))); $('#cgrid').innerHTML = res.length ? res.map(cafeCard).join('') : `<div class="empty" style="grid-column:1/-1">${emptyArt()}<b>Тохирох кафе олдсонгүй</b><br><button class="btn btn-o" data-reset>Шүүлтүүр цэвэрлэх</button></div>`; $('#cfCount').textContent = `${res.length} кафе олдлоо · сул суудлаар эрэмбэлсэн`; $('#exActive').innerHTML = activeHTML(res.length); $('#mfc').textContent = activeCount() ? '· ' + activeCount() : '' }
+function updateCafes() { const res = CAFES.filter(matches).sort((a, b) => (b.open - a.open) || (freePct(b) - freePct(a))); $('#cgrid').innerHTML = res.length ? res.map(cafeCard).join('') : emptyHTML(' style="grid-column:1/-1"'); $('#cfCount').textContent = `${res.length} кафе олдлоо · сул суудлаар эрэмбэлсэн`; $('#exActive').innerHTML = activeHTML(res.length); $('#mfc').textContent = activeCount() ? '· ' + activeCount() : '' }
 
 /* ---------- cafe detail ---------- */
+// Phones: a small hand-drawn arrow curves down onto each goal tag (alternating sides).
+const tagArrow = i => `<svg class="cd-arrow" viewBox="0 0 40 34" aria-hidden="true" focusable="false"><path d="${i % 2 ? 'M8 2C20 6 27 16 22 30' : 'M32 2C20 6 13 16 18 30'}"/><path d="${i % 2 ? 'M15 24l7 7 5-8' : 'M12 23l6 8 7-7'}"/></svg>`;
 function renderCafe(id) {
   const c = byId(id); if (!c) { app.innerHTML = `<div class="wrap empty">${emptyArt()}<b>Кафе олдсонгүй</b><a class="btn btn-o" href="#explore">Газрын зураг руу буцах</a></div>`; return }
   selId = id; cdCafe = c;
   app.innerHTML = `<div class="wrap page"><div class="skel" style="height:150px;margin-top:24px"></div><div class="skel" style="height:420px;margin-top:20px"></div></div>`;
   pageTasks.timeout(() => { if (location.hash === '#cafe-' + id) buildCafe(c) }, Prefs.reduced ? 0 : 380)
 }
+// First screen of a café: is it open, is there a seat, how loud / Wi-Fi, how fresh, and how to get there.
+function summaryHTML(c) {
+  const o = { staleAfterSec: stale() }, op = openState(c), seat = seatState(c, o), noise = noiseState(c, o), wifi = wifiState(c);
+  const dir = dataMode(c) === 'demo'
+    ? `<button class="btn btn-p cds-dir" disabled title="Демо кафе: байршил нь зохиомол">${I.walk} Чиглэл авах · ДЕМО байршил</button>`
+    : `<a class="btn btn-p cds-dir" href="${directionsUrl(c)}" target="_blank" rel="noopener">${I.walk} Чиглэл авах</a>`;
+  return `<div class="cds-main">
+   <span class="cs-open${op.open ? ' on' : ''}">${openLamp(c)}${escapeHTML(op.text)}</span>
+   <span class="cds-row${seat.known ? '' : ' unk'}">${I.seat}<span><b>Суудал:</b> ${escapeHTML(seat.text)}</span></span>
+   ${c.open ? `<span class="cds-row">${wifiSVG(wifi.known ? (dataMode(c) === 'demo' ? c.wifi : c.live?.wifi_level || c.wifi) : 0, 18)}<span>${escapeHTML(noise.short)} · ${escapeHTML(wifi.short)}<small>${escapeHTML(wifi.source)}</small></span></span>` : ''}
+   ${trustHTML(c, o)}
+  </div>
+  <div class="cds-go">${dir}${c.walk != null ? `<small>${walkText(c)}</small>` : ''}</div>`;
+}
 function buildCafe(c) {
   sensorHistoryView?.destroy(); sensorHistoryView = null;
-  liveNoiseView?.destroy(); liveNoiseView = null;
+  liveNoiseView?.destroy(); liveNoiseView = null; dropCust();
   const t = tone(c), fp_ = freePct(c);
   const legend = `<div class="plan-legend"><span><i class="lg-seat"></i>Сул</span><span><i class="lg-seat o"></i>Хүнтэй</span><span><i class="lg-seat u">?</i>Мэдээлэлгүй</span></div>`;
   app.innerHTML = `<div class="page"><div class="wrap cd">
  <div class="cd-head roof2">
-  <svg class="roof-svg" viewBox="0 0 1000 210" preserveAspectRatio="none" aria-hidden="true"><g class="chim"><rect x="742" y="46" width="42" height="90" fill="#B6771D"/><rect x="736" y="38" width="54" height="12" rx="3" fill="#7B542F"/></g><path d="M90 207 500 10l410 197z" fill="#FFCF71"/><path d="M70 208 500 5l430 203" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/></svg>
-  <a class="ibtn back" href="#explore" aria-label="Газрын зураг руу буцах" title="Газрын зураг">${I.map}</a>
+  <svg class="roof-svg" viewBox="0 0 1000 210" preserveAspectRatio="none" aria-hidden="true"><g class="chim"><rect x="742" y="46" width="42" height="90" fill="#B6771D"/><rect x="736" y="38" width="54" height="12" rx="3" fill="#7B542F"/></g><path class="rf-tri" d="M90 207 500 10l410 197z" fill="#FFCF71"/><path class="rf-tri" d="M70 208 500 5l430 203" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/><path class="rf-trap" d="M40 207 170 26h660l130 181z" fill="#FFCF71"/><path class="rf-trap" d="M18 208 166 18h668l148 190" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/></svg>
+  <a class="ibtn back" href="#explore" data-back aria-label="Буцах" title="Буцах"><span class="back-ic">${I.arr}</span></a>
   <div class="cd-act">${favBtn(c.id)}${cmpBtn(c.id)}</div>
   <div class="cd-title"><h1>${c.name}</h1>${c.open ? `<p class="mood-line ${t}" id="moodLine">${mood(c)}</p>` : `<p class="mood-line">${c.note || ''}</p>`}
-   <div class="cd-pills">${openLamp(c)}<span class="tagp2 num">${I.clock}${c.hours}</span><span class="tagp2 num">${I.walk}${c.walk} мин</span>${tagPills(c)}<span id="cdMode">${modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</span></div></div>
+   <div class="cd-pills"><span class="tagp2 num">${I.clock}${c.hours}</span><span class="cd-tags">${c.tags.map((t, i) => `<span class="cd-tag">${tagArrow(i)}${tagPills({ tags: [t] })}</span>`).join('')}</span><span id="cdMode">${modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</span></div></div>
  </div>
+ <section class="card cd-summary" id="cdSummary" aria-label="Товч мэдээлэл" aria-live="polite">${summaryHTML(c)}</section>
  <section id="publicSensor" ${c.live?.sensor ? 'class="card"' : ''}>${sensorPanelHTML(c, false, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</section>
  ${c.open ? `<div class="cd-grid">
   <section class="card plan-card" aria-label="Кафены зураглал">
@@ -392,6 +469,7 @@ function buildCafe(c) {
     <div id="seatInfo"></div></div></div>
    <div id="viewTable" hidden>${tableHTML(c)}</div>
   </section>
+  <h2 class="cd-more-h">Дэлгэрэнгүй</h2>
   <div class="side-stack">
    <div class="cd-fresh" id="cdFresh" aria-live="polite">${freshnessHTML(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</div>
    <section class="card mcard seatcard"><h3>${I.seat} Сул суудал</h3><div class="sc-row"><div class="big-pct"><b class="num" id="freePct">${fp_ == null ? '—' : fp_ + '%'}</b><span id="crowdLab">${fp_ == null ? 'Суудал хэмжээгүй' : crowdCat(c.occ)[0]}</span></div><small class="muted num" id="freeSub"></small></div><div class="chairs" id="chairs" aria-hidden="true"></div></section>
@@ -405,20 +483,22 @@ function buildCafe(c) {
    <input type="range" id="teSl" min="8" max="22" step="1" value="${nowHour()}" aria-label="Цаг сонгох">
   </section>
  </div>`: `<div class="card" style="margin-top:20px;text-align:center;padding:40px">${emptyArt()}<h2 style="margin:10px 0">${c.status_text ? 'Мэдээлэл хүлээгдэж байна' : 'Одоо хаалттай'}</h2><p class="muted">${closedText(c)}.</p><a class="btn btn-p" href="#explore">Нээлттэй кафе хайх</a></div>`}
+ <div class="cd-cust"><section class="card going-card" id="goingPanel" aria-label="Очих"></section><section class="card menu-card" id="cafeMenu" aria-label="Цэс"></section></div>
  ${dataMode(c) !== 'demo' ? '<section class="card" id="publicSensorHistory"></section>' : ''}
  </div>${footer()}</div>`;
   if ($('#publicSensorHistory')) sensorHistoryView = mount(SensorHistory, $('#publicSensorHistory'), { cafeId: c.id, source: c.live?.sensor?.dataSource || 'real', role: 'public' });
+  mountCust(lazy.going, $('#goingPanel'), { cafe: c }); mountCust(lazy.menuView, $('#cafeMenu'), { cafeId: c.id });
   if (!c.open) return;
   syncDetailNoise(c); renderWF(c.wifi, c);
   // floor plan
-  fp = new FloorPlan($('#planWrap'), { ...c, occ: c.occ ?? 40 }, { onStats: updSeats, onEvent: logEvent, onSeat: seatInfo, sound: c.sound });
+  fp = new FloorPlan($('#planWrap'), { ...c, occ: c.occ ?? 40 }, { onStats: updSeats, onEvent: logEvent, onSeat: seatInfo, sound: c.sound, portrait: isMobile() });
   syncDetailPlan(c);
   $$('[data-pz]').forEach(b => b.onclick = () => { Snd.ui('click'); fp.setZoom(b.dataset.pz === 'in' ? 1.4 : 1 / 1.4) });
   $('#addG').onclick = () => { if (!fp.arrive(true)) { Snd.ui('err'); toast('Сул сандал үлдсэнгүй') } else Snd.ui('click') };
   $('#remG').onclick = () => { if (!fp.depart(true)) { Snd.ui('err'); toast('Суусан зочин алга') } };
   // tabs
   const seg = $('#viewSeg'); const moveInd = () => { const b = $('[aria-selected="true"]', seg); const ind = $('.ind-s', seg); ind.style.width = b.offsetWidth + 'px'; ind.style.transform = `translateX(${b.offsetLeft - 4}px)` }; moveInd();
-  seg.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; Snd.ui('click'); $$('[data-view]', seg).forEach(x => x.setAttribute('aria-selected', x === b)); moveInd(); $('#viewPlan').hidden = b.dataset.view !== 'plan'; $('#viewTable').hidden = b.dataset.view !== 'table'; if (b.dataset.view === 'table') $('#viewTable').innerHTML = tableHTML(c, fp.stats()) });
+  seg.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; Snd.ui('click'); $$('[data-view]', seg).forEach(x => x.setAttribute('aria-selected', x === b)); moveInd(); $('#viewPlan').hidden = b.dataset.view !== 'plan'; $('#viewTable').hidden = b.dataset.view !== 'table'; $('.plan-card .plan-legend').classList.toggle('off', b.dataset.view !== 'plan'); if (b.dataset.view === 'table') $('#viewTable').innerHTML = tableHTML(c, fp.stats()) });
   $$('[data-ssl]').forEach(b => b.onclick = () => { Snd.ui('tick'); $$('[data-ssl]').forEach(x => x.classList.toggle('on', x === b)); renderSS(+b.dataset.ssl); fp.sound = +b.dataset.ssl });
   syncDetailNoise(c);
   initTE(c);
@@ -432,10 +512,9 @@ function syncDetailPlan(c) {
   const table = $('#viewTable'); if (table && !table.hidden) table.innerHTML = tableHTML(c, fp.stats());
   for (const id of ['addG', 'remG']) { const button = $('#' + id); if (button) button.disabled = fp.telemetryControlled; }
   const note = $('[data-plan-reliability]');
-  if (note) note.hidden = dataMode(c) === 'demo';
   if (note) note.textContent = fp.telemetryControlled
     ? `${fp.observedPeople == null ? 'Хүний тоо тодорхойгүй · unknown occupancy.' : `Ажиглагдсан хүмүүс: ${fp.observedPeople}.`} Байрлал нь зөвхөн дүрслэл · illustrative positions, бодит байршил хянаагүй. Суудлын төлөв тодорхойгүй. Суух болон гарах хөдөлгөөн нь жишээ анимац; бодит сул суудал тогтоохгүй.`
-    : dataMode(c) === 'demo' ? '' : 'Дүрслэл / simulation · SIMULATED: хүмүүс болон суудлын байрлал нь жишээ.';
+    : dataMode(c) === 'demo' ? 'Дүрслэл: хүмүүс болон суудлын байрлал нь жишээ анимац — бодит хүмүүсийн байрлал биш.' : 'Дүрслэл / simulation · SIMULATED: хүмүүс болон суудлын байрлал нь жишээ.';
 }
 function syncDetailNoise(c) {
   const root = $('#ssBox'); if (!root) return;
@@ -455,12 +534,14 @@ function tickFreshness() {
     if (cdCafe) {
       syncDetailPlan(cdCafe); if (dataMode(cdCafe) !== 'demo') syncDetailNoise(cdCafe);
       const sensor = $('#publicSensor'); if (sensor) sensor.innerHTML = sensorPanelHTML(cdCafe, false, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
+      refreshSummary(cdCafe);
       const badge = $('#cdMode'); if (badge) badge.innerHTML = modeBadge(cdCafe, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
       const fresh = $('#cdFresh'); if (fresh && hasMeasurements(cdCafe)) fresh.innerHTML = freshnessHTML(cdCafe, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
     }
     tickFreshness();
   }, 1000);
 }
+function refreshSummary(c) { const el = $('#cdSummary'); if (!el) return; const html = summaryHTML(c); if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html } }
 // A new measurement for the open café: update indicators in place, never rebuild the simulation.
 function applyLiveToDetail(c) {
   // Initial polling may finish before the scheduled detail render. That render
@@ -469,6 +550,7 @@ function applyLiveToDetail(c) {
   sensorHistoryView?.setProps({ source: c.live?.sensor?.dataSource || 'real' });
   const sensor = $('#publicSensor'); if (sensor) { sensor.innerHTML = sensorPanelHTML(c, false, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 }); sensor.className = c.live?.sensor ? 'card' : ''; }
   if (!$('#planWrap') && c.open && hasMeasurements(c)) { buildCafe(c); return; }
+  refreshSummary(c);
   if (!$('#cdFresh')) return;
   $('#cdFresh').innerHTML = freshnessHTML(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 }); $('#cdMode').innerHTML = modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 });
   const ml = $('#moodLine'); if (ml && c.open) ml.textContent = mood(c);
@@ -479,8 +561,8 @@ function applyLiveToDetail(c) {
   if (c.wifi) renderWF(c.wifi, c);
   if (fp && c.occ != null) fp.setTarget(c.occ, false);
 }
-function renderSS(l) { if (!l) { $('#ssBox').innerHTML = '<p class="muted">SPL хэмжилтгүй. dBFS утгыг мэдрэгчийн хэсгээс харна уу.</p>'; return; } $('#ssBox').innerHTML = `<div class="ssbig"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 84)}</div><div><b>${SS[l].t}</b><small>${SS[l].s}</small></div><button class="play icon" data-play="${l}" aria-label="Сонсох" title="Сонсох">${I.play}</button></div>` }
-function renderWF(l, c) { $('#wfBox').innerHTML = `<div class="wfbig">${wifiSVG(l, 52)}<div><b>${WIFI[l]}${c.mbps ? ` <span class="num mb">${c.mbps} Mbps</span>` : ''}</b><small>${WIFI_S[l]}</small></div></div>` }
+function renderSS(l) { if (!l) { $('#ssBox').innerHTML = '<p class="muted">SPL хэмжилтгүй. dBFS утгыг мэдрэгчийн хэсгээс харна уу.</p>'; return; } $('#ssBox').innerHTML = `<div class="ssbig"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 84)}</div><div><b>${SS[l].t}</b><small>${SS[l].s}</small></div></div><button class="play ss-try" data-play="${l}">${I.play} Орчны дууны жишээ сонсох</button>` }
+function renderWF(l, c) { $('#wfBox').innerHTML = `<div class="wfbig">${wifiSVG(l, 52)}<div><b>${WIFI[l]}${c.mbps ? ` <span class="num mb">${c.mbps} Mbps</span>` : ''}</b><small>${WIFI_S[l]}</small></div></div><p class="wf-src">${escapeHTML(wifiState(c).source)}</p>` }
 function updSeats(s) {
   const measured = cdCafe && measuredSeats(cdCafe); if (measured) s = measured;
   if (cdCafe && dataMode(cdCafe) !== 'demo' && !measured) { const el = $('#freePct'); if (el) { el.textContent = '—'; $('#crowdLab').textContent = 'Суудал хэмжээгүй'; $('#freeSub').textContent = 'Хүний тооноос сул суудал тооцохгүй'; $('#chairs').innerHTML = ''; } return; }
@@ -565,9 +647,14 @@ function renderPartner() {
  <section class="sec"><div class="sec-h"><h2>Хамтран ажилласнаар</h2></div><div class="g4">${[[I.people, 'Илүү олон хэрэглэгч', 'Сурах, ажиллах газар хайж буй хэрэглэгчдэд таны кафе газрын зураг дээр харагдана.'], [I.clock, 'Бодит цагийн мэдээлэл', 'Сул суудал, дуу чимээ, Wi-Fi-гаа хэрэглэгчиддээ шууд харуулна.'], [I.chart, 'Ачааллын тойм', 'Өдрийн аль цагт ачаалал ихтэй, тайван байдгийг харж, үйлчилгээгээ төлөвлөнө.'], [I.star, 'Брэндээ таниулах', 'Кафены онцлог, тав тухтай орчноо олон хүнд таниулна.']].map(([ic, b, s]) => `<div class="icard"><span class="ic">${ic}</span><b>${b}</b><span>${s}</span></div>`).join('')}</div>
   <p style="text-align:center;margin-top:18px"><a class="btn btn-o" href="#staff">Ажилтны шууд хяналтыг үзэх →</a></p></section>
  <section class="sec" id="pform"><div class="sec-h"><h2>Хамтран ажиллах хүсэлт</h2></div>
- ${pendingClaimHTML()}
- ${partnerFormHTML()}</section></div>${footer()}</div>`;
-  partnerCleanup = bindPartnerForm($('#pf'));
+ <div id="pformBody"><div class="skel" style="height:420px"></div></div></section></div>${footer()}</div>`;
+  // The application form (photos, validation, owner sign-up) loads with this page only.
+  const token = navToken;
+  lazy.partner().then(({ pendingClaimHTML, partnerFormHTML, bindPartnerForm }) => {
+    if (token !== navToken) return;
+    $('#pformBody').outerHTML = pendingClaimHTML() + partnerFormHTML();
+    partnerCleanup = bindPartnerForm($('#pf'));
+  }).catch(() => { if (token === navToken) $('#pformBody').innerHTML = '<p class="muted">Маягтыг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.</p>' });
 }
 
 /* ---------- staff ---------- */
@@ -595,7 +682,9 @@ function renderStaff() {
    <div class="seg" id="musSeg"><span class="ind-s"></span><button data-mus="calm" aria-selected="true">Тайван</button><button data-mus="mid" aria-selected="false">Дунд</button><button data-mus="up" aria-selected="false">Эрч хүчтэй</button></div>
    <div style="display:flex;gap:16px;align-items:center"><div class="eq" id="eq">${'<i></i>'.repeat(6)}</div><div><b style="color:#fff" id="musV">Хөгжмийн дуу 32%</b><br><small id="musR">Санал болгосон: орчны чимээ аль хэдийн өндөр байна.</small></div></div>
    <small style="color:#BFAE95">Тоног төхөөрөмжийг удирдахгүй — зөвхөн ажилтанд санал болгоно.</small></section>
- </div></div></div>${footer()}</div>`;
+ </div></div>
+ <div class="st-cust"><section class="card" id="stIncoming" aria-label="Ирэх зочид"></section><section class="card" id="stMenu" aria-label="Цэс засах"></section></div></div>${footer()}</div>`;
+  mountCust(lazy.incoming, $('#stIncoming'), { cafeId: c.id }); mountCust(lazy.menuEditor, $('#stMenu'), { cafeId: c.id, editor: 'staff' });
   fp = new FloorPlan($('#planWrap'), { ...c, occ: 78 }, { sound: 4, onStats: s => { const pct = Math.round((s.total - s.free) / s.total * 100); $('#occC').style.strokeDashoffset = 377 - 377 * pct / 100; animNum($('#occT'), pct, '%'); $('#stFree').textContent = Math.round(s.free / s.total * 100) + '%' } });
   const ts = [{ t: 'Wi-Fi ажиллахгүй', e: '2 цаг' }]; let exp = '2 цаг';
   const rts = () => { $('#tsList').innerHTML = ts.length ? ts.map((x, i) => `<div class="tstat"><div><b>${x.t}</b><small>${x.e}-ийн дараа автоматаар дуусна</small></div><button class="btn btn-g" data-tsx="${i}" style="color:var(--terraT)">Цуцлах</button></div>`).join('') : '<small class="muted">Идэвхтэй түр төлөв алга.</small>'; $$('[data-tsx]').forEach(b => b.onclick = () => { ts.splice(+b.dataset.tsx, 1); Snd.ui('click'); rts() }) }; rts();
@@ -611,8 +700,13 @@ function renderStaff() {
 // the original pages keep their render functions. Every navigation first releases
 // the previous page's timers, frames, simulation, map, audio and listeners.
 const page = (Component, props) => () => { app.innerHTML = ''; pageComp = mount(Component, app, props) };
+const lazyPage = (load, props) => () => {
+  const token = navToken; app.innerHTML = '<div class="wrap page"><div class="skel" style="height:150px;margin-top:24px"></div></div>';
+  load().then(Component => { if (token === navToken) { app.innerHTML = ''; pageComp = mount(Component, app, props) } }).catch(() => { if (token === navToken) app.innerHTML = loadFailed() });
+};
 function teardown() {
-  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } refreshResults = () => { }; closeModal();
+  navToken++;
+  pageTasks.clear(); liveNoiseView?.destroy(); liveNoiseView = null; dropCust(); Snd.stopAmb(); if (fp) { fp.destroy(); fp = null } if (mapCtl) { mapCtl.destroy(); mapCtl = null } if (homeMini) { homeMini.destroy(); homeMini = null } if (homeMobileOff) { homeMobileOff(); homeMobileOff = null } if (deskRecOff) { deskRecOff(); deskRecOff = null } if (homeOffscreenOff) { homeOffscreenOff(); homeOffscreenOff = null } refreshResults = () => { }; closeModal();
   if (pageComp) { pageComp.destroy(); pageComp = null } if (partnerCleanup) { partnerCleanup(); partnerCleanup = null } cdCafe = null;
 }
 const router = createRouter({
@@ -624,7 +718,7 @@ const router = createRouter({
     document.body.classList.toggle('on-explore', key === 'explore');
     if (key !== 'explore') $$('.pv').forEach(p => p.remove());
   },
-  afterEach(to) { if (to.name !== 'explore') window.scrollTo(0, 0); renderTray() },
+  afterEach(to) { navDepth++; if (to.name !== 'explore') window.scrollTo(0, 0); renderTray() },
   routes: [
     { path: '', name: 'home', enter: renderHome },
     { path: 'home', name: 'home', enter: renderHome },
@@ -635,14 +729,17 @@ const router = createRouter({
     { path: 'partner', name: 'partner', enter: renderPartner },
     { path: 'staff', name: 'staff', enter: renderStaff },
     { path: 'account', name: 'account', enter: page(AccountPage, { favorites: () => [...favs].map(byId).filter(Boolean), cafeCard }) },
-    { path: 'owner', name: 'owner', enter: page(OwnerPage) },
-    { path: 'admin', name: 'admin', enter: page(AdminPage) }
+    { path: 'owner', name: 'owner', enter: lazyPage(lazy.owner) },
+    { path: 'admin', name: 'admin', enter: lazyPage(lazy.admin) }
   ]
 });
 const route = () => router.resolve();
+// The café page's back arrow returns to wherever the visitor came from (map, list, home);
+// opened directly from a link, it goes to the map.
+document.addEventListener('click', e => { if (e.target.closest('[data-back]') && navDepth > 1) { e.preventDefault(); Snd.ui('click'); history.back() } });
 document.addEventListener('click', e => { const a = e.target.closest('a[href^="#"]'); if (a && a.getAttribute('href') === '#pform') { e.preventDefault(); $('#pform').scrollIntoView({ behavior: Prefs.reduced ? 'auto' : 'smooth' }); return } if (a && !e.defaultPrevented) { Snd.ui('click') } });
-document.addEventListener('click', e => { if (e.target.closest('[data-owner-signup]')) { Snd.ui('whoosh'); openOwnerSignup() } });
-let lastMobile = isMobile(); window.addEventListener('resize', () => { const m = isMobile(); if (m !== lastMobile) { lastMobile = m; if ((location.hash || '').startsWith('#explore')) route() } });
+document.addEventListener('click', e => { if (e.target.closest('[data-owner-signup]')) { Snd.ui('whoosh'); lazy.partner().then(m => m.openOwnerSignup()) } });
+let lastMobile = isMobile(); window.addEventListener('resize', () => { const m = isMobile(); if (m !== lastMobile) { lastMobile = m; const h = location.hash || ''; if (h.startsWith('#explore') || h === '' || h === '#' || h.startsWith('#home')) route() } });
 document.documentElement.classList.toggle('rm', Prefs.reduced);
 configureErrors({ message: 'Энэ хэсгийг харуулахад алдаа гарлаа. Хуудсаа дахин ачаална уу.', render: message => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">${escapeHTML(message)}</p></div></div>` });
 

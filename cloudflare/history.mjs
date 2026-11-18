@@ -25,8 +25,18 @@ export function createSensorHistory(db, config) {
     const o = options(query);
     // A count from overlapping cameras cannot be summed or treated as one series.
     // Default to a single latest reporting device for this cafe/source/range.
-    const deviceId = o.deviceId || (await first(db, `SELECT device_id FROM measurements WHERE cafe_id = ? AND data_source = ?
-      AND message_id IS NOT NULL AND ts >= ? AND ts < ? ORDER BY observed_people IS NOT NULL DESC, ts DESC, id DESC LIMIT 1`, cafeId, o.source, o.from, o.to))?.device_id;
+    const devices = o.deviceId ? [] : await all(db, "SELECT id FROM devices WHERE cafe_id=?", cafeId);
+    const candidates = o.deviceId ? [] : (await Promise.all(devices.map(async d => {
+      const args=[d.id,cafeId,o.source,o.from,o.to];
+      // Two bounded seeks preserve preference for a device with people samples.
+      return await first(db, `SELECT device_id,ts,id,observed_people FROM measurements
+        WHERE device_id=? AND cafe_id=? AND data_source=? AND message_id IS NOT NULL AND ts>=? AND ts<?
+        AND observed_people IS NOT NULL ORDER BY ts DESC,id DESC LIMIT 1`,...args)
+        || await first(db, `SELECT device_id,ts,id,observed_people FROM measurements
+        WHERE device_id=? AND cafe_id=? AND data_source=? AND message_id IS NOT NULL AND ts>=? AND ts<?
+        ORDER BY ts DESC,id DESC LIMIT 1`,...args);
+    }))).filter(Boolean).sort((a,b)=>Number(b.observed_people!=null)-Number(a.observed_people!=null) || b.ts.localeCompare(a.ts) || b.id-a.id);
+    const deviceId=o.deviceId || candidates[0]?.device_id;
     const where = 'cafe_id = ? AND data_source = ? AND device_id = ? AND message_id IS NOT NULL AND ts >= ? AND ts < ?';
     const args = [cafeId, o.source, deviceId || '', o.from, o.to];
     const readings = await all(db, `SELECT * FROM measurements WHERE ${where} ORDER BY ts DESC, id DESC LIMIT ?`, ...args, o.limit);

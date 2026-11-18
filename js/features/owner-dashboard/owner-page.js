@@ -4,7 +4,7 @@
 import { Component, html, raw, readForm, dateTime } from '../../../framework/index.js';
 import { I } from '../../icons.js';
 import { Snd } from '../../audio.js';
-import { SS, WIFI } from '../../cafes.js';
+import { SS, WIFI, byId } from '../../cafes.js';
 import { seatRow, ssGlyph, wifiSVG } from '../../components/atmosphere.js';
 import { FloorPlan } from '../../simulation/floor-plan.js';
 import { LAYOUTS } from '../../simulation/layouts.js';
@@ -16,6 +16,8 @@ import { platform } from '../../services/platform.js';
 import { toast } from '../../components/feedback.js';
 import { openAuth, field } from '../authentication/auth-modal.js';
 import { signInPrompt } from '../account/account.js';
+import { IncomingOrders } from '../going/incoming-orders.js';
+import { MenuEditor } from '../menu/menu-editor.js';
 
 const STATUS_TEXT = {
   submitted: 'Таны хүсэлтийг хүлээн авлаа. Манай баг тантай удахгүй холбогдоно.',
@@ -43,6 +45,12 @@ export function liveTilesHTML(live) {
   return html`${raw(sensorPanelHTML({ live }))}<div class="own-tiles">${seats}${noise}${wifi}</div>`;
 }
 
+// «Юу хийх вэ?» — next steps when data or a device connection is lost.
+const NEXT_STEPS = {
+  load: ['Интернэт холболтоо шалгаад «Дахин оролдох»-г дарна уу.', 'Болохгүй бол хуудсаа дахин ачаална уу.', 'Асуудал үргэлжилбэл LiveSpace-ийн багт хандана уу.'],
+  device: ['Мэдрэгч, камерын цахилгаан залгаатай эсэхийг шалгана уу.', 'Кафены Wi-Fi ажиллаж байгаа, төхөөрөмж сүлжээнд холбогдсон эсэхийг шалгана уу.', 'Төхөөрөмжийг унтрааж асаана уу — холбогдмогц хэмжилт өөрөө үргэлжилнэ.', 'Тасалдал үргэлжилбэл LiveSpace-ийн багт хандана уу.']
+};
+const nextStepsHTML = (kind, note = '') => html`<div class="own-next" role="note"><h3>Юу хийх вэ?</h3><ol>${NEXT_STEPS[kind].map(s => html`<li>${s}</li>`)}</ol>${note ? html`<p class="muted">${note}</p>` : ''}</div>`;
 export class OwnerPage extends Component {
   initialState() { return { cafes: null, error: null, selected: null, saving: false, formErrors: {} }; }
   events() {
@@ -56,17 +64,19 @@ export class OwnerPage extends Component {
   onMount() {
     this.watch(platform.session.store, s => s.user, () => this.load());
     this.listen(document, 'visibilitychange', () => { if (!document.hidden) this.load(); });
-    this.onCleanup(platform.bus.on('cafe:updated', id => { if (this.state.cafes?.some(c => c.id === id)) this.load(); }));
-    this.interval(() => { if (!document.hidden) this.load(); }, Math.min(5000, platform.config.poll_interval_sec * 1000));
+    this.onCleanup(platform.bus.on('cafe:updated', id => { const live=byId(id)?.live;if(live&&this.state.cafes?.some(c=>c.id===id))this.setState({cafes:this.state.cafes.map(c=>c.id===id?{...c,live}:c)}); }));
+    this.interval(() => { if (!document.hidden) this.load(); }, Math.max(30000, platform.config.poll_interval_sec * 1000));
     this.load();
   }
   onDestroy() { this.fp?.destroy(); this.historyView?.destroy(); }
   async load() {
+    if(this.loadingRequest || Date.now()<(this.retryAfter || 0))return;
     if (!platform.online || !platform.session.hasRole('owner', 'admin')) { this.setState({ cafes: null }); return; }
+    this.loadingRequest=true;
     try {
       const { cafes } = await platform.api.get('/owner/cafes');
       this.setState({ cafes, error: null, selected: this.state.selected && cafes.some(c => c.id === this.state.selected) ? this.state.selected : cafes[0]?.id });
-    } catch (error) { this.setState({ error: error.message || 'Алдаа гарлаа' }); }
+    } catch (error) { if(error.status===503)this.retryAfter=Date.now()+900000;this.setState({ error: error.message || 'Алдаа гарлаа' }); } finally {this.loadingRequest=false;}
   }
   async save(form) {
     const cafe = this.current();
@@ -79,7 +89,17 @@ export class OwnerPage extends Component {
     this.setState({ saving: false });
   }
   current() { return this.state.cafes?.find(c => c.id === this.state.selected); }
-  onUpdate() { this.syncPlan(); this.syncHistory(); }
+  onUpdate() { this.syncPlan(); this.syncHistory(); this.syncCustomer(); }
+  // Incoming visitors / pre-orders and the menu editor for the selected café.
+  syncCustomer() {
+    const cafe = this.current(), orders = this.$('[data-own-orders]'), menu = this.$('[data-own-menu]');
+    if (cafe && orders && this.custCafe === cafe.id && this.ordersView?.el === orders) return;
+    this.ordersView?.destroy(); this.menuView?.destroy(); this.ordersView = this.menuView = null; this.custCafe = null;
+    if (!cafe || !orders || !menu) return;
+    this.custCafe = cafe.id;
+    this.ordersView = this.child(IncomingOrders, orders, { cafeId: cafe.id });
+    this.menuView = this.child(MenuEditor, menu, { cafeId: cafe.id, editor: 'owner' });
+  }
   syncHistory() {
     const cafe = this.current(), root = this.$('[data-owner-sensor-history]');
     if (!cafe || !root) return;
@@ -104,7 +124,7 @@ export class OwnerPage extends Component {
     if (!platform.online) return html`<div class="wrap page"><div class="card gate"><h1>Кафе эзэмшигч</h1><p class="muted">Энэ хувилбар сервергүй ажиллаж байгаа тул самбар ашиглах боломжгүй.</p></div></div>`;
     if (!user) return signInPrompt('owner', 'Кафе эзэмшигчийн самбарт нэвтэрнэ үү.');
     if (!platform.session.hasRole('owner', 'admin')) return html`<div class="wrap page"><div class="card gate"><span class="gate-ic">${raw(I.hand)}</span><h1>Кафе эзэмшигч үү?</h1><p class="muted">«Хамтын ажиллагаа» хуудаснаас хүсэлт илгээснээр кафе эзэмшигчийн самбар нээгдэнэ.</p><a class="btn btn-p" href="#partner">Хамтран ажиллах →</a></div></div>`;
-    if (this.state.error) return html`<div class="wrap page"><div class="card gate"><h1>Мэдээлэл ачаалж чадсангүй</h1><p class="muted">${this.state.error}</p><button class="btn btn-o" data-own-retry>Дахин оролдох</button></div></div>`;
+    if (this.state.error) return html`<div class="wrap page"><div class="card gate"><h1>Мэдээлэл ачаалж чадсангүй</h1><p class="muted">${this.state.error}</p>${nextStepsHTML('load')}<button class="btn btn-o" data-own-retry>Дахин оролдох</button></div></div>`;
     const { cafes } = this.state;
     if (!cafes) return html`<div class="wrap page"><div class="skel" style="height:150px;margin-top:24px"></div><div class="skel" style="height:320px;margin-top:20px"></div></div>`;
     if (!cafes.length) return html`<div class="wrap page"><div class="card gate"><span class="gate-ic">${raw(I.hand)}</span><h1>Кафе бүртгэгдээгүй байна</h1><p class="muted">Хамтран ажиллах хүсэлт илгээсний дараа энд харагдана.</p><a class="btn btn-p" href="#partner">Хүсэлт илгээх →</a></div></div>`;
@@ -143,11 +163,15 @@ export class OwnerPage extends Component {
           <div class="card-h"><h2>Мэдрэгч, камер</h2></div>
           ${c.devices.length ? html`<ul class="own-devices">${c.devices.map(d => html`<li><span class="dot ${d.online ? 'on' : ''}"></span><b>${d.label || d.id}</b><small class="muted">${sensorStatusLabel(d.status)} · ${sensorSourceLabel(d.is_test ? 'simulated' : 'real')}${d.last_seen_at ? ` · сүүлд ${dateTime(d.last_seen_at)}` : ''}</small>${raw(deviceDiagnosticsHTML(d))}</li>`)}</ul>`
             : html`<p class="own-msg">Төхөөрөмж хараахан суурилуулаагүй.</p>`}
+          ${c.devices.some(d => !d.online) ? nextStepsHTML('device', 'Энэ хооронд зочдод «Мэдээлэл хуучирсан» гэж харагдана; хуучин тоог шинэ мэт харуулахгүй.') : ''}
         </section>
         <section class="card" data-key="sensor-history"><div data-owner-sensor-history data-preserve data-key="sensor-history-${c.id}"></div></section>
 
         ${c.application?.photos.length ? html`<section class="card own-photos" data-key="photos"><div class="card-h"><h2>Илгээсэн зураг</h2></div>
           <div class="ph-grid">${c.application.photos.map((p, i) => html`<figure class="ph"><img src="${p.url}" alt="Кафены зураг ${i + 1}" loading="lazy" decoding="async"></figure>`)}</div></section>` : ''}
+
+        <section class="card own-orders" data-key="orders"><div data-own-orders data-preserve data-key="orders-${c.id}"></div></section>
+        <section class="card own-menu" data-key="menu"><div data-own-menu data-preserve data-key="menu-${c.id}"></div></section>
 
         <section class="card own-info" data-key="info">
           <div class="card-h"><h2>Кафены мэдээлэл</h2></div>

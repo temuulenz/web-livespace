@@ -31,6 +31,18 @@ python -m http.server 8000 --bind 127.0.0.1
 
 The site detects that no server is present and behaves like the original prototype. Native modules require HTTP serving rather than opening `index.html` directly. The original hash URLs (`#home`, `#explore`, `#cafes`, `#cafe-A`, `#about`, `#partner`, `#staff`) are unchanged. New routes are `#account`, `#owner` and `#admin`.
 
+## Map source
+
+The `#explore` map is a real map of Ulaanbaatar. It uses [MapLibre GL JS](https://maplibre.org/) 4.7.1 (pinned with an integrity hash, loaded from unpkg only on that page; ~210 KB gzipped) and free vector tiles from [OpenFreeMap](https://openfreemap.org/), which are built from OpenStreetMap data. No API key is needed.
+
+- **Look:** `js/map-style.js` copies the drawn map's palette.
+- **Markers, preview card, filters and mobile sheet:** unchanged.
+- **«Та энд»:** appears only after the visitor taps «Миний байршил». The location stays in the browser and is never sent to the server.
+- **Directions:** «Чиглэл авах» opens Google Maps. It is disabled for demo cafés, whose points are fictional and labelled ДЕМО.
+- **Fallback:** if the library, the tiles or WebGL fail, the site automatically shows the original drawn SVG map. The home-page preview always uses the drawing.
+
+To switch tile providers, change `tiles` and `glyphs` in `js/map-config.js` to another OpenMapTiles-schema source. Then add its host to the Content-Security-Policy in `server/lib/http.mjs` and `cloudflare/security.mjs`. OpenFreeMap has no published usage limits but is a donation-funded public service, so use your own tile server or a paid provider for heavy traffic. The «© OpenStreetMap contributors» attribution must stay visible.
+
 ## Code map
 
 | Responsibility | Files |
@@ -43,7 +55,7 @@ The site detects that no server is present and behaves like the original prototy
 | Café display calculations | `js/cafe-metrics.js` |
 | Preferences, filters and favourites | `js/state.js`, `js/storage.js` |
 | SVG artwork and atmosphere components | `js/icons.js`, `js/components/atmosphere.js` |
-| Map rendering and interaction | `js/map.js` |
+| Map rendering and interaction | `js/map.js` (drawn SVG + fallback), `js/map-gl.js` (real map), `js/map-style.js`, `js/map-config.js` |
 | Café simulation (`FloorPlan`) and per-café interior layouts | `js/simulation/floor-plan.js`, `js/simulation/layouts.js` |
 | Web Audio | `js/audio.js` |
 | Route-owned timers, number animations, modals, toasts | `js/lifecycle.js`, `js/animations.js`, `js/components/feedback.js` |

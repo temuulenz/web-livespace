@@ -13,24 +13,27 @@ export class SensorHistory extends Component {
   }
   onMount() {
     this.onCleanup(platform.bus.on('sensor:updated', id => {
-      if (id !== this.props.cafeId || this.refreshPending) return;
+      if (id !== this.props.cafeId || this.refreshPending || document.hidden || Date.now()-(this.lastLoad || 0)<600000) return;
       this.refreshPending = true;
       this.timeout(() => { this.refreshPending = false; this.load(); }, 300);
     }));
-    this.interval(() => { if (!document.hidden) this.load(); }, 10000);
+    this.interval(() => { if (!document.hidden) this.load(); }, 600000);
     this.load();
   }
   onUpdate() {
     if (!this.userSource && this.props.source && this.state.source !== this.props.source) { this.setState({ source: this.props.source, data: null }); this.load(); }
   }
   async load() {
+    if(Date.now()<(this.retryAfter || 0))return;
+    if(this.loading){this.reloadPending=true;return;}
+    this.loading=true;this.lastLoad=Date.now();
     const request = this.request = (this.request || 0) + 1;
     const { source, interval } = this.state;
     const prefix = this.props.role === 'admin' ? '/admin' : this.props.role === 'owner' ? '/owner' : '';
     try {
       const data = await platform.api.get(`${prefix}/cafes/${encodeURIComponent(this.props.cafeId)}/sensor-history?source=${source}&interval=${interval}&limit=50`);
       if (this.mounted && this.request === request) this.setState({ data, error: null });
-    } catch (error) { if (this.mounted && this.request === request) this.setState({ error: error.message }); }
+    } catch (error) { if(error.status===503)this.retryAfter=Date.now()+900000; if (this.mounted && this.request === request) this.setState({ error: error.message }); } finally {this.loading=false;if(this.reloadPending){this.reloadPending=false;if(this.mounted)this.load();}}
   }
   render() {
     const { source, interval, data, error } = this.state;

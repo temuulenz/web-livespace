@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 // Starts a real LiveSpace server on a random port with a throw-away database.
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -33,4 +34,4 @@ export async function startServer(overrides = {}) {
 }
 
 // Smallest bytes that pass the JPEG signature check.
-export const tinyJpeg = (n = 0) => 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(64 + n, 7)]).toString('base64');
+export const tinyJpeg = () => 'data:image/jpeg;base64,' + readFileSync(new URL('../fixtures/upload-valid.jpg',import.meta.url)).toString('base64');
