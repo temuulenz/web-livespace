@@ -1,9 +1,9 @@
 // "Хамтран ажиллах" application form and the café-owner account step that follows it.
 //
-// The form is split into three steps: 1) contact person, 2) café details, 3) photos.
-// The original form fields (f1–f7) keep their ids and look; the additions are the
-// address, opening hours, seats, purposes, a description and 3–4 photographs that
-// our team uses to build the café's own animated interior.
+// The form is split into three steps: 1) the essentials (name, contact, phone, e-mail,
+// location, hours), 2) about the café, 3) photos. The fields keep their ids (f1–f12).
+// The server still requires every starred field and 3–4 photos; nothing is auto-filled
+// to get around that (see docs/BACKEND_REQUESTS.md for the recommended relaxations).
 import { Component, html, raw, readForm, escapeHTML } from '../../../framework/index.js';
 import { $, $$ } from '../../dom.js';
 import { I } from '../../icons.js';
@@ -17,42 +17,54 @@ import { field } from '../authentication/auth-modal.js';
 const PURPOSES = [['Сурах', I.book], ['Ажиллах', I.laptop], ['Найзуудтай', I.people], ['Тухтай', I.sofa]];
 const MAX_PHOTOS = 4, MIN_PHOTOS = 3;
 
+// Жишээ өгүүлбэр: эзэмшигч дарж оруулаад өөрөө засна.
+const EXAMPLES = ['Чимээгүй, хичээл хийхэд тохиромжтой', 'Найзуудтайгаа уулзахад тухтай', 'Залгуур, Wi-Fi сайтай, ажиллахад тохиромжтой'];
+const STEP_TIME = ['~3 минут', '~2 минут', '~1 минут'];
+
 export function partnerFormHTML() {
-  const text = ([id, label, placeholder, type, req]) => `<div class="fld"><label for="${id}">${label}</label><input id="${id}" type="${type}" placeholder="${placeholder}" ${req ? 'required' : ''}><span class="em"></span></div>`;
+  const req = '<span class="pf-req" aria-hidden="true">*</span>';
+  const text = ([id, label, placeholder, type, req_, extra = '']) => `<div class="fld"><label for="${id}">${label}${req_ ? req : ''}</label><input id="${id}" type="${type}" placeholder="${placeholder}" ${req_ ? 'required' : ''} ${extra}><span class="em"></span></div>`;
   return `<form class="form" id="pf" novalidate>
   <ol class="pf-steps">
-    <li class="on"><b>1</b>Хувийн мэдээлэл</li>
-    <li><b>2</b>Кафены мэдээлэл</li>
+    <li class="on"><b>1</b>Үндсэн мэдээлэл</li>
+    <li><b>2</b>Кафены тухай</li>
     <li><b>3</b>Зураг</li>
   </ol>
+  <p class="pf-progress" data-pf-progress aria-live="polite">Алхам 1/3 · ${STEP_TIME[0]}</p>
 
   <fieldset class="pf-step" data-step="1">
-    ${[['f2', 'Холбоо барих хүн', 'Овог, нэр', 'text', 1], ['f3', 'Утасны дугаар', '8800 0000', 'tel', 1], ['f4', 'И-мэйл', 'name@example.com', 'email', 1]].map(text).join('')}
+    <p class="pf-legend full"><span class="pf-req">*</span> — заавал бөглөх</p>
+    ${text(['f1', 'Кафены нэр', 'Жишээ: Кафе A', 'text', 1, 'autocomplete="organization"'])}
+    ${text(['f2', 'Холбоо барих хүн', 'Овог, нэр', 'text', 1, 'autocomplete="name"'])}
+    ${text(['f3', 'Утасны дугаар', '8800 0000', 'tel', 1, 'autocomplete="tel" inputmode="tel"'])}
+    ${text(['f4', 'И-мэйл', 'name@example.com', 'email', 1, 'autocomplete="email"'])}
+    <div class="fld pf-where full"><label for="f8">Байршил${req}</label><div class="pf-where-row"><select id="f5" aria-label="Дүүрэг"><option>Сүхбаатар</option><option>Чингэлтэй</option><option>Баянгол</option><option>Хан-Уул</option><option>Баянзүрх</option><option>Сонгинохайрхан</option></select><input id="f8" type="text" placeholder="Гудамж, байр, давхар" required data-kind="text" autocomplete="street-address"></div><span class="em"></span></div>
+    <div class="fld"><label for="f9">Ажлын цаг${req}</label><div class="pf-hours"><input id="f9" type="time" value="08:00" required aria-label="Нээх цаг"><span>–</span><input id="f10" type="time" value="22:00" required aria-label="Хаах цаг"></div><span class="em"></span></div>
   </fieldset>
 
   <fieldset class="pf-step" data-step="2" hidden>
-    ${text(['f1', 'Кафены нэр', 'Жишээ: Кафе A', 'text', 1])}
-    <div class="fld"><label for="f5">Дүүрэг</label><select id="f5"><option>Сүхбаатар</option><option>Чингэлтэй</option><option>Баянгол</option><option>Хан-Уул</option><option>Баянзүрх</option><option>Сонгинохайрхан</option></select></div>
-    <div class="fld"><label for="f6">Байгууллагын төрөл</label><select id="f6"><option>Кафе</option><option>Коворкинг</option><option>Номын сан</option></select></div>
-    <div class="fld full"><label for="f8">Хаяг</label><input id="f8" type="text" placeholder="Гудамж, байр, давхар — газрын зураг дээр байршуулахад хэрэгтэй" required data-kind="text"><span class="em"></span></div>
-    <div class="fld"><label for="f9">Ажлын цаг</label><div class="pf-hours"><input id="f9" type="time" value="08:00" required aria-label="Нээх цаг"><span>–</span><input id="f10" type="time" value="22:00" required aria-label="Хаах цаг"></div><span class="em"></span></div>
+    <div class="fld"><label for="f6">Төрөл</label><select id="f6"><option selected>Кафе</option><option>Коворкинг</option><option>Номын сан</option></select></div>
     <div class="fld"><label for="f11">Суудлын тоо <small class="muted">(заавал биш)</small></label><input id="f11" type="number" min="1" max="2000" inputmode="numeric" placeholder="Жишээ: 30"><span class="em"></span></div>
-    <div class="fld full"><label>Юунд тохиромжтой вэ?</label><div class="chips pf-purp">${PURPOSES.map(([p, ic]) => `<label class="chip"><input type="checkbox" name="purposes" value="${p}">${ic}${p}</label>`).join('')}</div></div>
-    <div class="fld full"><label for="f12">Кафены тухай</label><textarea id="f12" rows="3" placeholder="Орчин, онцлог, хэн ихэвчлэн ирдэг вэ" required data-kind="text"></textarea><span class="em"></span></div>
-    <div class="fld full"><label for="f7">Нэмэлт мэдээлэл</label><textarea id="f7" rows="3" placeholder="Кафенийхаа тухай товч бичнэ үү"></textarea></div>
+    <div class="fld full"><label>Юунд тохиромжтой вэ? <small class="muted">(заавал биш)</small></label><div class="chips pf-purp">${PURPOSES.map(([p, ic]) => `<label class="chip"><input type="checkbox" name="purposes" value="${p}">${ic}${p}</label>`).join('')}</div></div>
+    <div class="fld full"><label for="f12">Кафены тухай${req}</label>
+      <div class="pf-examples" role="group" aria-label="Жишээ өгүүлбэр нэмэх">${EXAMPLES.map(e => `<button type="button" class="chip" data-pf-example="${e}">+ ${e}</button>`).join('')}</div>
+      <textarea id="f12" rows="3" placeholder="Орчин, онцлог, хэн ихэвчлэн ирдэг вэ — дээрх жишээг дарж эхэлж болно" required data-kind="text"></textarea><span class="em"></span>
+      <details class="pf-more"><summary>+ Нэмэлт мэдээлэл</summary><textarea id="f7" rows="3" placeholder="Бусад зүйл (заавал биш)" aria-label="Нэмэлт мэдээлэл"></textarea></details></div>
   </fieldset>
 
   <fieldset class="pf-step" data-step="3" hidden>
-    <div class="fld full pf-photos"><label for="fPhotos">Кафены зураг <small class="muted">(3–4 ширхэг)</small></label>
-     <p class="muted pf-hint">Орц, танхим, суудал, лангууны зургийг оруулаарай. Манай баг эдгээрээр танай кафены өөрийн хөдөлгөөнт зураглалыг бүтээнэ.</p>
+    <div class="fld full pf-photos"><label for="fPhotos">Кафены зураг${req} <small class="muted">(3–4 ширхэг)</small></label>
+     <p class="muted pf-hint">Яагаад хэрэгтэй вэ? Орц, танхим, суудал, лангууны зургаар манай баг танай кафены өөрийн хөдөлгөөнт зураглалыг бүтээнэ. Зураг нийтэд шууд харагдахгүй.</p>
+     <p class="pf-count" data-ph-count aria-live="polite">0 / ${MIN_PHOTOS} зураг</p>
      <div class="ph-grid" id="phGrid"></div>
-     <label class="ph-add" for="fPhotos">${I.photo}<span>Зураг нэмэх</span><input id="fPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>
+     <div class="pf-ph-btns"><label class="ph-add" for="fPhotos">${I.photo}<span>Зураг сонгох</span><input id="fPhotos" type="file" accept="image/*" multiple></label>
+     <label class="ph-add ph-cam" for="fCamera">${I.photo}<span>Камераар авах</span><input id="fCamera" type="file" accept="image/*" capture="environment"></label></div>
      <span class="em"></span></div>
   </fieldset>
 
   <div class="fld full pf-nav">
     <button type="button" class="btn btn-g" data-prev hidden>← Буцах</button>
-    <span class="muted" style="font-size:13px">Эсвэл: [И-мэйл хаяг] · [Утасны дугаар]</span>
+    <span class="muted" style="font-size:13px">Бид утас эсвэл и-мэйлээр тантай холбогдоно</span>
     <button type="button" class="btn btn-p" data-next>Үргэлжлүүлэх →</button>
     <button type="submit" class="btn btn-p" data-submit hidden>Хүсэлт илгээх</button>
   </div>
@@ -64,22 +76,36 @@ const doneHTML = (title, body, extra = '') => `<div class="done"><svg viewBox="0
 // Bind the form. Returns a cleanup function (object URLs for previews).
 export function bindPartnerForm(form) {
   let photos = [];
-  const grid = $('#phGrid', form), fileInput = $('#fPhotos', form);
+  const grid = $('#phGrid', form), fileInput = $('#fPhotos', form), cameraInput = $('#fCamera', form);
   const renderPhotos = () => {
     grid.querySelectorAll('img').forEach(img => URL.revokeObjectURL(img.src));
     grid.innerHTML = photos.map((file, i) => `<figure class="ph"><img src="${URL.createObjectURL(file)}" alt="Зураг ${i + 1}"><button type="button" class="pv-x" data-ph-rm="${i}" aria-label="Зураг хасах">${I.x}</button></figure>`).join('');
-    $('.ph-add', form).hidden = photos.length >= MAX_PHOTOS;
+    $$('.ph-add', form).forEach(b => { b.hidden = photos.length >= MAX_PHOTOS; });
+    $('[data-ph-count]', form).textContent = photos.length >= MIN_PHOTOS ? `${photos.length} / ${MAX_PHOTOS} зураг ✓` : `${photos.length} / ${MIN_PHOTOS} зураг`;
+    if (photos.length >= MIN_PHOTOS) setError(fileInput, '');
   };
-  fileInput.addEventListener('change', () => {
-    const added = [...fileInput.files].filter(f => /^image\/(jpeg|png|webp)$/.test(f.type));
-    if (added.length < fileInput.files.length) toast('Зөвхөн JPEG, PNG, WebP зураг');
+  const addFiles = input => {
+    const added = [...input.files].filter(f => f.type.startsWith('image/'));
+    if (added.length < input.files.length) toast('Зөвхөн зураг оруулна уу');
+    if (photos.length + added.length > MAX_PHOTOS) toast(`Хамгийн ихдээ ${MAX_PHOTOS} зураг`);
     photos = [...photos, ...added].slice(0, MAX_PHOTOS);
-    fileInput.value = '';
+    input.value = '';
     Snd.ui('pop'); renderPhotos();
-  });
+  };
+  fileInput.addEventListener('change', () => addFiles(fileInput));
+  cameraInput.addEventListener('change', () => addFiles(cameraInput));
+  // Жишээ өгүүлбэрийг тайлбарт нэмнэ (эзэмшигч дараа нь засна).
+  $$('[data-pf-example]', form).forEach(b => b.addEventListener('click', () => {
+    const area = $('#f12', form), add = b.dataset.pfExample;
+    if (area.value.includes(add)) return;
+    area.value = area.value.trim() ? `${area.value.trim().replace(/[.]?$/, '.')} ${add}.` : `${add}.`;
+    setError(area, ''); area.focus(); Snd.ui('click');
+  }));
   grid.addEventListener('click', e => { const b = e.target.closest('[data-ph-rm]'); if (b) { photos.splice(+b.dataset.phRm, 1); Snd.ui('click'); renderPhotos(); } });
   $$('.pf-purp input', form).forEach(input => input.addEventListener('change', () => { input.parentElement.setAttribute('aria-pressed', input.checked); Snd.ui('click'); }));
 
+  // Scroll to and focus the first field with an error.
+  const focusError = scope => { const f = $('.fld.err', scope); if (!f) return; f.scrollIntoView({ block: 'center', behavior: 'smooth' }); $('input:not([type=file]):not([type=checkbox]), textarea, select', f)?.focus({ preventScroll: true }); };
   const setError = (el, message) => { const f = el.closest('.fld'); f.classList.toggle('err', !!message); $('.em', f).textContent = message || ''; return !message; };
 
   /* ---------- steps ---------- */
@@ -92,6 +118,7 @@ export function bindPartnerForm(form) {
     $('[data-prev]', form).hidden = n === 0;
     $('[data-next]', form).hidden = n === steps.length - 1;
     $('[data-submit]', form).hidden = n !== steps.length - 1;
+    $('[data-pf-progress]', form).textContent = `Алхам ${n + 1}/${steps.length} · ${STEP_TIME[n]}`;
     form.scrollIntoView({ block: 'start', behavior: 'smooth' });
   };
 
@@ -112,13 +139,13 @@ export function bindPartnerForm(form) {
       if (!setError($('#f11', form), !seats || (+seats >= 1 && +seats <= 2000 && Number.isInteger(+seats)) ? '' : '1–2000 хооронд тоо')) ok = false;
     }
     if (scope.contains(fileInput)) {
-      if (!setError(fileInput, photos.length >= MIN_PHOTOS ? '' : `Кафены ${MIN_PHOTOS}–${MAX_PHOTOS} зураг оруулна уу (одоо ${photos.length})`)) ok = false;
+      if (!setError(fileInput, photos.length >= MIN_PHOTOS ? '' : `Дахиад ${MIN_PHOTOS - photos.length} зураг нэмнэ үү (${photos.length} / ${MIN_PHOTOS})`)) ok = false;
     }
     return ok;
   };
 
   $('[data-next]', form).onclick = () => {
-    if (!validate(steps[step])) { Snd.ui('err'); $('.fld.err', steps[step])?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    if (!validate(steps[step])) { Snd.ui('err'); focusError(steps[step]); return; }
     Snd.ui('click'); showStep(step + 1);
   };
   $('[data-prev]', form).onclick = () => { Snd.ui('click'); showStep(step - 1); };
@@ -127,7 +154,7 @@ export function bindPartnerForm(form) {
     e.preventDefault();
     if (step < steps.length - 1) { $('[data-next]', form).click(); return; } // Enter pressed on step 1 or 2
     const bad = steps.findIndex(s => !validate(s));
-    if (bad !== -1) { Snd.ui('err'); showStep(bad); return; }
+    if (bad !== -1) { Snd.ui('err'); showStep(bad); focusError(steps[bad]); return; }
     const open = $('#f9', form).value, close = $('#f10', form).value, seats = $('#f11', form).value;
 
     const values = readForm(form);
@@ -145,7 +172,8 @@ export function bindPartnerForm(form) {
     const prev = $('[data-prev]', form);
     button.disabled = true; prev.disabled = true; button.textContent = 'Зураг бэлтгэж байна…';
     try {
-      body.photos = await Promise.all(photos.map(file => resizePhoto(file)));
+      try { body.photos = await Promise.all(photos.map(file => resizePhoto(file))); }
+      catch { const error = new Error('Нэг зургийг уншиж чадсангүй. Өөр зураг сонгоод дахин оролдоно уу.'); error.details = { photos: 'Зургийг уншиж чадсангүй — JPEG, PNG эсвэл WebP зураг сонгоно уу' }; throw error; }
       button.textContent = 'Илгээж байна…';
       const result = await platform.api.post('/applications', body, { timeout: 60000 });
       Snd.ui('chime');
@@ -166,7 +194,7 @@ export function bindPartnerForm(form) {
       }
       // Jump back to the first step that has a server-side error.
       const errStep = steps.findIndex(s => s.querySelector('.fld.err'));
-      if (errStep !== -1) showStep(errStep);
+      if (errStep !== -1) { showStep(errStep); focusError(steps[errStep]); }
       toast(error.isNetwork ? 'Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.' : error.message || 'Хүсэлт илгээхэд алдаа гарлаа');
     }
   };

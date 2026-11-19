@@ -4,6 +4,7 @@ import { Component, html, raw, readForm, dateTime } from '../../../framework/ind
 import { I } from '../../icons.js';
 import { Snd } from '../../audio.js';
 import { LayoutEditor } from './layout-editor.js';
+import { mountLocationPicker } from './location-picker.js';
 import { SETUP_STATUSES, statusLabel, VIS_STATUSES } from '../../live/levels.js';
 import { platform } from '../../services/platform.js';
 import { toast } from '../../components/feedback.js';
@@ -57,8 +58,15 @@ export class AdminPage extends Component {
     this.interval(() => { if (this.state.auto && !document.hidden && this.state.tab === 'measurements' && !this.state.cafe) this.load(); }, 15000);
     this.load();
   }
-  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); this.menuView?.destroy(); }
-  onUpdate() { this.syncEditor(); this.syncHistory(); this.syncMenu(); }
+  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); this.menuView?.destroy(); this.locOff?.(); }
+  onUpdate() { this.syncEditor(); this.syncHistory(); this.syncMenu(); this.syncLocation(); }
+  // Location is picked on the map; one picker per opened café (it survives re-renders).
+  syncLocation() {
+    const host = this.$('[data-loc-map]'), key = host ? this.state.cafe?.id : null;
+    if (key === this.locKey && (!key || host.firstChild)) return;
+    this.locOff?.(); this.locOff = null; this.locKey = key;
+    if (key) this.locOff = mountLocationPicker(host, host.closest('form'));
+  }
   // The café's menu: admins enter/correct the menu the owner sends; owners can edit it too.
   syncMenu() {
     const cafeId = this.state.cafe?.id, root = this.$('[data-admin-menu]');
@@ -341,7 +349,11 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
           <form class="form adm-form" data-form="saveInfo" novalidate>
             ${input('name', 'Нэр', c.name)}${input('category', 'Ангилал', c.category)}${input('district', 'Дүүрэг', c.district)}${input('hours', 'Ажлын цаг', c.hours)}
             <div class="fld full"><label>Хаяг</label><input name="address" value="${c.address}"></div>
-            ${input('lat', 'Өргөрөг (lat)', c.lat, 'number')}${input('lng', 'Уртраг (lng)', c.lng, 'number')}${input('map_x', 'Газрын зураг X (0–1000)', c.map_x, 'number')}${input('map_y', 'Газрын зураг Y (0–680)', c.map_y, 'number')}
+            <div class="fld full adm-loc"><label>Байршил <small class="muted">— газрын зураг дээр дарж эсвэл тэмдгийг чирж байрлуулна</small></label>
+              <div class="loc-map" data-loc-map data-preserve data-key="loc-${c.id}"></div>
+              <p class="muted loc-read" data-loc-read data-preserve data-key="loc-read-${c.id}"></p>
+              <details class="loc-manual" data-preserve data-key="loc-manual-${c.id}"><summary>Координатаа гараар засах</summary><div class="loc-fields">
+              ${input('lat', 'Өргөрөг (lat)', c.lat, 'number')}${input('lng', 'Уртраг (lng)', c.lng, 'number')}${input('map_x', 'Газрын зураг X (0–1000)', c.map_x, 'number')}${input('map_y', 'Газрын зураг Y (0–680)', c.map_y, 'number')}</div></details></div>
             ${input('phone', 'Утас', c.phone)}${input('contact_name', 'Холбоо барих', c.contact_name)}${input('email', 'И-мэйл', c.email)}${input('total_seats', 'Суудлын тоо', c.total_seats, 'number')}
             ${input('tags', 'Зорилго (таслалаар)', c.tags.join(', '))}${input('sort_order', 'Эрэмбэ', c.sort_order, 'number')}
             <div class="fld"><label>Өгөгдлийн горим</label><select name="data_mode"><option value="live" ${raw(c.data_mode === 'live' ? 'selected' : '')}>Бодит (мэдрэгч)</option><option value="demo" ${raw(c.data_mode === 'demo' ? 'selected' : '')}>Демо (жишээ утга)</option></select></div>

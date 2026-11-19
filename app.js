@@ -135,10 +135,13 @@ function cmpBtn(id) { return `<button class="cmpb" data-cmp="${id}" aria-pressed
 // the café is saved right after signing in. Without a server, the original local favourites.
 function toggleFav(id, btn) {
   if (!platform.online) { applyFav(id, false); return }
-  platform.session.requireLogin(async () => { await (favSync || pullFavorites()); if (favs.has(id)) refreshFavUI(); else applyFav(id, true) }, 'favorite')
+  // Already signed in: the heart toggles. Signed in just now: the café may already be saved there.
+  const signedIn = !!platform.session.user;
+  platform.session.requireLogin(async () => { await (favSync || pullFavorites()); if (!signedIn && favs.has(id)) refreshFavUI(); else applyFav(id, true) }, 'favorite')
 }
 function applyFav(id, remote) {
   const c = byId(id); if (favs.has(id)) { favs.delete(id); Snd.ui('click'); toast(`${c.name} хадгалснаас хасагдлаа`) } else { favs.add(id); Snd.ui('chime'); toast(`${c.name} хадгалагдлаа`, true) } if (!remote) store.set('favs', [...favs]);
+  if (!favs.has(id)) $$(`#favPop [data-fav-item="${id}"]`).forEach(row => row.remove());
   $$(`[data-fav="${id}"]`).forEach(b => { b.setAttribute('aria-pressed', favs.has(id)); if (favs.has(id)) { b.classList.remove('burst'); void b.offsetWidth; b.classList.add('burst') } }); renderFavCount(true);
   if (remote) {
     const on = favs.has(id);
@@ -220,7 +223,7 @@ $('#sndBtn').onclick = e => {
     $('#swRm').onclick = () => { Prefs.reduced = !Prefs.reduced; store.set('reduced', Prefs.reduced); $('#swRm').setAttribute('aria-checked', Prefs.reduced); document.documentElement.classList.toggle('rm', Prefs.reduced); if (fp) fp.reduced = Prefs.reduced; Snd.ui('click') }
   }
 };
-$('#favBtn').onclick = e => { e.stopPropagation(); const p = $('#favPop'); $('#sndPop').hidden = true; $('#accPop').hidden = true; p.hidden = !p.hidden; if (!p.hidden) { p.innerHTML = `<h3>Хадгалсан кафе</h3>` + (platform.online && !platform.session.user ? `<p class="muted" style="margin:0 0 12px">Дуртай кафегаа хадгалж, дараа нь эндээс харахын тулд нэвтэрнэ үү.</p><button class="btn btn-p" data-fav-login>Нэвтрэх</button>` : favs.size ? [...favs].map(id => { const c = byId(id); if (!c) return ''; return `<div class="fav-item">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="26"')}<a href="#cafe-${id}">${escapeHTML(c.name)}</a><span class="muted" style="font-size:13px">${c.open ? (freePct(c) == null ? 'Суудал хэмжээгүй' : freePct(c) + '% сул') : openTag(c)}</span></div>` }).join('') : `<p class="muted" style="margin:0">Одоогоор хадгалсан кафе алга. Картын ♡ товчийг дарж хадгална.</p>`) } };
+$('#favBtn').onclick = e => { e.stopPropagation(); const p = $('#favPop'); $('#sndPop').hidden = true; $('#accPop').hidden = true; p.hidden = !p.hidden; if (!p.hidden) { p.innerHTML = `<h3>Хадгалсан кафе</h3>` + (platform.online && !platform.session.user ? `<p class="muted" style="margin:0 0 12px">Дуртай кафегаа хадгалж, дараа нь эндээс харахын тулд нэвтэрнэ үү.</p><button class="btn btn-p" data-fav-login>Нэвтрэх</button>` : favs.size ? [...favs].map(id => { const c = byId(id); if (!c) return ''; return `<div class="fav-item" data-fav-item="${id}">${pinSVG(c.open ? '#FF9D00' : '#C9C2B4').replace('<svg', '<svg width="22" height="26"')}<a href="#cafe-${id}">${escapeHTML(c.name)}</a><span class="muted" style="font-size:13px">${c.open ? (freePct(c) == null ? 'Суудал хэмжээгүй' : freePct(c) + '% сул') : openTag(c)}</span><button class="fav-rm" data-fav="${id}" aria-pressed="true" aria-label="${escapeHTML(c.name)} хадгалснаас хасах" title="Хадгалснаас хасах">${I.x}</button></div>` }).join('') : `<p class="muted" style="margin:0">Одоогоор хадгалсан кафе алга. Картын ♡ товчийг дарж хадгална.</p>`) } };
 $('#favPop').addEventListener('click', e => { if (e.target.closest('[data-fav-login]')) { $('#favPop').hidden = true; Snd.ui('whoosh'); openAuth({ reason: 'favorite' }) } });
 document.addEventListener('click', e => { if (!e.target.closest('#sndPop,#sndBtn')) $('#sndPop').hidden = true; if (!e.target.closest('#favPop,#favBtn')) $('#favPop').hidden = true; if (e.target.closest('#favPop a')) $('#favPop').hidden = true });
 
@@ -278,9 +281,6 @@ function renderHome() {
  ${mob ? mobileHomeHTML({ cafes: CAFES }) : ''}
  <div class="wrap">
   ${mob ? '' : deskRecHTML()}
-  <section class="sec"><div class="sec-h"><h2>Ойролцоох кафенууд</h2><p>Танд хамгийн ойр 6 кафе</p></div>
-   <div class="cgrid">${[...CAFES].sort((a, b) => parseFloat(a.dist) * (a.dist.includes('км') ? 1000 : 1) - parseFloat(b.dist) * (b.dist.includes('км') ? 1000 : 1)).slice(0, 6).map(cafeCard).join('')}</div>
-   <div style="text-align:center;margin-top:28px"><a class="btn btn-o" href="#cafes">Бүх кафе харах →</a></div></section>
   <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Жишээ дуу — бодит бичлэг биш. Товчоор сонсоорой.</p></div>
    <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Орчны дууны жишээ сонсох</button></div>`).join('')}</div>
    <div class="ss-dots" aria-hidden="true">${[1, 2, 3, 4, 5].map((l, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></section>
@@ -295,7 +295,7 @@ function renderHome() {
   homeMobileOff = bindMobileHome($('.mhome'), { cafes: CAFES, onSearch: search });
   deskRecOff = bindDeskRec($('.drec'), { cafes: CAFES });
   // Sections scrolled out of view stop animating (no visible change; saves repaints every frame).
-  homeOffscreenOff = pauseOffscreen([$(".hero"), $(".cgrid"), $(".ss-row")]);
+  homeOffscreenOff = pauseOffscreen([$(".hero"), $(".ss-row")]);
   // Phones scroll the five noise cards sideways; the dots under them show which one is in view.
   const ssRow = $('.ss-row'); let ssFrame;
   ssRow.addEventListener('scroll', () => { if (ssFrame === undefined) ssFrame = pageTasks.frame(() => { ssFrame = undefined; const cards = $$('.ss-card', ssRow), x = ssRow.scrollLeft + 16; let k = 0; cards.forEach((c, i) => { if (Math.abs(c.offsetLeft - x) < Math.abs(cards[k].offsetLeft - x)) k = i }); if (ssRow.scrollLeft + ssRow.clientWidth >= ssRow.scrollWidth - 4) k = cards.length - 1; $$('.ss-dots i').forEach((d, i) => d.classList.toggle('on', i === k)) }) }, { passive: true });
@@ -463,7 +463,7 @@ function buildCafe(c) {
  ${c.open ? `<div class="cd-grid">
   <section class="card plan-card" aria-label="Кафены зураглал">
    <div class="card-h"><h2>Кафе дотор</h2>${legend}<div class="r"><div class="seg" role="tablist" id="viewSeg"><span class="ind-s"></span><button role="tab" aria-selected="true" data-view="plan">Зураглал</button><button role="tab" aria-selected="false" data-view="table">Хүснэгт</button></div></div></div>
-   <p class="muted" data-plan-reliability></p>
+   <p class="muted" data-plan-reliability></p><p class="vip-note" id="vipNote" hidden></p>
    <div id="viewPlan"><div class="plan-outer"><div class="plan-wrap" id="planWrap"></div>
     <div class="plan-tools"><button data-pz="in" aria-label="Томруулах" title="Томруулах">${I.plus}</button><button data-pz="out" aria-label="Жижигрүүлэх" title="Жижигрүүлэх">${I.minus}</button><span class="pt-sep"></span><button id="addG" aria-label="Зочин орж ирэх" title="Зочин орж ирэх">${I.guestIn}</button><button id="remG" aria-label="Зочин гарах" title="Зочин гарах">${I.guestOut}</button></div>
     <div id="seatInfo"></div></div></div>
@@ -493,6 +493,8 @@ function buildCafe(c) {
   // floor plan
   fp = new FloorPlan($('#planWrap'), { ...c, occ: c.occ ?? 40 }, { onStats: updSeats, onEvent: logEvent, onSeat: seatInfo, sound: c.sound, portrait: isMobile() });
   syncDetailPlan(c);
+  // Optional VIP room (layout editor): booked separately, never filled by walk-in guests.
+  if (fp.L.vip) { const n = fp.seats.filter(s => s.zone === 'vip').length, el = $('#vipNote'); el.hidden = false; el.innerHTML = `<b>★ ${escapeHTML(fp.L.vip.name || 'VIP өрөө')}</b> · ${n} суудал · тусдаа, урьдчилан захиалж орно (коворкинг, уулзалтад тохиромжтой). Захиалгыг кафед шууд хийнэ.` }
   $$('[data-pz]').forEach(b => b.onclick = () => { Snd.ui('click'); fp.setZoom(b.dataset.pz === 'in' ? 1.4 : 1 / 1.4) });
   $('#addG').onclick = () => { if (!fp.arrive(true)) { Snd.ui('err'); toast('Сул сандал үлдсэнгүй') } else Snd.ui('click') };
   $('#remG').onclick = () => { if (!fp.depart(true)) { Snd.ui('err'); toast('Суусан зочин алга') } };
@@ -574,7 +576,7 @@ function updSeats(s) {
 function logEvent(msg, kind) { const l = $('#elog'); if (!l) return; const d = document.createElement('div'); d.className = kind; d.textContent = msg; l.prepend(d); while (l.children.length > 4) l.lastChild.remove() }
 function seatInfo(s) {
   const box = $('#seatInfo'); if (!box) return; if (!s) { box.innerHTML = ''; return }
-  const st = { free: 'Сул', occ: 'Хүнтэй', unknown: 'Мэдээлэлгүй' }[s.state];
+  const st = { free: 'Сул', occ: 'Хүнтэй', unknown: 'Мэдээлэлгүй', vip: 'Захиалгаар' }[s.state];
   box.innerHTML = `<div class="seatinfo ${s.state}"><div class="si-ic">${s.kind === 'sofa' ? I.sofa : I.seat}</div><div><b>${s.label} · ${st}</b><small>${ZONES[s.zone].d} ${ZONES[s.zone].q}</small></div><button class="pv-x" data-sixclose aria-label="Хаах">${I.x}</button></div>`;
   $('[data-sixclose]', box).onclick = () => { box.innerHTML = '' }
 }

@@ -1880,3 +1880,112 @@ html.rm .ml-you-pulse {
 @media (max-width:820px) and (max-height:700px) { .rc-info h3 { font-size: 19px; margin-bottom: 2px } .rc-foot { margin-top: 5px } }
 .rc-facts { align-items: flex-start; white-space: normal; line-height: 1.3 }
 .rc-facts svg { margin-top: 1px }
+
+/* ---------- saved cafés: remove from the list ---------- */
+.fav-item { position: relative }
+.fav-rm { display: grid; place-items: center; flex: none; width: 30px; height: 30px; margin-left: auto; border: 0; border-radius: 50%; background: var(--sand); color: var(--ink2) }
+.fav-rm svg { width: 14px; height: 14px }
+.fav-rm:hover { background: var(--sand2); color: var(--ink) }
+
+/* ---------- layout editor: new looks and the room ---------- */
+.le-new { border-style: dashed }
+.le-plus { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--sand); color: var(--brown); font-size: 20px; font-weight: 800 }
+.le-note { flex-basis: 100%; font-size: 12.5px }
+.le-look { margin: 0 0 12px; padding: 14px; border: 1.5px solid var(--line2); border-radius: 14px; background: var(--paper) }
+.le-look-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px }
+.le-look-row:last-child { margin-bottom: 0 }
+.le-look-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 800; color: var(--ink2) }
+.le-look-row input:not([type=color]), .le-look-row select { height: 36px; padding: 0 10px; border: 1.5px solid var(--line2); border-radius: 10px; background: var(--cream); font: inherit; font-size: 14px; color: var(--ink) }
+.le-look-row .le-color { flex-direction: row; align-items: center; gap: 6px }
+.le-color input { width: 34px; height: 30px; padding: 0; border: 1.5px solid var(--line2); border-radius: 8px; background: none }
+
+/* ---------- café page: optional VIP room ---------- */
+.vip-note { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--sand); font-size: 13px; color: var(--ink2) }
+.vip-note b { color: var(--ink) }
+
+/* home hero lamps: the cord runs on under the shade, so the round and bell shades (whose
+   drawing starts lower in their picture) no longer hang below a gap */
+.hero .lamp .cord { position: relative }
+.hero .lamp .cord::after { content: ""; position: absolute; left: 0; top: 100%; width: 100%; height: 18px; background: inherit }
+.hero .lamp svg { position: relative }
+
+/* admin: the café's location is picked on the map */
+.adm-loc .loc-map { position: relative; height: 280px; border: 1.5px solid var(--line2); border-radius: 14px; overflow: hidden; background: var(--sand) }
+.adm-loc .loc-map .maplibregl-canvas { cursor: crosshair }
+.adm-loc .loc-read { margin: 6px 0 0; font-size: 13px }
+.loc-manual summary { margin-top: 6px; cursor: pointer; font-size: 13px; font-weight: 800; color: var(--brown) }
+.loc-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 10px }
+
+/* ---------- café-owner dashboard: summary, tabs, plain words ---------- */
+.own-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px }
+.own-sum-c { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 112px; padding: 16px 18px; border: 1.5px solid var(--line); border-radius: 20px; background: var(--paper); color: var(--ink); text-align: left; box-shadow: var(--sh); cursor: pointer; transition: border-color .2s, transform .15s }
+.own-sum-c:hover { border-color: var(--brown) }
+.own-sum-c:active { transform: scale(.98) }
+.own-sum-c > b { font-family: var(--f-disp); font-size: 38px; line-height: 1; color: var(--brown) }
+.own-sum-c > span { font-size: 15px; font-weight: 800 }
+.own-sum-f { font-size: 12px; font-weight: 700; color: var(--ink3) }
+.own-sum-f.t-live { color: #2E7D4F } .own-sum-f.t-stale { color: var(--terraT) }
+.own-tabs { position: sticky; top: var(--hd); z-index: 5; display: flex; gap: 4px; margin: 0 0 16px; padding: 5px; border-radius: 999px; background: var(--sand); box-shadow: 0 6px 16px -10px rgba(62, 42, 23, .3) }
+.own-tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--ink2); font-size: 15px; font-weight: 800 }
+.own-tabs button[aria-selected="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 2px 8px rgba(62, 42, 23, .14) }
+.own-tab-n { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--orange); color: #fff; font-size: 12px }
+.own-panel { display: grid; gap: 16px }
+.own-panel[hidden] { display: none }
+.own-meta { margin: 0 }
+.own-trust { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--ink2) }
+.own-trust.t-live { color: #2E7D4F } .own-trust.t-stale { color: var(--terraT) }
+.own-active summary, .own-vis > summary, .own-tech > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: pointer; list-style: none }
+.own-active summary::-webkit-details-marker, .own-vis > summary::-webkit-details-marker, .own-tech > summary::-webkit-details-marker { display: none }
+.own-vis > summary h2, .own-tech > summary h2 { margin: 0; font-size: 20px }
+.own-vis > summary::after, .own-tech > summary::after, .own-active summary::after { content: "▾"; margin-left: auto; color: var(--ink3); transition: transform .2s }
+.own-vis[open] > summary::after, .own-tech[open] > summary::after, .own-active[open] summary::after { transform: rotate(180deg) }
+.own-active[open] .own-steps, .own-vis[open] .own-plan, .own-tech[open] > :not(summary):first-of-type { margin-top: 14px }
+.own-vis .own-plan { max-width: 620px; margin-inline: auto }
+.own-devices-tech li { display: grid; gap: 4px }
+/* report chart */
+.rep .card-h { flex-wrap: wrap; gap: 8px }
+.rep-range { display: inline-flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 999px; background: var(--sand) }
+.rep-range button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--ink2); font-weight: 800 }
+.rep-range button[aria-pressed="true"] { background: var(--paper); color: var(--ink) }
+.rep-chart { display: block; width: 100%; max-height: 240px }
+.rep-chart rect { fill: var(--amberL) }
+.rep-chart rect.best { fill: var(--orange) }
+.rep-chart line { stroke: var(--line2) }
+.rep-chart text { font-size: 10px; fill: var(--ink3); text-anchor: middle; font-family: var(--f-body, sans-serif) }
+.rep-best { margin: 10px 0 4px; font-size: 16px; font-weight: 800 }
+.rep-note { margin: 0; font-size: 13px }
+.rep-empty { margin: 8px 0; font-weight: 800; color: var(--ink2) }
+@media (max-width:820px) {
+  .own { padding-top: 12px }
+  .own-head { align-items: center; gap: 8px; margin-bottom: 12px }
+  .own-head .tagp { display: none }
+  .own-head h1 { margin: 0; font-size: 26px }
+  .own-meta { font-size: 13px }
+  .own-public { min-height: 40px; padding: 8px 14px; font-size: 14px }
+  .own-sum { gap: 8px }
+  .own-sum-c { min-height: 0; padding: 12px; border-radius: 16px }
+  .own-sum-c > b { font-size: 28px }
+  .own-sum-c > span { font-size: 13px }
+  .own-tabs { border-radius: 16px }
+  .own-tabs button { padding: 0 4px; font-size: 13px }
+  .own-vis .own-plan { max-width: 100% }
+}
+@media (max-width:420px) { .own-sum { grid-template-columns: 1fr 1fr } .own-sum-c:first-child { grid-column: 1/-1 } }
+
+/* ---------- partner form: essentials first, progress, examples, camera ---------- */
+.pf-progress { grid-column: 1/-1; margin: -4px 0 0; font-size: 13px; font-weight: 800; color: var(--ink2) }
+.pf-legend { grid-column: 1/-1; margin: 0; font-size: 12.5px; color: var(--ink3) }
+.pf-req { margin-left: 3px; color: var(--orange); font-weight: 800 }
+.pf-where-row { display: grid; grid-template-columns: minmax(130px, 200px) 1fr; gap: 8px }
+.pf-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px }
+.pf-examples .chip { min-height: 36px; font-size: 13px }
+.pf-more { margin-top: 10px }
+.pf-more summary { cursor: pointer; font-size: 14px; font-weight: 800; color: var(--brown) }
+.pf-more textarea { width: 100%; margin-top: 8px }
+.pf-count { margin: 0 0 8px; font-weight: 800; color: var(--brown) }
+.pf-ph-btns { display: flex; flex-wrap: wrap; gap: 10px }
+.pf-ph-btns .ph-add { flex: 1 1 180px }
+.pf-ph-btns .ph-add[hidden] { display: none }
+.ph-cam { display: none }
+@media (pointer:coarse) { .ph-cam { display: flex } }
+@media (max-width:560px) { .pf-where-row { grid-template-columns: 1fr } }

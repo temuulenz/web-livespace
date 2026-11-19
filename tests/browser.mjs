@@ -199,9 +199,15 @@ try {
   await check('partner form validation and demo submission', async () => {
     await navigate('#partner');
     await evaluate(`document.querySelector('#pf').requestSubmit()`);
-    // The merged three-step form validates the visible contact step first.
-    assert.equal(await evaluate(`document.querySelectorAll('.fld.err').length`), 3);
+    // The first step holds the essentials (café name, contact, phone, e-mail, address; hours have defaults).
+    assert.equal(await evaluate(`document.querySelectorAll('.fld.err').length`), 5);
+    assert.equal(await evaluate(`document.activeElement.id`), 'f1', 'the first error is focused');
+    assert.equal(await evaluate(`document.querySelector('#f6').value`), 'Кафе', 'category defaults to Кафе');
     for (const [selector, value] of [['#f1','Cafe'],['#f2','Test'],['#f3','88000000'],['#f4','test@example.com'],['#f8','Seoul street 1'],['#f12','Quiet cafe']]) await input(selector, value);
+    // Answers survive moving between steps.
+    await click('#pf [data-next]'); await click('#pf [data-prev]');
+    assert.equal(await evaluate(`document.querySelector('#f1').value + '|' + document.querySelector('#f8').value`), 'Cafe|Seoul street 1');
+    assert.match(await evaluate(`document.querySelector('[data-pf-progress]').textContent`), /Алхам 1\/3/);
     await evaluate(`(() => { const input = document.querySelector('#fPhotos'), dt = new DataTransfer(); for (let i = 0; i < 3; i++) dt.items.add(new File([new Uint8Array([137,80,78,71,13,10,26,10])], 'p' + i + '.png', { type: 'image/png' })); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
     assert.equal(await evaluate(`document.querySelectorAll('#phGrid .ph').length`), 3);
     await click('#pf [data-next]');

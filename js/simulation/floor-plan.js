@@ -5,7 +5,7 @@ import { resolveLayout } from './layouts.js';
 import { isRealMode, sensorState } from '../live/sensor-state.js';
 
 /* ================= FLOOR PLAN (canvas, top-down) ================= */
-const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' }, chair: { d: 'Ганц сандал.', q: 'Дунд зэргийн чимээтэй.' }, round: { d: 'Дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, lounge: { d: 'Буйдан — зөөлөн, тухтай суудал.', q: 'Тухтай бүс.' } };
+const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' }, chair: { d: 'Ганц сандал.', q: 'Дунд зэргийн чимээтэй.' }, round: { d: 'Дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, lounge: { d: 'Буйдан — зөөлөн, тухтай суудал.', q: 'Тухтай бүс.' }, vip: { d: 'VIP өрөө — тусдаа, урьдчилан захиалж ордог (коворкинг, уулзалтад).', q: 'Нам гүм, хаалттай өрөө.' } };
 const DIRS = { N: -Math.PI / 2, S: Math.PI / 2, E: 0, W: Math.PI };
 // Single-letter demo ids keep their original seeds; longer ids get a stable hash.
 const seedOf = id => id.length === 1 ? id.charCodeAt(0) * 31 : [...id].reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261);
@@ -28,6 +28,32 @@ const THEMES = {
     chair: ['#FBEBD3', '#C8553D'], stool: ['#2F5A4E', '#E9C46A'], label: 'rgba(33,77,68,.85)', pendants: true, pendant: '#2F5A4E', stringLights: true
   }
 };
+// A new look made in the admin editor: a base template recoloured (layout.look).
+const hex = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c : null;
+const mix = (a, b, t) => '#' + [1, 3, 5].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
+function lookTheme(look) {
+  const base = THEMES[look?.base] || THEMES.minimal;
+  if (!look || typeof look !== 'object') return base;
+  const floor = hex(look.floor) || base.floor, wall = hex(look.wall) || base.wall, wood = hex(look.wood) || base.table[1], sofa = hex(look.sofa) || base.sofa[0], plant = hex(look.plant) || base.plant[0], accent = hex(look.accent) || base.accents[0];
+  return {
+    ...base, floor, wall, outside: mix(wall, '#FFFFFF', .72), floorLine: mix(floor, '#000000', .06), staffFloor: mix(floor, '#000000', .05), mat: accent,
+    floorStyle: ['tiles', 'terrazzo', 'wood'].includes(look.floorStyle) ? look.floorStyle : base.floorStyle, speckles: [mix(floor, '#000000', .18), accent, plant, wood, mix(floor, '#000000', .1)],
+    rug: base.rugPattern ? [accent, mix(accent, '#FFFFFF', .4), wall] : [mix(accent, floor, .82), mix(accent, floor, .5)],
+    bar: [mix(wood, '#FFFFFF', .2), mix(wood, '#000000', .25)], shelf: mix(wall, '#000000', .1), spines: [accent, mix(accent, '#FFFFFF', .5), wood, plant, mix(wall, '#FFFFFF', .4)],
+    table: [mix(wood, '#FFFFFF', .35), wood, mix(wood, '#000000', .35)], long: [wood, mix(wood, '#000000', .3)], sofa: [sofa, mix(sofa, '#FFFFFF', .25), mix(sofa, '#000000', .25)], coffee: mix(wood, '#FFFFFF', .2),
+    plant: [plant, mix(plant, '#FFFFFF', .3), mix(plant, '#FFFFFF', .5), mix(plant, '#000000', .25)], counter: [wall, accent], accents: [accent, wood, wall],
+    chair: [mix(floor, '#FFFFFF', .6), mix(wood, '#000000', .1)], stool: [wall, accent], pendant: wall, label: wall
+  };
+}
+// Room geometry for the templates: door on any wall, windows on any wall, corners cut away
+// (L- or U-shaped rooms) and an optional bookable VIP room. All optional: a layout without
+// them is exactly the original room.
+const SIDES = ['top', 'bottom', 'left', 'right'];
+const doorOf = L => L.door && SIDES.includes(L.door.side) && Number.isFinite(L.door.at) ? L.door : { side: 'bottom', at: 90 };
+const windowsOf = L => (L.windows || []).map(w => Array.isArray(w) ? { side: 'top', a: w[0], b: w[1] } : w).filter(w => w && SIDES.includes(w.side) && Number.isFinite(w.a) && Number.isFinite(w.b));
+// Maps the bottom wall's own coordinates (u along the wall, v = 500 at the wall) onto a side.
+const SIDE_TF = { bottom: [1, 0, 0, 1, 0, 0], top: [1, 0, 0, -1, 0, 524], left: [0, 1, -1, 0, 524, 0], right: [0, 1, 1, 0, 276, 0] };
+const inRect = (x, y, [rx, ry, rw, rh]) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
 class FloorPlan {
   constructor(wrap, cafe, o) {
     this.wrap = wrap; this.cafe = cafe; this.o = o; this.W = 800; this.H = 520; this.sound = o.sound || 2; this.reduced = Prefs.reduced;
@@ -85,7 +111,7 @@ class FloorPlan {
       // Unknown is not an empty-cafe observation. Hide guests and release only
       // illustrative reservations; leave the actual occupancy projection unknown.
       this.people = []; this.bubbles = []; this.fx = [];
-      for (const seat of this.seats) if (seat.person || seat.res) { seat.person = null; seat.res = false; seat.state = 'free'; seat.flash = 0; }
+      for (const seat of this.seats) if (seat.person || seat.res) { seat.person = null; seat.res = false; seat.state = seat.zone === 'vip' ? 'vip' : 'free'; seat.flash = 0; }
     } else this.reconcilePopulation();
     this.emit();
   }
@@ -112,7 +138,7 @@ class FloorPlan {
       for (let row = 9; row < this.rows - 5; row += 4) for (let col = 5; col < this.cols - 5; col += 4) {
         if (this.g[row * this.cols + col]) continue;
         const x = col * 10 + 5, y = row * 10 + 5;
-        if (this.path(this.door[0], this.door[1] + 4, x, y).length > 1) this.standingPlaces.push([x, y]);
+        if (this.path(...this.entry, x, y).length > 1) this.standingPlaces.push([x, y]);
       }
     }
     if (!this.standingPlaces.length) return null;
@@ -121,17 +147,18 @@ class FloorPlan {
     return { x, y, ang: -Math.PI / 2, kind: 'standing', state: 'free', label: 'Жишээ зогсох байрлал', res: false, person: null, flash: 0 };
   }
   seatView(seat) { return this.telemetryControlled && seat ? { ...seat, state: 'unknown', person: null, res: false, illustrative: true } : seat; }
-  countable() { let count = 0; for (const seat of this.seats) if (seat.state !== 'unknown') count++; return count }
+  countable() { let count = 0; for (const seat of this.seats) if (seat.state !== 'unknown' && seat.state !== 'vip') count++; return count }
   stats() {
-    if (this.telemetryControlled) return { free: 0, total: 0, unknown: this.seats.length, list: [] };
+    const vip = this.seats.filter(seat => seat.state === 'vip').length;
+    if (this.telemetryControlled) return { free: 0, total: 0, unknown: this.seats.length - vip, list: [] };
     let free = 0;
     const list = [];
     for (const seat of this.seats) {
-      if (seat.state === 'unknown') continue;
+      if (seat.state === 'unknown' || seat.state === 'vip') continue;
       list.push(seat.state);
       if (seat.state === 'free') free++;
     }
-    return { free, total: list.length, unknown: this.seats.length - list.length, list };
+    return { free, total: list.length, unknown: this.seats.length - list.length - vip, list };
   }
   emit() { this.o.onStats && this.o.onStats(this.stats()) }
   layout() {
@@ -144,12 +171,32 @@ class FloorPlan {
     this.tables = L.round.map(t => [t.x, t.y]);
     const counter = L.counter || { x: 600, y: 24 }; this.cdx = counter.x - 600; this.cdy = counter.y - 24;
     this.door = [90, 514]; this.order = [580 + this.cdx, 112 + this.cdy];
+    // Where guests appear (just outside the door) and the first step inside.
+    const D = doorOf(L), at = D.at;
+    this.entry = { bottom: [at, 518], top: [at, 2], left: [2, at], right: [798, at] }[D.side];
+    this.doorIn = { bottom: [at, 494], top: [at, 46], left: [46, at], right: [754, at] }[D.side];
+    if (D.side === 'bottom') this.door = [at, 514];
+    this.custom = !L.kitchen && (!!L.door || !!(L.cuts && L.cuts.length) || !!L.vip);
+    // VIP room: its seats are booked separately, so the simulation never seats walk-ins there.
+    if (L.vip) for (const seat of S) if (inRect(seat.x, seat.y, [L.vip.x, L.vip.y, L.vip.w, L.vip.h])) { seat.zone = 'vip'; seat.state = 'vip'; seat.label = `${L.vip.name || 'VIP өрөө'} · ${seat.label}`; }
   }
   buildGrid() {
     const C = 10, cols = 80, rows = 52, g = new Uint8Array(cols * rows); const R = [], Cc = []; const rect = (x, y, w, h, p = 9) => R.push([x - p, y - p, x + w + p, y + h + p]); const circ = (x, y, r) => Cc.push([x, y, r]);
     const L = this.L;
     // Without a kitchen the staff area is only the barista corner; the rest is customer floor.
-    rect(20, 20, 760, 8); rect(20, 20, 8, 484); rect(772, 20, 8, 484); rect(20, 496, 40, 8); rect(120, 496, 660, 8); rect(598 + this.cdx, 20 + this.cdy, 182, L.kitchen ? 484 : 236, 4); rect(0, 504, 50, 16, 0); rect(130, 504, 670, 16, 0); rect(0, 0, 800, 12, 0);
+    if (!this.custom) { rect(20, 20, 760, 8); rect(20, 20, 8, 484); rect(772, 20, 8, 484); rect(20, 496, 40, 8); rect(120, 496, 660, 8); rect(598 + this.cdx, 20 + this.cdy, 182, L.kitchen ? 484 : 236, 4); rect(0, 504, 50, 16, 0); rect(130, 504, 670, 16, 0); rect(0, 0, 800, 12, 0); }
+    else {
+      // Walls with a gap at the door, the outside strip with a gap in front of it.
+      const D = doorOf(L), gap = (lo, hi, at, half, make) => { if (at == null) { make(lo, hi); return } if (at - half > lo) make(lo, at - half); if (at + half < hi) make(at + half, hi) };
+      const on = side => D.side === side ? D.at : null;
+      gap(20, 780, on('top'), 30, (a, b) => rect(a, 20, b - a, 8)); gap(20, 780, on('bottom'), 30, (a, b) => rect(a, 496, b - a, 8));
+      gap(20, 504, on('left'), 30, (a, b) => rect(20, a, 8, b - a)); gap(20, 504, on('right'), 30, (a, b) => rect(772, a, 8, b - a));
+      gap(0, 800, on('top'), 40, (a, b) => rect(a, 0, b - a, 12, 0)); gap(0, 800, on('bottom'), 40, (a, b) => rect(a, 504, b - a, 16, 0));
+      gap(0, 520, on('left'), 40, (a, b) => rect(0, a, 12, b - a, 0)); gap(0, 520, on('right'), 40, (a, b) => rect(788, a, 12, b - a, 0));
+      rect(598 + this.cdx, 20 + this.cdy, 182, 236, 4);
+      (L.cuts || []).forEach(([x, y, w, h]) => rect(x, y, w, h));
+      if (L.vip) { const { x, y, w, h } = L.vip, mid = x + w / 2; rect(x, y, w, 6, 4); rect(x, y, 6, h, 4); rect(x + w - 6, y, 6, h, 4); rect(x, y + h - 6, mid - 28 - x, 6, 4); rect(mid + 28, y + h - 6, x + w - mid - 28, 6, 4); }
+    }
     if (L.windowBar) rect(L.windowBar.x, 30, L.windowBar.w, 24); L.long.forEach(t => rect(t.x, t.y, t.w, 36)); L.sofas.forEach(f => { rect(f.x, f.y - 4, f.w, 36); if (f.table) circ(f.table[0], f.table[1], 32) }); L.shelves.forEach(b => rect(b.x, b.y, b.w, b.h));
     this.tables.forEach(([x, y]) => circ(x, y, 34)); this.seats.forEach(s => circ(s.x, s.y, s.kind === 'stool' ? 18 : 19));
     L.plants.forEach(([x, y, r]) => circ(x, y, r + 3));
@@ -176,7 +223,7 @@ class FloorPlan {
   arrive(user, sensorDriven = false) {
     if (this.telemetryControlled && !sensorDriven) return false;
     const free = this.seats.filter(s => s.state === 'free' && !s.res); if (!free.length && !this.telemetryControlled) return false; let pool = free; if (this.sound <= 2) { const q = free.filter(s => s.zone === 'bar' || s.zone === 'long'); if (q.length && this.r() < .7) pool = q }
-    const s = pool.length ? pool[Math.floor(this.r() * pool.length)] : this.standingSeat(); if (!s) return false; s.res = true; const p = this.newPerson(); p.user = user; p.seat = s; p.x = this.door[0]; p.y = this.door[1] + 4; p.ang = -Math.PI / 2;
+    const s = pool.length ? pool[Math.floor(this.r() * pool.length)] : this.standingSeat(); if (!s) return false; s.res = true; const p = this.newPerson(); p.user = user; p.seat = s; [p.x, p.y] = this.entry; p.ang = Math.atan2(this.doorIn[1] - p.y, this.doorIn[0] - p.x);
     const q = this.people.filter(x => x.state === 'toOrder' || x.state === 'order').length; p.orderPt = [this.order[0], this.order[1] + q * 24];
     if (this.reduced) { this.sit(p); this.people.push(p); return true }
     if (s.kind === 'standing') { p.path = this.path(p.x, p.y, s.x, s.y); p.state = 'toSeat'; }
@@ -191,7 +238,7 @@ class FloorPlan {
     const sat = this.people.filter(p => this.telemetryControlled ? p.state !== 'leaving' && p.state !== 'gone' : p.state === 'seated'); if (!sat.length) return false; const p = sat[Math.floor(this.r() * sat.length)]; const s = p.seat; s.state = 'free'; s.person = null; s.res = false; s.flash = 1; this.fx.push({ x: s.x, y: s.y, t: 0, c: '#C08A4A' });
     if (user) Snd.ui('leave'); this.o.onEvent && this.o.onEvent(`${s.label} суллаа`, 'out'); this.emit(); if (this.sel === s) this.o.onSeat && this.o.onSeat(this.seatView(s));
     if (this.reduced) { this.people = this.people.filter(x => x !== p); return true }
-    p.state = 'leaving'; p.path = this.path(p.x, p.y, this.door[0], this.door[1] + 4); p.seat = null; return true
+    p.state = 'leaving'; p.path = this.path(p.x, p.y, ...this.entry); p.seat = null; return true
   }
   setTarget(pct, fast) { if (this.telemetryControlled) return; this.target = Math.round(pct * this.countable() / 100); this.busyUntil = fast ? performance.now() + 20000 : 0; this.nextEv = fast ? 150 : 800 }
   setZoom(f) { this.zoom = clamp(this.zoom * f, 1, 2.6); this.resize(true) }
@@ -332,15 +379,20 @@ class FloorPlan {
   // colours, plus the template's own floor and decoration. Rendered once per size (cached).
   drawThemed(k = 2.5) {
     const c = document.createElement('canvas'); c.width = Math.round(this.W * k); c.height = Math.round(this.H * k); const x = c.getContext('2d'); x.scale(k, k); const rr = (X, y, w, h, r) => this.rr(x, X, y, w, h, r); const r = rng(5); const L = this.L;
-    const T = THEMES[L.theme] || THEMES.minimal, dx = this.cdx, dy = this.cdy;
+    const T = L.look ? lookTheme(L.look) : THEMES[L.theme] || THEMES.minimal, dx = this.cdx, dy = this.cdy;
     const disc = (px, py, rad, fill) => { x.fillStyle = fill; x.beginPath(); x.arc(px, py, rad, 0, 7); x.fill() };
     x.fillStyle = T.outside; x.fillRect(0, 0, 800, 520);
     // floor
     x.fillStyle = T.floor; x.fillRect(24, 24, 752, 476);
     if (T.floorStyle === 'tiles') { x.strokeStyle = T.floorLine; x.lineWidth = 1; for (let xx = 24; xx < 776; xx += 48) { x.beginPath(); x.moveTo(xx, 24); x.lineTo(xx, 500); x.stroke() } for (let yy = 24; yy < 500; yy += 48) { x.beginPath(); x.moveTo(24, yy); x.lineTo(776, yy); x.stroke() } }
+    else if (T.floorStyle === 'wood') { x.strokeStyle = T.floorLine; x.lineWidth = 1; for (let yy = 24, row = 0; yy < 500; yy += 22, row++) { x.beginPath(); x.moveTo(24, yy); x.lineTo(776, yy); x.stroke(); for (let xx = 24 + (row % 2) * 55 + r() * 30; xx < 776; xx += 90 + r() * 40) { x.beginPath(); x.moveTo(xx, yy); x.lineTo(xx, Math.min(500, yy + 22)); x.stroke() } } }
     else { x.save(); x.globalAlpha = .75; for (let i = 0; i < 520; i++) disc(24 + r() * 752, 24 + r() * 476, .6 + r() * 1.4, T.speckles[i % T.speckles.length]); x.restore() }
     // window light
-    x.save(); x.globalAlpha = T.lightAlpha; const lg = x.createLinearGradient(0, 24, 0, 200); lg.addColorStop(0, T.light); lg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = lg; L.windows.forEach(([a, b]) => { x.beginPath(); x.moveTo(a, 24); x.lineTo(b, 24); x.lineTo(b + 40, 190); x.lineTo(a + 40, 190); x.fill() }); x.restore();
+    const W = windowsOf(L);
+    x.save(); x.globalAlpha = T.lightAlpha;
+    const light = (a, b, side) => { const g = { top: [0, 24, 0, 200], bottom: [0, 500, 0, 324], left: [24, 0, 200, 0], right: [776, 0, 600, 0] }[side], lg = x.createLinearGradient(...g); lg.addColorStop(0, T.light); lg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = lg; x.beginPath();
+      if (side === 'top') { x.moveTo(a, 24); x.lineTo(b, 24); x.lineTo(b + 40, 190); x.lineTo(a + 40, 190) } else if (side === 'bottom') { x.moveTo(a, 500); x.lineTo(b, 500); x.lineTo(b + 40, 334); x.lineTo(a + 40, 334) } else if (side === 'left') { x.moveTo(24, a); x.lineTo(24, b); x.lineTo(190, b + 40); x.lineTo(190, a + 40) } else { x.moveTo(776, a); x.lineTo(776, b); x.lineTo(610, b + 40); x.lineTo(610, a + 40) } x.fill() };
+    W.forEach(({ side, a, b }) => light(a, b, side)); x.restore();
     // rug
     if (L.rug) {
       const [rx, ry, rw, rh] = L.rug;
@@ -351,20 +403,42 @@ class FloorPlan {
     x.fillStyle = T.staffFloor; x.fillRect(600 + dx, 24 + dy, 176, 226);
     // pendant lamp light pools over round tables
     if (T.pendants) this.tables.forEach(([tx, ty]) => { const g = x.createRadialGradient(tx, ty, 10, tx, ty, 70); g.addColorStop(0, 'rgba(255,214,140,.45)'); g.addColorStop(1, 'rgba(255,214,140,0)'); x.fillStyle = g; x.beginPath(); x.arc(tx, ty, 70, 0, 7); x.fill() });
+    // VIP room floor
+    if (L.vip) { const { x: vx, y: vy, w: vw, h: vh } = L.vip; x.save(); x.globalAlpha = .14; x.fillStyle = T.accents[0]; x.fillRect(vx, vy, vw, vh); x.restore() }
     // walls (the barista area's partition walls move with the counter)
-    x.fillStyle = T.wall; x.fillRect(20, 20, 760, 8); x.fillRect(20, 20, 8, 484); x.fillRect(772, 20, 8, 484); x.fillRect(20, 496, 40, 8); x.fillRect(120, 496, 660, 8);
+    const D = doorOf(L);
+    x.fillStyle = T.wall;
+    if (D.side === 'bottom' && D.at === 90) { x.fillRect(20, 20, 760, 8); x.fillRect(20, 20, 8, 484); x.fillRect(772, 20, 8, 484); x.fillRect(20, 496, 40, 8); x.fillRect(120, 496, 660, 8) }
+    else {
+      const seg = (side, lo, hi) => { const at = D.side === side ? D.at : null, put = (a, b) => side === 'top' ? x.fillRect(a, 20, b - a, 8) : side === 'bottom' ? x.fillRect(a, 496, b - a, 8) : side === 'left' ? x.fillRect(20, a, 8, b - a) : x.fillRect(772, a, 8, b - a); if (at == null) put(lo, hi); else { if (at - 30 > lo) put(lo, at - 30); if (at + 30 < hi) put(at + 30, hi) } };
+      seg('top', 20, 780); seg('bottom', 20, 780); seg('left', 20, 504); seg('right', 20, 504);
+    }
+    // cut-away corners: outside colour, walled along the room side
+    (L.cuts || []).forEach(([cx, cy, cw, ch]) => {
+      const x0 = cx <= 32 ? 0 : cx, y0 = cy <= 32 ? 0 : cy, x1 = cx + cw >= 768 ? 800 : cx + cw, y1 = cy + ch >= 492 ? 520 : cy + ch;
+      x.fillStyle = T.outside; x.fillRect(x0, y0, x1 - x0, y1 - y0);
+      x.save(); x.beginPath(); x.rect(20, 20, 760, 484); x.clip(); x.strokeStyle = T.wall; x.lineWidth = 8; x.strokeRect(cx - 4, cy - 4, cw + 8, ch + 8); x.restore();
+    });
+    x.fillStyle = T.wall;
     x.fillRect(598 + dx, 250 + dy, 90, 6); x.fillRect(740 + dx, 250 + dy, 36, 6); x.fillRect(596 + dx, 190 + dy, 6, 66);
     if (dy > 0) x.fillRect(596 + dx, 20 + dy, 184, 6);
     if (dx < 0) x.fillRect(774 + dx, 20 + dy, 6, 236);
-    x.fillStyle = '#BFE1F2'; L.windows.forEach(([a, b]) => { x.fillRect(a + 4, 20, b - a - 8, 8) }); x.fillStyle = '#9ACBE5'; L.windows.forEach(([a, b]) => x.fillRect(a + 4, 23, b - a - 8, 2));
+    const glass = (side, a, b, y, h) => side === 'top' ? x.fillRect(a + 4, y, b - a - 8, h) : side === 'bottom' ? x.fillRect(a + 4, 516 - y - h, b - a - 8, h) : side === 'left' ? x.fillRect(y, a + 4, h, b - a - 8) : x.fillRect(800 - y - h, a + 4, h, b - a - 8);
+    x.fillStyle = '#BFE1F2'; W.forEach(({ side, a, b }) => glass(side, a, b, 20, 8)); x.fillStyle = '#9ACBE5'; W.forEach(({ side, a, b }) => glass(side, a, b, 23, 2));
+    // VIP room walls with its own door, and its name
+    if (L.vip) {
+      const { x: vx, y: vy, w: vw, h: vh } = L.vip, mid = vx + vw / 2; x.fillStyle = T.wall;
+      x.fillRect(vx, vy, vw, 6); x.fillRect(vx, vy, 6, vh); x.fillRect(vx + vw - 6, vy, 6, vh); x.fillRect(vx, vy + vh - 6, mid - 28 - vx, 6); x.fillRect(mid + 28, vy + vh - 6, vx + vw - mid - 28, 6);
+    }
     // string lights along the left wall
     if (T.stringLights) {
       x.strokeStyle = 'rgba(62,42,23,.5)'; x.lineWidth = 1; x.beginPath(); for (let yy = 60; yy <= 460; yy += 4) { const xx = 36 + Math.sin(yy / 25) * 4; yy === 60 ? x.moveTo(xx, yy) : x.lineTo(xx, yy) } x.stroke();
       for (let yy = 64; yy < 460; yy += 25) { const xx = 36 + Math.sin(yy / 25) * 4, g = x.createRadialGradient(xx, yy, 0, xx, yy, 9); g.addColorStop(0, 'rgba(255,214,120,.9)'); g.addColorStop(1, 'rgba(255,214,120,0)'); x.fillStyle = g; x.beginPath(); x.arc(xx, yy, 9, 0, 7); x.fill(); disc(xx, yy, 2.2, '#FFE6A8') }
     }
-    // door
-    x.strokeStyle = T.wall; x.lineWidth = 2; x.setLineDash([4, 4]); x.beginPath(); x.arc(60, 500, 60, -Math.PI / 2.4, 0); x.stroke(); x.setLineDash([]); x.beginPath(); x.moveTo(60, 500); x.lineTo(60 + 60 * Math.cos(-Math.PI / 2.4), 500 + 60 * Math.sin(-Math.PI / 2.4)); x.stroke();
-    x.fillStyle = T.mat; rr(66, 486, 48, 12, 4); x.fill();
+    // door (drawn in the bottom wall's coordinates, then turned onto its own wall)
+    x.save(); x.transform(...SIDE_TF[D.side]); const h0 = D.at - 30;
+    x.strokeStyle = T.wall; x.lineWidth = 2; x.setLineDash([4, 4]); x.beginPath(); x.arc(h0, 500, 60, -Math.PI / 2.4, 0); x.stroke(); x.setLineDash([]); x.beginPath(); x.moveTo(h0, 500); x.lineTo(h0 + 60 * Math.cos(-Math.PI / 2.4), 500 + 60 * Math.sin(-Math.PI / 2.4)); x.stroke();
+    x.fillStyle = T.mat; rr(h0 + 6, 486, 48, 12, 4); x.fill(); x.restore();
     // window bar
     if (L.windowBar) {
       const { x: bx, w: bw } = L.windowBar; x.fillStyle = T.bar[0]; rr(bx, 30, bw, 24, 6); x.fill(); x.strokeStyle = T.bar[1]; x.lineWidth = 2; x.stroke();
@@ -398,7 +472,8 @@ class FloorPlan {
     for (let i = 0; i < 4; i++) { disc(640 + i * 12, 74, 4, '#fff'); x.strokeStyle = '#C9C2B4'; x.lineWidth = 1; x.stroke() }
     x.restore();
     // labels
-    const labels = [['Орц', 90, 486], ['Кофе захиалга', 690 + dx, 110 + dy]];
+    const entryLabel = { bottom: [D.at, 486], top: [D.at, 44], left: [56, D.at + 4], right: [744, D.at + 4] }[D.side];
+    const labels = [['Орц', ...entryLabel], ['Кофе захиалга', 690 + dx, 110 + dy]];
     if (L.windowBar) labels.push(['Цонхны баар', ...L.windowBar.label]);
     L.long.forEach(t => t.label && labels.push([t.name, ...t.label]));
     L.sofas.forEach(f => f.label && labels.push([f.name || 'Буйдан', ...f.label]));
@@ -410,6 +485,12 @@ class FloorPlan {
       else { x.rotate(s.ang + Math.PI / 2); x.fillStyle = 'rgba(0,0,0,.1)'; rr(-9, -7, 19, 19, 4); x.fill(); x.fillStyle = T.chair[0]; rr(-10, -9, 20, 18, T.thin ? 3 : 4); x.fill(); x.strokeStyle = T.chair[1]; x.lineWidth = T.thin ? 1.2 : 1.5; x.stroke(); x.fillStyle = T.chair[1]; rr(-10, 6, 20, 5, 2.5); x.fill() }
       x.restore()
     });
+    // VIP room name on a small plate, above the furniture so nothing hides it
+    if (L.vip) {
+      const t = `★ ${L.vip.name || 'VIP өрөө'} · захиалгаар`; x.font = '800 11px Manrope, sans-serif'; x.textAlign = 'center';
+      const w = x.measureText(t).width + 14, cx = L.vip.x + L.vip.w / 2, cy = L.vip.y + 18;
+      x.fillStyle = T.floor; if (!this.portrait) { rr(cx - w / 2, cy - 12, w, 18, 9); x.fill() } x.fillStyle = T.label; this.label(x, t, cx, cy + 1);
+    }
     return c
   }
   person(x, p, px, py, ang, walking, time = p.t) {
@@ -432,6 +513,7 @@ class FloorPlan {
       const state = this.telemetryControlled ? 'unknown' : s.state;
       if (state === 'free') { x.fillStyle = 'rgba(243,226,196,.62)'; x.beginPath(); x.arc(s.x, s.y, s.kind === 'stool' ? 12 : 14, 0, 7); x.fill() }
       if (state === 'occ') { x.fillStyle = 'rgba(255,157,0,.9)'; x.beginPath(); x.arc(s.x, s.y, s.kind === 'stool' ? 14 : 16, 0, 7); x.fill(); x.strokeStyle = '#7B542F'; x.lineWidth = 2; x.stroke() }
+      if (state === 'vip') { x.strokeStyle = 'rgba(182,119,29,.85)'; x.lineWidth = 1.6; x.setLineDash([2, 3]); x.beginPath(); x.arc(s.x, s.y, 13, 0, 7); x.stroke(); x.setLineDash([]) }
       if (state === 'unknown') { x.strokeStyle = 'rgba(154,133,112,.9)'; x.lineWidth = 1.6; x.setLineDash([3, 3]); this.rr(x, s.x - 14, s.y - 12, 28, 22, 6); x.stroke(); x.setLineDash([]); x.fillStyle = '#9A8570'; x.font = '800 12px Manrope, sans-serif'; x.textAlign = 'center'; this.label(x, '?', s.x + (this.portrait ? 4 : 0), s.y + (this.portrait ? 0 : 4)) }
       if (s.flash > 0) { x.fillStyle = `rgba(255,207,113,${s.flash * .6})`; x.beginPath(); x.arc(s.x, s.y, 18, 0, 7); x.fill() }
     });
@@ -455,4 +537,4 @@ class FloorPlan {
   }
 }
 
-export { FloorPlan, ZONES, THEMES };
+export { FloorPlan, ZONES, THEMES, lookTheme, doorOf, windowsOf };

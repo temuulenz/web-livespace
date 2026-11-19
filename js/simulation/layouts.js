@@ -6,7 +6,9 @@
  * see THEMES in floor-plan.js) and a starting arrangement. Inside a template every
  * object can be moved in the admin layout editor: tables with their chairs, single
  * chairs, sofas, the window bar, shelves, plants, the rug and the order counter.
- * The outer walls, the windows (top) and the entrance (bottom left) are fixed.
+ * The room itself can be changed too: the entrance on any wall, windows on any wall,
+ * corners cut away for an L- or U-shaped room, and an optional VIP room that guests book
+ * separately. A café can also get a new look (`look`: a template recoloured).
  * Coordinates use the 800×520 world of FloorPlan.
  *
  * `legacy` is the original interior including the kitchen. It is kept so the seeded
@@ -70,7 +72,7 @@ const LAYOUTS = {
 };
 
 const LAYOUT_IDS = Object.keys(LAYOUTS).filter(id => id !== 'legacy');
-const EDITABLE = ['windowBar', 'counter', 'rug', 'round', 'long', 'sofas', 'chairs', 'plants', 'shelves'];
+const EDITABLE = ['windowBar', 'counter', 'rug', 'round', 'long', 'sofas', 'chairs', 'plants', 'shelves', 'door', 'windows', 'cuts', 'vip'];
 // Visualizations saved before there were two templates keep working.
 const OLD_PRESETS = { classic: 'minimal', library: 'minimal', workspace: 'minimal', social: 'artistic', lounge: 'artistic' };
 
@@ -94,6 +96,9 @@ function resolveLayout(spec, cafe) {
   const out = { ...base, kitchen: presetId === 'legacy' };
   for (const key of EDITABLE) if (key in overrides && (Array.isArray(overrides[key]) || overrides[key] === null || typeof overrides[key] === 'object')) out[key] = overrides[key];
   if (!out.counter) out.counter = COUNTER;
+  if (!out.windows) out.windows = [];
+  if (out.door === null) delete out.door; if (out.vip === null) delete out.vip; if (out.cuts === null) delete out.cuts;
+  if (config?.look && typeof config.look === 'object') out.look = config.look;
   for (const key of ['round', 'long', 'sofas', 'chairs', 'plants', 'shelves']) if (!Array.isArray(out[key])) out[key] = [];
   return out;
 }

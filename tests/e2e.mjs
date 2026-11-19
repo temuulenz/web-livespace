@@ -206,6 +206,28 @@ try {
     await waitFor(`!!document.querySelector('.own-tiles') && !!document.querySelector('.own-plan canvas')`, 200);
     assert.match(await evaluate(`document.querySelector('.own-live').innerText`), /ШУУД/);
     await shot('owner-dashboard-active');
+    // Owner UX: summary on the first screen, plain words, active café collapsed to one badge.
+    assert.equal(await evaluate(`document.querySelectorAll('.own-sum [data-own-go]').length`), 3);
+    assert.ok(await evaluate(`document.querySelector('.own-sum').getBoundingClientRect().bottom <= innerHeight`), 'summary cards are visible without scrolling');
+    assert.match(await evaluate(`document.querySelector('.own-sum').innerText`), /Одоо \d+ хүн|Хүний тоо одоогоор алга/);
+    assert.equal(await evaluate(`['SIMULATED', 'dBFS', 'Inference'].filter(w => document.querySelector('#app').innerText.includes(w)).join()`), '');
+    assert.equal(await evaluate(`!!document.querySelector('.own-active:not([open])') && document.querySelector('.own-active').innerText.includes('Идэвхтэй ✓')`), true);
+    // Tabs: the report draws a chart from the history API (or says there is no data), technical details expand.
+    await click('[data-own-tab="report"]');
+    await waitFor(`!document.querySelector('[data-own-panel="report"]').hidden && document.querySelector('[data-own-panel="today"]').hidden`);
+    await waitFor(`!!document.querySelector('.rep-chart, .rep-empty')`, 200);
+    await click('[data-own-open="tech"]');
+    await waitFor(`!!document.querySelector('.own-tech[open] [data-sensor-history]')`, 200);
+    await click('[data-own-tab="orders"]');
+    await waitFor(`!document.querySelector('[data-own-panel="orders"]').hidden`);
+    // Phone width: the summary still fits the first screen and tab targets are thumb-sized.
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    await evaluate(`scrollTo(0, 0)`); await delay(200);
+    assert.ok(await evaluate(`document.querySelector('.own-sum').getBoundingClientRect().bottom <= innerHeight`), 'summary fits a phone screen');
+    assert.ok(await evaluate(`Math.min(...[...document.querySelectorAll('[data-own-tab]')].map(b => b.getBoundingClientRect().height)) >= 44`), 'tabs are at least 44 px');
+    await shot('owner-dashboard-mobile');
+    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await click('[data-own-tab="today"]');
   });
 
   await check('real camera counts drive the existing canvas through 0 → 5 → 2 → 0 and offline', async () => {
