@@ -228,19 +228,17 @@ $('#favPop').addEventListener('click', e => { if (e.target.closest('[data-fav-lo
 document.addEventListener('click', e => { if (!e.target.closest('#sndPop,#sndBtn')) $('#sndPop').hidden = true; if (!e.target.closest('#favPop,#favBtn')) $('#favPop').hidden = true; if (e.target.closest('#favPop a')) $('#favPop').hidden = true });
 
 /* ================= cafe card (V1 layout, upgraded) ================= */
-// compact (home «Ойролцоох кафенууд»): only name, open, seats · Wi-Fi and freshness; the rest is behind «Дэлгэрэнгүй».
-function cafeCard(c, _i, mode) {
-  const compact = mode === true; // .map(cafeCard) passes (c, index, array)
+function cafeCard(c) {
   const fp_ = freePct(c);
   const tiles = c.open ? `<div class="tile" title="Сул суудал"><div class="ti">${seatRow(c.occ)}</div><b class="num">${fp_ == null ? '—' : fp_ + '%'}</b></div>
   <div class="tile" title="Дуу чимээ · ${SS[c.sound].t}"><div class="ti">${ssGlyph(c.sound)}</div><b>${SS[c.sound].short}</b></div>
   <div class="tile" title="Wi-Fi · ${WIFI_S[c.wifi]}"><div class="ti">${wifiSVG(c.wifi, 26)}</div><b>${WIFI[c.wifi]}</b></div>`
     : `<div class="unav"><b>${closedText(c)}</b></div>`;
-  return `<article class="ccard${c.open ? '' : ' is-closed'}${compact ? ' cc-compact' : ''}" data-href="#cafe-${c.id}">
+  return `<article class="ccard${c.open ? '' : ' is-closed'}" data-href="#cafe-${c.id}">
   <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${c.name}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${walkMeta(c)}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${c.id}" aria-label="${c.name} дэлгэрэнгүй">${I.arr}</a></div></div>
   ${statusBlock(c)}
-  ${compact ? '' : `<div class="tags">${tagPills(c)}</div>
-  <div class="tiles">${tiles}</div>${sensorPanelHTML(c, true)}`}
+  <div class="tags">${tagPills(c)}</div>
+  <div class="tiles">${tiles}</div>${sensorPanelHTML(c, true)}
   ${moreLink(c)}
  </article>`}
 document.addEventListener('click', e => { const card = e.target.closest('[data-href]'); if (card && !e.target.closest('a,button')) location.hash = card.dataset.href });
@@ -283,9 +281,6 @@ function renderHome() {
  ${mob ? mobileHomeHTML({ cafes: CAFES }) : ''}
  <div class="wrap">
   ${mob ? '' : deskRecHTML()}
-  <section class="sec"><div class="sec-h"><h2>Ойролцоох кафенууд</h2><p>Танд хамгийн ойр 6 кафе</p></div>
-   <div class="cgrid">${[...CAFES].sort((a, b) => parseFloat(a.dist) * (a.dist.includes('км') ? 1000 : 1) - parseFloat(b.dist) * (b.dist.includes('км') ? 1000 : 1)).slice(0, 6).map(c => cafeCard(c, 0, true)).join('')}</div>
-   <div style="text-align:center;margin-top:28px"><a class="btn btn-o" href="#cafes">Бүх кафе харах →</a></div></section>
   <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Жишээ дуу — бодит бичлэг биш. Товчоор сонсоорой.</p></div>
    <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Орчны дууны жишээ сонсох</button></div>`).join('')}</div>
    <div class="ss-dots" aria-hidden="true">${[1, 2, 3, 4, 5].map((l, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></section>
@@ -300,7 +295,7 @@ function renderHome() {
   homeMobileOff = bindMobileHome($('.mhome'), { cafes: CAFES, onSearch: search });
   deskRecOff = bindDeskRec($('.drec'), { cafes: CAFES });
   // Sections scrolled out of view stop animating (no visible change; saves repaints every frame).
-  homeOffscreenOff = pauseOffscreen([$(".hero"), $(".cgrid"), $(".ss-row")]);
+  homeOffscreenOff = pauseOffscreen([$(".hero"), $(".ss-row")]);
   // Phones scroll the five noise cards sideways; the dots under them show which one is in view.
   const ssRow = $('.ss-row'); let ssFrame;
   ssRow.addEventListener('scroll', () => { if (ssFrame === undefined) ssFrame = pageTasks.frame(() => { ssFrame = undefined; const cards = $$('.ss-card', ssRow), x = ssRow.scrollLeft + 16; let k = 0; cards.forEach((c, i) => { if (Math.abs(c.offsetLeft - x) < Math.abs(cards[k].offsetLeft - x)) k = i }); if (ssRow.scrollLeft + ssRow.clientWidth >= ssRow.scrollWidth - 4) k = cards.length - 1; $$('.ss-dots i').forEach((d, i) => d.classList.toggle('on', i === k)) }) }, { passive: true });
