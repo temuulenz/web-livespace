@@ -1920,3 +1920,59 @@ html.rm .ml-you-pulse {
 .adm-loc .loc-read { margin: 6px 0 0; font-size: 13px }
 .loc-manual summary { margin-top: 6px; cursor: pointer; font-size: 13px; font-weight: 800; color: var(--brown) }
 .loc-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 10px }
+
+/* ---------- café-owner dashboard: summary, tabs, plain words ---------- */
+.own-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px }
+.own-sum-c { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 112px; padding: 16px 18px; border: 1.5px solid var(--line); border-radius: 20px; background: var(--paper); color: var(--ink); text-align: left; box-shadow: var(--sh); cursor: pointer; transition: border-color .2s, transform .15s }
+.own-sum-c:hover { border-color: var(--brown) }
+.own-sum-c:active { transform: scale(.98) }
+.own-sum-c > b { font-family: var(--f-disp); font-size: 38px; line-height: 1; color: var(--brown) }
+.own-sum-c > span { font-size: 15px; font-weight: 800 }
+.own-sum-f { font-size: 12px; font-weight: 700; color: var(--ink3) }
+.own-sum-f.t-live { color: #2E7D4F } .own-sum-f.t-stale { color: var(--terraT) }
+.own-tabs { position: sticky; top: var(--hd); z-index: 5; display: flex; gap: 4px; margin: 0 0 16px; padding: 5px; border-radius: 999px; background: var(--sand); box-shadow: 0 6px 16px -10px rgba(62, 42, 23, .3) }
+.own-tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--ink2); font-size: 15px; font-weight: 800 }
+.own-tabs button[aria-selected="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 2px 8px rgba(62, 42, 23, .14) }
+.own-tab-n { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--orange); color: #fff; font-size: 12px }
+.own-panel { display: grid; gap: 16px }
+.own-panel[hidden] { display: none }
+.own-meta { margin: 0 }
+.own-trust { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--ink2) }
+.own-trust.t-live { color: #2E7D4F } .own-trust.t-stale { color: var(--terraT) }
+.own-active summary, .own-vis > summary, .own-tech > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; cursor: pointer; list-style: none }
+.own-active summary::-webkit-details-marker, .own-vis > summary::-webkit-details-marker, .own-tech > summary::-webkit-details-marker { display: none }
+.own-vis > summary h2, .own-tech > summary h2 { margin: 0; font-size: 20px }
+.own-vis > summary::after, .own-tech > summary::after, .own-active summary::after { content: "▾"; margin-left: auto; color: var(--ink3); transition: transform .2s }
+.own-vis[open] > summary::after, .own-tech[open] > summary::after, .own-active[open] summary::after { transform: rotate(180deg) }
+.own-active[open] .own-steps, .own-vis[open] .own-plan, .own-tech[open] > :not(summary):first-of-type { margin-top: 14px }
+.own-vis .own-plan { max-width: 620px; margin-inline: auto }
+.own-devices-tech li { display: grid; gap: 4px }
+/* report chart */
+.rep .card-h { flex-wrap: wrap; gap: 8px }
+.rep-range { display: inline-flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 999px; background: var(--sand) }
+.rep-range button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--ink2); font-weight: 800 }
+.rep-range button[aria-pressed="true"] { background: var(--paper); color: var(--ink) }
+.rep-chart { display: block; width: 100%; max-height: 240px }
+.rep-chart rect { fill: var(--amberL) }
+.rep-chart rect.best { fill: var(--orange) }
+.rep-chart line { stroke: var(--line2) }
+.rep-chart text { font-size: 10px; fill: var(--ink3); text-anchor: middle; font-family: var(--f-body, sans-serif) }
+.rep-best { margin: 10px 0 4px; font-size: 16px; font-weight: 800 }
+.rep-note { margin: 0; font-size: 13px }
+.rep-empty { margin: 8px 0; font-weight: 800; color: var(--ink2) }
+@media (max-width:820px) {
+  .own { padding-top: 12px }
+  .own-head { align-items: center; gap: 8px; margin-bottom: 12px }
+  .own-head .tagp { display: none }
+  .own-head h1 { margin: 0; font-size: 26px }
+  .own-meta { font-size: 13px }
+  .own-public { min-height: 40px; padding: 8px 14px; font-size: 14px }
+  .own-sum { gap: 8px }
+  .own-sum-c { min-height: 0; padding: 12px; border-radius: 16px }
+  .own-sum-c > b { font-size: 28px }
+  .own-sum-c > span { font-size: 13px }
+  .own-tabs { border-radius: 16px }
+  .own-tabs button { padding: 0 4px; font-size: 13px }
+  .own-vis .own-plan { max-width: 100% }
+}
+@media (max-width:420px) { .own-sum { grid-template-columns: 1fr 1fr } .own-sum-c:first-child { grid-column: 1/-1 } }
