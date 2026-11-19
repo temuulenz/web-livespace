@@ -1976,3 +1976,21 @@ html.rm .ml-you-pulse {
   .own-vis .own-plan { max-width: 100% }
 }
 @media (max-width:420px) { .own-sum { grid-template-columns: 1fr 1fr } .own-sum-c:first-child { grid-column: 1/-1 } }
+
+/* ---------- partner form: essentials first, progress, examples, camera ---------- */
+.pf-progress { grid-column: 1/-1; margin: -4px 0 0; font-size: 13px; font-weight: 800; color: var(--ink2) }
+.pf-legend { grid-column: 1/-1; margin: 0; font-size: 12.5px; color: var(--ink3) }
+.pf-req { margin-left: 3px; color: var(--orange); font-weight: 800 }
+.pf-where-row { display: grid; grid-template-columns: minmax(130px, 200px) 1fr; gap: 8px }
+.pf-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px }
+.pf-examples .chip { min-height: 36px; font-size: 13px }
+.pf-more { margin-top: 10px }
+.pf-more summary { cursor: pointer; font-size: 14px; font-weight: 800; color: var(--brown) }
+.pf-more textarea { width: 100%; margin-top: 8px }
+.pf-count { margin: 0 0 8px; font-weight: 800; color: var(--brown) }
+.pf-ph-btns { display: flex; flex-wrap: wrap; gap: 10px }
+.pf-ph-btns .ph-add { flex: 1 1 180px }
+.pf-ph-btns .ph-add[hidden] { display: none }
+.ph-cam { display: none }
+@media (pointer:coarse) { .ph-cam { display: flex } }
+@media (max-width:560px) { .pf-where-row { grid-template-columns: 1fr } }
