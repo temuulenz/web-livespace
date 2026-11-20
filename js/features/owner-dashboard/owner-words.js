@@ -1,23 +1,12 @@
 // Кафе эзэмшигчид зориулсан энгийн үгс ба тайлангийн тооцоо (DOM-гүй, Node-д тестлэгдэнэ:
 // tests/owner-words.test.mjs). Техникийн нэр томъёо (dBFS, SIMULATED, inference…) энд орохгүй;
 // тэдгээр нь «Техникийн дэлгэрэнгүй» хэсэгт хэвээр харагдана.
-import { noiseLevel } from '../../live/levels.js';
-import { SS } from '../../cafes.js';
+// Нийтлэг үгс (эх үүсвэр, дуу чимээ, цаг) нэг л газар байна: js/live/status.js.
+import { sourceWord, noiseWord, clockUB } from '../../live/status.js';
+export { sourceWord, noiseWord, clockUB };
 
 const UB = 'Asia/Ulaanbaatar';
 const pad = n => String(n).padStart(2, '0');
-
-// Эх үүсвэр: SIMULATED / REAL биш.
-export const sourceWord = source => source === 'simulated' || source === true ? 'Туршилтын өгөгдөл' : 'Бодит хэмжилт';
-
-// Дуу чимээ: зөвхөн тохируулсан (калибровктой) үед түвшний үгээр; бусад үед түүхий тоо харуулахгүй.
-export function noiseWord(noise) {
-  if (noise?.calibrated && Number.isFinite(noise.estimatedDbSpl)) return `Дуу чимээ: ${SS[noiseLevel(noise.estimatedDbSpl)].short}`;
-  return 'Дуу чимээ: тохируулаагүй байна';
-}
-
-// «14:20» — Улаанбаатарын цагаар.
-export const clockUB = at => { const t = Date.parse(at); return Number.isFinite(t) ? new Intl.DateTimeFormat('en-GB', { timeZone: UB, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(t) : ''; };
 
 // Төхөөрөмжийн нэг мөр: «Утас холбогдсон ✓ · Батарей 85% · Цэнэглэж байна» / «Утас салсан · сүүлд 14:20».
 export function deviceWords(device) {

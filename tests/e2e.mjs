@@ -192,7 +192,9 @@ try {
     assert.equal((await post(reading(4, 24, 71, 30))).status, 202);
     await waitFor(`document.querySelector('#freePct').textContent === '14%'`, 200);
     assert.equal(await evaluate(`window.__cv === document.querySelector('canvas')`), true, 'the visualization was not rebuilt');
-    assert.match(await evaluate(`document.querySelector('#ssBox').innerText`), /71.0 dB SPL/);
+    // 71 dB (calibrated) is shown as a level word; the number itself stays for admins.
+    assert.match(await evaluate(`document.querySelector('#ssBox').innerText`), /Шуугиантай/);
+    assert.doesNotMatch(await evaluate(`document.querySelector('#ssBox').innerText`), /dB/);
     await shot('cafe-live-after');
   });
 
@@ -250,39 +252,38 @@ try {
         await waitFor(`window.__realPlan?.telemetryControlled && window.__realPlan.observedPeople === ${count} && window.__realPlan.population().active === ${count}`);
         await evaluate(`window.__realCanvas ||= document.querySelector('#planWrap canvas')`);
         assert.equal(await evaluate(`window.__realCanvas === document.querySelector('#planWrap canvas') && window.__realPlan.seats.every(s => window.__realPlan.seatView(s).state === 'unknown') && document.querySelector('#addG').disabled`), true);
-        assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /illustrative/);
+        assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /Дүрслэл — бодит суудлын байршил биш/);
       }
       const sendNoise = (dbfs, calibrated = false) => {
         const frame = { schemaVersion: 1, type: 'sensor.telemetry', messageId: `noise_${Date.now()}`, deviceId: 'real_canvas', locationId: 'B', timestamp: new Date().toISOString(), occupancy: { observedPeople: 2 }, noise: { dbfs, calibrated, estimatedDbSpl: calibrated ? 55 : null }, device: {} };
         ws.send(JSON.stringify(frame)); return frame;
       };
+      // Customers see noise in words only when calibrated; never raw dBFS (that stays for admins).
+      const noise = `document.querySelector('#publicSensor [data-sensor-noise]')?.textContent`;
       sendNoise(-62);
-      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-62.0' && window.__realPlan.population().active === 2`);
+      await waitFor(`${noise} === 'Дуу чимээ: хэмжилт тохируулагдаагүй' && window.__realPlan.population().active === 2`);
       const originalFrame = sendNoise(-24, true);
-      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-24.0' && !!document.querySelector('[data-live-spl]')`);
-      assert.match(await evaluate(`document.querySelector('[data-live-spl]').textContent`), /55.0 dB SPL/);
-      assert.equal(await evaluate(`document.querySelector('[data-noise-chart]').dataset.samples`), '2');
+      await waitFor(`${noise} === 'Дуу чимээ: Яриатай'`);
       await shot('cafe-real-noise');
       // Valid old outbox upload must remain historical; its receipt time is newer.
       ws.send(JSON.stringify({ ...originalFrame, messageId: `old_${Date.now()}`, timestamp: new Date(Date.now() - 60000).toISOString(), occupancy: { observedPeople: 99 }, noise: { dbfs: -95, calibrated: false } }));
       await delay(300);
-      assert.equal(await evaluate(`document.querySelector('[data-live-dbfs]').textContent`), '-24.0');
+      assert.equal(await evaluate(noise), 'Дуу чимээ: Яриатай');
       assert.equal(await evaluate(`window.__realPlan.population().active`), 2);
       sendNoise(null);
-      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '—' && window.__realPlan.population().active === 2`);
-      assert.match(await evaluate(`document.querySelector('[data-noise-category]').textContent`), /unknown/);
-      assert.equal(await evaluate(`document.querySelector('[data-noise-time]').textContent`), '—');
+      await waitFor(`${noise} === 'Дуу чимээ: хэмжилт тохируулагдаагүй' && window.__realPlan.population().active === 2`);
+      assert.equal(await evaluate(`['dBFS', 'SIMULATED', 'online', 'итгэлцэл'].filter(w => document.querySelector('#app').innerText.includes(w)).join()`), '');
       await evaluate(`import('/js/services/platform.js').then(({ platform }) => { platform.config.sensor_stale_after_sec = .01; })`);
       await waitFor(`window.__realPlan.observedPeople === null && document.querySelector('#publicSensor [data-sensor-status]')?.dataset.sensorStatus === 'stale'`);
       await evaluate(`import('/js/services/platform.js').then(({ platform }) => { platform.config.sensor_stale_after_sec = 30; })`);
       sendNoise(-33);
-      await waitFor(`document.querySelector('[data-live-dbfs]')?.textContent === '-33.0' && window.__realPlan.population().active === 2`);
+      await waitFor(`${noise} === 'Дуу чимээ: хэмжилт тохируулагдаагүй' && window.__realPlan.population().active === 2 && document.querySelector('#publicSensor [data-sensor-status]')?.dataset.sensorStatus === 'online'`);
       assert.equal(await evaluate(`window.__realCanvas === document.querySelector('#planWrap canvas')`), true);
       await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
       assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true);
       await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
     } finally { ws.close(); }
-    await waitFor(`window.__realPlan?.observedPeople === null && document.querySelector('[data-plan-reliability]').textContent.includes('unknown occupancy')`);
+    await waitFor(`window.__realPlan?.observedPeople === null && document.querySelector('[data-plan-reliability]').textContent.includes('Хүний тоо одоогоор тодорхойгүй')`);
   });
 
   await check('virtual sensor → WebSocket → SQLite → existing SSE framework → browser', async () => {
@@ -317,22 +318,22 @@ try {
     const running = runSimulator(options, { signal: controller.signal, log: () => {} }).catch(error => { if (!controller.signal.aborted) throw error; });
     try {
       await waitFor(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '7' && !!document.querySelector('#planWrap canvas')`);
-      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /dBFS/);
-      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /SIMULATED/);
+      // Plain words for customers: test data is called so, no dBFS / SIMULATED / device status.
+      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /Туршилтын өгөгдөл/);
+      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /Хүний тоо нь сул суудлын тоо биш/);
+      assert.doesNotMatch(await evaluate(`document.querySelector('#app').innerText`), /dBFS|SIMULATED|online|итгэлцэл/);
       assert.equal(await evaluate(`document.querySelector('#freePct').textContent`), '—');
-      assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /simulation/);
+      assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /Дүрслэл — бодит суудлын байршил биш/);
       await evaluate(`window.__sensorCanvas = document.querySelector('#planWrap canvas')`);
       options.people = 12;
       await waitFor(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '12'`);
       assert.equal(await evaluate(`window.__sensorCanvas === document.querySelector('#planWrap canvas')`), true);
       assert.equal(await evaluate(`document.querySelector('#publicSensor [data-sensor-status]').dataset.sensorStatus`), 'online');
       assert.equal(await evaluate(`document.querySelector('#publicSensor [data-device-diagnostics]')`), null);
-      // Historical aggregation refreshes independently of responsive live counts.
-      await click('#publicSensorHistory [data-history-refresh]');
-      await waitFor(`document.querySelector('#publicSensorHistory [data-history-reading]')?.textContent.includes('12')`);
-      assert.equal(await evaluate(`document.querySelector('#publicSensorHistory [data-history-source]').value`), 'simulated');
-      await evaluate(`(() => { const input = document.querySelector('#publicSensorHistory [data-history-interval]'); input.value = '15'; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-      await waitFor(`!!document.querySelector('#publicSensorHistory [data-history-bucket]')`);
+      // Historical aggregation still refreshes independently of live counts (the technical
+      // table is shown to owners and admins only; the public API is unchanged).
+      assert.equal(await evaluate(`!!document.querySelector('#publicSensorHistory')`), false);
+      await waitFor(`fetch('/api/v1/cafes/A/sensor-history?source=simulated&interval=15').then(r => r.json()).then(d => d.readings.some(r => r.observedPeople === 12) && d.aggregates.length > 0)`);
     } finally { controller.abort(); await running; }
     await waitFor(`document.querySelector('#publicSensor [data-sensor-status]')?.dataset.sensorStatus === 'offline'`);
     await go('#admin?tab=devices');

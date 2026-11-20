@@ -5,7 +5,7 @@ import { sourceWord, noiseWord, deviceWords, reportRange, hourlyPeople, busiestT
 test('plain source and noise words; raw dBFS is never shown', () => {
   assert.equal(sourceWord('simulated'), 'Туршилтын өгөгдөл');
   assert.equal(sourceWord('real'), 'Бодит хэмжилт');
-  assert.equal(noiseWord({ dbfs: -37.1, calibrated: false }), 'Дуу чимээ: тохируулаагүй байна');
+  assert.equal(noiseWord({ dbfs: -37.1, calibrated: false }), 'Дуу чимээ: хэмжилт тохируулагдаагүй');
   assert.doesNotMatch(noiseWord({ dbfs: -37.1 }), /dB/);
   assert.match(noiseWord({ calibrated: true, estimatedDbSpl: 62 }), /^Дуу чимээ: \S/);
 });

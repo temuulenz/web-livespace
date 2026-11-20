@@ -3,7 +3,10 @@
 //
 // Зарчим: мэдээлэлд итгэх итгэл. Бодит, туршилт, хуучирсан, демо, мэдээлэлгүй гэдгийг үргэлж
 // хэлнэ; хэмжээгүй утгыг 0 гэж харуулахгүй; хүний тооноос сул суудал таамаглахгүй.
+// Нийтийн хуудас болон эзэмшигчийн самбар энэ нэг файлын үгсийг ашиглана: англи үг, SIMULATED/REAL,
+// dBFS, итгэлцлийн хувь, төхөөрөмжийн төлөвийн үг энд гарахгүй (техникийн утга нь зөвхөн админд).
 import { sensorState } from './sensor-state.js';
+import { noiseLevel } from './levels.js';
 
 const SECOND = 1000;
 const WIFI_WORD = ['мэдээлэлгүй', 'Сул', 'Дундаж', 'Сайн', 'Маш сайн'];
@@ -11,6 +14,29 @@ const NOISE_WORD = ['', 'Нам гүм', 'Намуухан', 'Яриатай', '
 
 export const dataModeOf = c => c.live?.mode || 'demo';
 const measured = c => ['live', 'test'].includes(dataModeOf(c));
+
+// Эх үүсвэр: «Туршилтын өгөгдөл» / «Бодит хэмжилт» (SIMULATED / REAL биш).
+export const sourceWord = source => source === 'simulated' || source === true ? 'Туршилтын өгөгдөл' : 'Бодит хэмжилт';
+
+// «14:20» — Улаанбаатарын цагаар.
+export const clockUB = at => { const t = Date.parse(at); return Number.isFinite(t) ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ulaanbaatar', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(t) : ''; };
+
+// Дуу чимээ: зөвхөн тохируулсан (калибровктой) хэмжилтийг түвшний үгээр; бусад үед түүхий тоо харуулахгүй.
+export const NOISE_UNCALIBRATED = 'хэмжилт тохируулагдаагүй';
+export function noiseWord(noise) {
+  if (noise?.calibrated && Number.isFinite(noise.estimatedDbSpl)) return `Дуу чимээ: ${NOISE_WORD[noiseLevel(noise.estimatedDbSpl)]}`;
+  return `Дуу чимээ: ${NOISE_UNCALIBRATED}`;
+}
+
+// «Одоо: 8 хүн ажиглагдсан». Тоо ирээгүй бол үүнийгээ хэлнэ (0 гэж зохиохгүй).
+export function peopleState(c, { now = Date.now(), staleAfterSec = 30 } = {}) {
+  const sensor = sensorState(c, { now, staleAfterSec });
+  if (!sensor) return null;
+  return Number.isInteger(sensor.observedPeople)
+    ? { known: true, count: sensor.observedPeople, text: `Одоо: ${sensor.observedPeople} хүн ажиглагдсан` }
+    : { known: false, count: null, text: 'Одоо: хүний тоо мэдээлэлгүй' };
+}
+export const PEOPLE_NOTE = 'Хүний тоо нь сул суудлын тоо биш';
 
 // «20 сек өмнө», «12 мин өмнө», «3 цагийн өмнө».
 export function ageShort(at, now = Date.now()) {
@@ -32,10 +58,11 @@ export function trustState(c, { now = Date.now(), staleAfterSec = 30 } = {}) {
   const sensor = sensorState(c, { now, staleAfterSec });
   const at = sensor?.timestamp || c.live?.updated_at;
   const age = ageShort(at, now);
-  if (c.live?.stale || (sensor && sensor.status !== 'online')) return { kind: 'stale', text: `Мэдээлэл хуучирсан${age ? ' · ' + age : ''}` };
-  return mode === 'test'
-    ? { kind: 'test', text: `Туршилтын мэдээлэл${age ? ' · ' + age : ''}` }
-    : { kind: 'live', text: `Бодит мэдээлэл${age ? ' · ' + age : ''}` };
+  if (c.live?.stale || (sensor && sensor.status !== 'online')) { const clock = clockUB(at); return { kind: 'stale', text: `Мэдээлэл хуучирсан${clock ? ' · ' + clock : ''}` }; }
+  const simulated = mode === 'test' || sensor?.dataSource === 'simulated';
+  return simulated
+    ? { kind: 'test', text: `Туршилтын өгөгдөл${age ? ' · ' + age : ''}` }
+    : { kind: 'live', text: `Бодит хэмжилт${age ? ' · ' + age : ''}` };
 }
 
 // «08:00–22:00» → «22:00»
@@ -74,7 +101,7 @@ export function wifiState(c) {
 export function noiseState(c, { now = Date.now(), staleAfterSec = 30 } = {}) {
   if (!c.open) return { known: false, short: 'Дуу: —' };
   const sensor = sensorState(c, { now, staleAfterSec });
-  if (sensor) return sensor.noiseAvailable ? { known: true, short: 'Дуу: хэмжсэн' } : { known: false, short: 'Дуу: хэмжилтгүй' };
+  if (sensor) { const calibrated = sensor.noise?.calibrated && Number.isFinite(sensor.noise.estimatedDbSpl); return { known: !!calibrated, short: noiseWord(sensor.noise).replace('Дуу чимээ: ', 'Дуу: ') }; }
   if (c.sound) return { known: true, demo: dataModeOf(c) === 'demo', short: `Дуу: ${NOISE_WORD[c.sound]}` };
   return { known: false, short: 'Дуу: хэмжилтгүй' };
 }

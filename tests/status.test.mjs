@@ -20,8 +20,8 @@ test('age is short and never negative', () => {
 
 test('trust line names demo, live, stale, test and missing data', () => {
   assert.deepEqual(trustState(demo, { now: NOW }), { kind: 'demo', text: 'Демо · Жишээ өгөгдөл' });
-  assert.equal(trustState(live({}), { now: NOW }).text, 'Бодит мэдээлэл · 20 сек өмнө');
-  assert.equal(trustState(live({ stale: true, updated_at: ago(12 * 60) }), { now: NOW }).text, 'Мэдээлэл хуучирсан · 12 мин өмнө');
+  assert.equal(trustState(live({}), { now: NOW }).text, 'Бодит хэмжилт · 20 сек өмнө');
+  assert.equal(trustState(live({ stale: true, updated_at: ago(12 * 60) }), { now: NOW }).text, 'Мэдээлэл хуучирсан · 13:48');
   assert.equal(trustState(live({ sensor: sensor({ timestamp: ago(12 * 60) }) }), { now: NOW }).kind, 'stale');
   assert.equal(trustState(live({ mode: 'test' }), { now: NOW }).kind, 'test');
   assert.equal(trustState(live({ mode: 'none' }), { now: NOW }).kind, 'none');
@@ -55,8 +55,8 @@ test('Wi-Fi says where its value came from', () => {
 
 test('noise and walk wording', () => {
   assert.equal(noiseState(demo, { now: NOW }).short, 'Дуу: Намуухан');
-  assert.equal(noiseState(live({ sensor: sensor() }), { now: NOW }).short, 'Дуу: хэмжсэн');
-  assert.equal(noiseState(live({ sensor: sensor({ noise: {} }) }), { now: NOW }).short, 'Дуу: хэмжилтгүй');
+  assert.equal(noiseState(live({ sensor: sensor() }), { now: NOW }).short, 'Дуу: хэмжилт тохируулагдаагүй', 'uncalibrated dBFS is never shown');
+  assert.equal(noiseState(live({ sensor: sensor({ noise: { calibrated: true, estimatedDbSpl: 40 } }) }), { now: NOW }).short, 'Дуу: Нам гүм');
   assert.equal(walkText(demo), '~6 мин алхана · жишээ байршлаас');
   assert.equal(walkText({}), '');
 });
@@ -66,4 +66,24 @@ test('status lines keep one order and escape server text', () => {
   assert.match(html, /&lt;b&gt;x&lt;\/b&gt;/);
   const order = statusLinesHTML(demo, { now: NOW }).match(/cs-(open|facts|trust)/g);
   assert.deepEqual(order, ['cs-open', 'cs-facts', 'cs-trust']);
+});
+
+test('shared plain words for customers and owners: no English, no dBFS, no device status', async () => {
+  const { sourceWord, noiseWord, peopleState, PEOPLE_NOTE } = await import('../js/live/status.js');
+  const { publicSensorHTML, publicBadge } = await import('../js/live/status-ui.js');
+  assert.equal(sourceWord('simulated'), 'Туршилтын өгөгдөл');
+  assert.equal(sourceWord('real'), 'Бодит хэмжилт');
+  assert.equal(noiseWord({ dbfs: -37.1, calibrated: false }), 'Дуу чимээ: хэмжилт тохируулагдаагүй');
+  assert.equal(noiseWord({ calibrated: true, estimatedDbSpl: 71 }), 'Дуу чимээ: Шуугиантай');
+  const cafe = live({}, { live: undefined });
+  const withSensor = { ...demo, live: { mode: 'live', updated_at: ago(20), sensor: sensor({ dataSource: 'simulated', confidence: 0.87, noise: { dbfs: -37.1 } }) } };
+  assert.equal(peopleState(withSensor, { now: NOW }).text, 'Одоо: 8 хүн ажиглагдсан');
+  assert.equal(peopleState(cafe, { now: NOW }), null);
+  const html = publicSensorHTML(withSensor, { now: NOW });
+  assert.match(html, /Одоо: <b class="num" data-observed-people>8<\/b> хүн ажиглагдсан/);
+  assert.match(html, /Туршилтын өгөгдөл · 20 сек өмнө/);
+  assert.ok(html.includes(PEOPLE_NOTE));
+  assert.doesNotMatch(html.replace(/data-[a-z-]+="[^"]*"/g, ''), /SIMULATED|REAL|dBFS|online|итгэлцэл|87/);
+  assert.match(publicBadge(withSensor, { now: NOW }), />ТУРШИЛТ</);
+  assert.match(publicBadge(demo, { now: NOW }), />ДЕМО</);
 });
