@@ -193,8 +193,8 @@ try {
     await waitFor(`document.querySelector('#freePct').textContent === '14%'`, 200);
     assert.equal(await evaluate(`window.__cv === document.querySelector('canvas')`), true, 'the visualization was not rebuilt');
     // 71 dB (calibrated) is shown as a level word; the number itself stays for admins.
-    assert.match(await evaluate(`document.querySelector('#ssBox').innerText`), /Шуугиантай/);
-    assert.doesNotMatch(await evaluate(`document.querySelector('#ssBox').innerText`), /dB/);
+    assert.match(await evaluate(`document.querySelector('#cdSummary [data-sensor-noise]').innerText`), /Шуугиантай/);
+    assert.doesNotMatch(await evaluate(`document.querySelector('#cdSummary').innerText`), /dB/);
     await shot('cafe-live-after');
   });
 
@@ -319,14 +319,26 @@ try {
     try {
       await waitFor(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '7' && !!document.querySelector('#planWrap canvas')`);
       // Plain words for customers: test data is called so, no dBFS / SIMULATED / device status.
-      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /Туршилтын өгөгдөл/);
-      assert.match(await evaluate(`document.querySelector('#publicSensor').textContent`), /Хүний тоо нь сул суудлын тоо биш/);
+      // One status card: people, seats, noise, Wi-Fi and freshness live together.
+      assert.equal(await evaluate(`document.querySelectorAll('#app .cd-summary').length`), 1);
+      assert.match(await evaluate(`document.querySelector('#cdSummary').textContent`), /Туршилтын өгөгдөл/);
+      assert.match(await evaluate(`document.querySelector('#cdSummary').textContent`), /Хүний тоо нь сул суудлын тоо биш/);
       assert.doesNotMatch(await evaluate(`document.querySelector('#app').innerText`), /dBFS|SIMULATED|online|итгэлцэл/);
       assert.equal(await evaluate(`document.querySelector('#freePct').textContent`), '—');
       assert.match(await evaluate(`document.querySelector('[data-plan-reliability]').textContent`), /Дүрслэл — бодит суудлын байршил биш/);
-      await evaluate(`window.__sensorCanvas = document.querySelector('#planWrap canvas')`);
+      await evaluate(`window.__sensorCanvas = document.querySelector('#planWrap canvas'); window.__noReload = document.querySelector('#cdSummary')`);
       options.people = 12;
       await waitFor(`document.querySelector('#publicSensor [data-observed-people]')?.textContent === '12'`);
+      // The measurement reached the one status card in place: same element, no reload, still one card.
+      assert.equal(await evaluate(`window.__noReload === document.querySelector('#cdSummary') && document.querySelectorAll('#app .cd-summary').length === 1 && document.querySelector('#cdSummary').contains(document.querySelector('[data-observed-people]'))`), true);
+      // Phone width: no technical words, one status card, a 40-character name wraps instead of being cut.
+      await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      await delay(300);
+      assert.doesNotMatch(await evaluate(`document.querySelector('#app').innerText`), /SIMULATED|dBFS|online|итгэлцэл|бүртгэгдсэн/);
+      const title = await evaluate(`(() => { const h = document.querySelector('.cd-title h1'), old = h.textContent; h.textContent = 'Улаанбаатар Номын Сан Кофе Шоп Тест Кафе'; h.classList.add('long'); const cs = getComputedStyle(h), r = h.getBoundingClientRect(), b = document.querySelector('.cd-act').getBoundingClientRect(); const out = { cut: h.scrollWidth > h.clientWidth + 1 || cs.textOverflow === 'ellipsis', overlap: r.top < b.bottom && r.bottom > b.top && r.right > b.left }; h.textContent = old; h.classList.remove('long'); return out })()`);
+      assert.deepEqual(title, { cut: false, overlap: false });
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+      assert.doesNotMatch(await evaluate(`document.querySelector('#app').innerText`), /SIMULATED|dBFS|online|итгэлцэл|бүртгэгдсэн/);
       assert.equal(await evaluate(`window.__sensorCanvas === document.querySelector('#planWrap canvas')`), true);
       assert.equal(await evaluate(`document.querySelector('#publicSensor [data-sensor-status]').dataset.sensorStatus`), 'online');
       assert.equal(await evaluate(`document.querySelector('#publicSensor [data-device-diagnostics]')`), null);
