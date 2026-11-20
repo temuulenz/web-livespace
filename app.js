@@ -455,7 +455,7 @@ function buildCafe(c) {
   <svg class="roof-svg" viewBox="0 0 1000 210" preserveAspectRatio="none" aria-hidden="true"><g class="chim"><rect x="742" y="46" width="42" height="90" fill="#B6771D"/><rect x="736" y="38" width="54" height="12" rx="3" fill="#7B542F"/></g><path class="rf-tri" d="M90 207 500 10l410 197z" fill="#FFCF71"/><path class="rf-tri" d="M70 208 500 5l430 203" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/><path class="rf-trap" d="M40 207 170 26h660l130 181z" fill="#FFCF71"/><path class="rf-trap" d="M18 208 166 18h668l148 190" fill="none" stroke="#B6771D" stroke-width="10" stroke-linejoin="round"/></svg>
   <a class="ibtn back" href="#explore" data-back aria-label="Буцах" title="Буцах"><span class="back-ic">${I.arr}</span></a>
   <div class="cd-act">${favBtn(c.id)}${cmpBtn(c.id)}</div>
-  <div class="cd-title"><h1>${c.name}</h1>${c.open ? `<p class="mood-line ${t}" id="moodLine">${mood(c)}</p>` : `<p class="mood-line">${c.note || ''}</p>`}
+  <div class="cd-title"><h1${c.name.length > 24 ? ' class="long"' : ''}>${escapeHTML(c.name)}</h1>${c.open ? `<p class="mood-line ${t}" id="moodLine">${mood(c)}</p>` : `<p class="mood-line">${c.note || ''}</p>`}
    <div class="cd-pills"><span class="tagp2 num">${I.clock}${c.hours}</span><span class="cd-tags">${c.tags.map((t, i) => `<span class="cd-tag">${tagArrow(i)}${tagPills({ tags: [t] })}</span>`).join('')}</span><span id="cdMode">${modeBadge(c, { staleAfterSec: platform.config.sensor_stale_after_sec ?? 30 })}</span></div></div>
  </div>
  <section class="card cd-summary" id="cdSummary" aria-label="Товч мэдээлэл" aria-live="polite">${summaryHTML(c)}</section>
