@@ -38,7 +38,7 @@ test('seats are never shown as 0 when unmeasured and never inferred from people'
   assert.equal(seatState(demo, { now: NOW }).text, '~64% сул (жишээ)');
   assert.equal(seatState(live({ free_pct: 40, available_seats: 8, total_seats: 20 }), { now: NOW }).text, '8/20 сул суудал · 40%');
   const people = seatState(live({ sensor: sensor() }), { now: NOW });
-  assert.equal(people.text, '8 хүн бүртгэгдсэн · Сул суудал тодорхойгүй');
+  assert.equal(people.text, '8 хүн ажиглагдсан · Сул суудал тодорхойгүй');
   assert.equal(people.known, false);
   const none = seatState(live({}), { now: NOW });
   assert.equal(none.text, 'Суудлын мэдээлэл алга');

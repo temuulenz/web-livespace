@@ -48,7 +48,7 @@ export function openState(c) {
   return { open: false, text: c.opens ? `Хаалттай · ${c.opens} нээгдэнэ` : 'Хаалттай' };
 }
 
-// Суудал. Хэмжээгүй бол «мэдээлэлгүй»; хүний тоо л байвал «N хүн бүртгэгдсэн · Сул суудал тодорхойгүй».
+// Суудал. Хэмжээгүй бол «мэдээлэлгүй»; хүний тоо л байвал «N хүн ажиглагдсан · Сул суудал тодорхойгүй».
 export function seatState(c, { now = Date.now(), staleAfterSec = 30 } = {}) {
   if (!c.open) return { known: false, short: 'Суудал: —', text: 'Хаалттай үед суудлын мэдээлэл байхгүй' };
   const mode = dataModeOf(c);
@@ -57,7 +57,7 @@ export function seatState(c, { now = Date.now(), staleAfterSec = 30 } = {}) {
     return { known: true, short: `Суудал: ${pct}% сул`, text: free != null && total ? `${free}/${total} сул суудал · ${pct}%` : `${pct}% сул` };
   }
   const people = sensorState(c, { now, staleAfterSec })?.observedPeople;
-  if (Number.isInteger(people)) return { known: false, short: `${people} хүн · суудал тодорхойгүй`, text: `${people} хүн бүртгэгдсэн · Сул суудал тодорхойгүй` };
+  if (Number.isInteger(people)) return { known: false, short: `${people} хүн ажиглагдсан · суудал тодорхойгүй`, text: `${people} хүн ажиглагдсан · Сул суудал тодорхойгүй` };
   if (mode === 'demo' && c.occ != null) { const pct = 100 - c.occ; return { known: true, demo: true, short: `Суудал: ~${pct}% сул`, text: `~${pct}% сул (жишээ)` }; }
   return { known: false, short: 'Суудал: мэдээлэлгүй', text: 'Суудлын мэдээлэл алга' };
 }
