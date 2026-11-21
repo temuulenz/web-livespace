@@ -1,7 +1,7 @@
 // Login / registration window. Opened when a guest tries something that needs an
 // account (e.g. saving a favourite); after success the pending action continues on
 // the same page, so the visitor never loses their place.
-import { Component, html, raw, readForm, validate, required, email, minLength } from '../../../framework/index.js';
+import { Component, html, raw, readForm, validate, required, email } from '../../../framework/index.js';
 import { openModal, closeModal, toast } from '../../components/feedback.js';
 import { I } from '../../icons.js';
 import { Snd } from '../../audio.js';
@@ -14,10 +14,10 @@ const REASONS = {
   admin: 'Зөвхөн LiveSpace багийн гишүүд нэвтэрнэ.'
 };
 
-export const fieldError = (errors, key) => errors[key] ? html`<span class="em">${errors[key]}</span>` : html`<span class="em"></span>`;
+export const fieldError = (errors, key) => errors[key] ? html`<span class="em" id="au-error-${key}" role="alert">${errors[key]}</span>` : html`<span class="em" id="au-error-${key}"></span>`;
 export const field = (errors, { name, label, type = 'text', value = '', autocomplete, placeholder = '' }) => html`
   <div class="fld${errors[name] ? ' err' : ''}"><label for="au-${name}">${label}</label>
-   <input id="au-${name}" name="${name}" type="${type}" value="${value}" placeholder="${placeholder}" ${raw(autocomplete ? `autocomplete="${autocomplete}"` : '')}>${fieldError(errors, name)}</div>`;
+   <input id="au-${name}" name="${name}" type="${type}" value="${value}" placeholder="${placeholder}" aria-invalid="${Boolean(errors[name])}" aria-describedby="au-error-${name}" ${raw(autocomplete ? `autocomplete="${autocomplete}"` : '')}>${fieldError(errors, name)}</div>`;
 
 class AuthForm extends Component {
   initialState(props) { return { mode: props.mode || 'login', errors: {}, busy: false, message: '' }; }
@@ -28,14 +28,14 @@ class AuthForm extends Component {
     };
   }
   async submit(form) {
+    if (this.state.mode !== 'login' || this.state.busy) return;
     const values = readForm(form);
     const rules = { email: [required('И-мэйлээ оруулна уу'), email('И-мэйл хаяг буруу байна')], password: [required('Нууц үгээ оруулна уу')] };
-    if (this.state.mode === 'register') rules.password.push(minLength(8, 'Дор хаяж 8 тэмдэгт'));
     const errors = validate(values, rules);
     if (Object.keys(errors).length) { Snd.ui('err'); this.setState({ errors, message: '' }); return; }
     this.setState({ busy: true, errors: {}, message: '' });
     try {
-      const user = this.state.mode === 'login' ? await platform.session.login(values) : await platform.session.register(values);
+      const user = await platform.session.login(values);
       Snd.ui('chime');
       closeModal();
       toast(`Тавтай морил${user.name ? ', ' + user.name : ''}!`, true);
@@ -55,14 +55,17 @@ class AuthForm extends Component {
       <button class="chip" role="tab" data-auth-mode="login" aria-pressed="${login}" aria-selected="${login}">Нэвтрэх</button>
       <button class="chip" role="tab" data-auth-mode="register" aria-pressed="${!login}" aria-selected="${!login}">Шинээр бүртгүүлэх</button>
     </div>
-    <form class="form auth-form" novalidate data-key="${mode}">
-      ${login ? '' : field(errors, { name: 'name', label: 'Нэр (заавал биш)', autocomplete: 'name' })}
+    ${!login ? html`<section class="auth-unavailable" role="status">
+      <p>Туршилт явагдаж байгаа тул одоогоор бүртгүүлэх боломжгүй.</p>
+      <p class="muted">Кафе болон газрын зургийг бүртгэлгүйгээр үзэх боломжтой.</p>
+      <button class="btn btn-p" type="button" data-auth-mode="login">Нэвтрэх</button>
+    </section>` : html`<form class="form auth-form" novalidate data-key="login">
       ${field(errors, { name: 'email', label: 'И-мэйл', type: 'email', autocomplete: 'email', placeholder: 'name@example.com' })}
-      ${field(errors, { name: 'password', label: 'Нууц үг', type: 'password', autocomplete: login ? 'current-password' : 'new-password', placeholder: login ? '' : 'Дор хаяж 8 тэмдэгт' })}
+      ${field(errors, { name: 'password', label: 'Нууц үг', type: 'password', autocomplete: 'current-password' })}
       ${message ? html`<p class="auth-msg" role="alert">${message}</p>` : ''}
-      <button class="btn btn-p" ${raw(busy ? 'disabled' : '')}>${busy ? 'Түр хүлээнэ үү…' : login ? 'Нэвтрэх' : 'Бүртгүүлэх'}</button>
+      <button class="btn btn-p" ${raw(busy ? 'disabled' : '')}>${busy ? 'Түр хүлээнэ үү…' : 'Нэвтрэх'}</button>
       <small class="muted">Нэвтрэхгүйгээр бүх кафе, газрын зураг, сул суудлыг үзэх боломжтой. Бүртгэл зөвхөн хадгалах үйлдэлд хэрэгтэй.</small>
-    </form>`;
+    </form>`}`;
   }
 }
 

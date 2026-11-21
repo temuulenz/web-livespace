@@ -2,6 +2,17 @@ import { Component, html, raw } from '../../../framework/index.js';
 import { platform } from '../../services/platform.js';
 import { sensorTime, sensorSourceLabel, noiseText } from '../../live/sensor-ui.js';
 
+function occupancyChart(aggregates, source) {
+  const buckets = aggregates.filter(row => Number.isFinite(row.averageObservedPeople)).slice(-24);
+  if (!buckets.length) return '';
+  const max = Math.max(1, ...buckets.map(row => row.averageObservedPeople));
+  return html`<figure class="cd-history-chart" aria-hidden="true">
+    <figcaption>Ажиглагдсан хүний тоо · ${sensorSourceLabel(source)}</figcaption>
+    <div class="cd-history-bars">${buckets.map(row => html`<span style="--level:${100 * row.averageObservedPeople / max}%" title="${sensorTime(row.timestamp)} · ${row.averageObservedPeople.toFixed(1)} хүн"></span>`)}</div>
+    <div class="cd-history-range"><span>${sensorTime(buckets[0].timestamp)}</span><span>${sensorTime(buckets.at(-1).timestamp)}</span></div>
+  </figure>`;
+}
+
 export class SensorHistory extends Component {
   initialState(props) { return { source: props.source || 'real', interval: 5, data: null, error: null }; }
   events() {
@@ -45,6 +56,7 @@ export class SensorHistory extends Component {
         <button class="btn btn-g" data-history-refresh>Шинэчлэх</button></div>
       <p class="muted">${sensorSourceLabel(source)} · Asia/Ulaanbaatar (UTC+8) · сүүлийн 24 цаг. Нэг төхөөрөмжийн цуваа; камерын тоонуудыг нэмэхгүй.${data?.deviceId ? ` Төхөөрөмж: ${data.deviceId}.` : ''}</p>
       ${error ? html`<p role="alert">${error}</p>` : !data ? html`<p>Ачаалж байна…</p>` : html`
+        ${this.props.chart ? occupancyChart(data.aggregates, source) : ''}
         <div class="adm-scroll"><table class="adm-t"><thead><tr><th>Интервал эхлэх</th><th>Хүн дундаж / min / max</th><th>Сорьц</th><th>Хамрах хүрээ</th><th>Калибровктой SPL дундаж</th></tr></thead><tbody>
           ${data.aggregates.length ? data.aggregates.slice(-24).reverse().map(row => html`<tr data-history-bucket><td>${sensorTime(row.timestamp)}</td><td>${number(row.averageObservedPeople)} / ${row.minimumObservedPeople ?? '—'} / ${row.maximumObservedPeople ?? '—'}</td><td>${row.sampleCount}</td><td>${Math.round(row.coverage * 100)}%</td><td>${row.averageCalibratedDbSpl == null ? '—' : number(row.averageCalibratedDbSpl) + ' dB SPL'}</td></tr>`) : html`<tr><td colspan="5">Шинэ, хүчинтэй хэмжилттэй интервал алга. Хоосон үед утга зохиохгүй.</td></tr>`}
         </tbody></table></div>

@@ -26,7 +26,7 @@ async function navigate(hash) {
   const start = events.length;
   await send('Page.navigate', { url: origin + '/?case=' + ++navigation + hash });
   for (let n = 0; n < 200 && !events.slice(start).some(e => e.method === 'Page.loadEventFired'); n++) await delay(50);
-  await waitFor(`document.querySelector('#app')?.children.length > 0`);
+  await waitFor(`!!document.querySelector('#app > :not(.platform-loading)')`);
   await evaluate(`document.fonts.ready`);
   if (hash === '#cafe-A' || hash === '#staff') await waitFor(`!!document.querySelector('canvas')`);
   await delay(100);
@@ -65,19 +65,61 @@ try {
     await evaluate(`document.querySelector('.pv').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}))`);
     await waitFor(`location.hash === '#cafe-A' && !!document.querySelector('canvas')`);
   });
-  await check('home map is a still preview; home has no goal buttons, recommendations sort by seats/noise/Wi-Fi', async () => {
+  await check('homepage category, feature and additional recommendations synchronize while search stays mounted', async () => {
     await navigate('#home');
-    // No pins, live pills or pulses on the home preview: the real map lives on #explore.
-    assert.equal(await evaluate(`document.querySelectorAll('#miniMap .mk').length`), 0);
-    assert.equal(await evaluate(`getComputedStyle(document.querySelector('#miniMap .you')).animationName`), 'none');
-    assert.equal(await evaluate(`document.body.innerText.includes('Кафе хайх эсвэл зорилгоо сонгоход')`), false);
-    // The four goals (Сурах, Ажиллах, Найзуудтай, Тухтай) were removed from the home page on request.
-    assert.equal(await evaluate(`document.querySelectorAll('.hero-purp, [data-go-purpose], [data-drec-goal]').length`), 0);
-    assert.equal(await evaluate(`document.querySelectorAll('.drec [data-drec-sort]').length`), 5);
-    assert.ok(await evaluate(`document.querySelectorAll('.drec .rc').length > 0`));
-    // The lamps keep their sway and glow.
-    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.hero .lamp')).animationName`), 'sway');
-    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.hero .lamp .cone')).animationName`), 'glow');
+    const before = await evaluate(`(() => {
+      window.searchElement = document.querySelector('#hq');
+      const href = document.querySelector('.dis-details').hash;
+      return { href, y: searchElement.getBoundingClientRect().y };
+    })()`);
+    assert.ok(await evaluate(`(() => {
+      const buttons = [...document.querySelectorAll('.dis-chips button')];
+      return buttons.length === 6 && buttons.every(button => button.offsetWidth > 0) &&
+        new Set(buttons.map(button => button.offsetTop)).size === 1;
+    })()`));
+    assert.ok(await evaluate(`document.querySelectorAll('.dis-card').length > 0 && document.querySelectorAll('.dis-card').length <= 4`));
+    assert.equal(await evaluate(`document.querySelector('.dis-map').hash`), '#explore');
+    assert.match(await evaluate(`document.querySelector('.dis-art img').currentSrc`), /cafe-dessert\.webp$/);
+    assert.equal(await evaluate(`document.querySelectorAll('#miniMap,.dis-window .mk').length`), 0);
+    assert.equal(await evaluate(`document.querySelectorAll('[data-dis-dot]:not([hidden])').length`), 6);
+    await click('[data-dis-step="1"]');
+    assert.equal(await evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`), 'dessert');
+    assert.match(await evaluate(`document.querySelector('.dis-feature p').textContent`), /^Жишээ ·/);
+    await waitFor(`document.querySelector('.dis-art img').currentSrc.endsWith('/cafe-bakery-desktop.webp') && document.querySelector('.dis-art img').naturalWidth > 0`);
+    await click('[data-dis-step="1"]');
+    assert.equal(await evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`), 'work');
+    assert.match(await evaluate(`document.querySelector('.dis-copy-panel[data-active] h1').textContent`), /Ажиллахад/);
+    assert.ok(await evaluate(`document.querySelector('#hq') === window.searchElement`));
+    assert.equal(await evaluate(`window.searchElement.getBoundingClientRect().y`), before.y);
+    const grouping = await evaluate(`import('/js/cafes.js').then(m => [...document.querySelectorAll('.dis-details,.dis-card a')].every(a => m.byId(a.hash.slice(6)).tags.includes('Ажиллах')))`);
+    assert.equal(grouping, true);
+    await click('[data-dis-step="-1"]');
+    await click('[data-dis-step="-1"]');
+    assert.equal(await evaluate(`document.querySelector('.dis-details').hash`), before.href);
+    await click('.dis-details');
+    await waitFor(`location.hash === ${JSON.stringify(before.href)} && !!document.querySelector('.cd')`);
+  });
+  await check('search and its controls stay fixed through every desktop category', async () => {
+    try {
+      for (const width of [1024, 1440, 1760]) {
+        await send('Emulation.setDeviceMetricsOverride', { width, height: 929, deviceScaleFactor: 1, mobile: false });
+        await navigate('#home');
+        const positions = () => evaluate(`[...document.querySelectorAll('.dis-search, .dis-chips')].map(el => el.getBoundingClientRect().top)`);
+        const initial = await positions();
+        for (const category of ['dessert', 'work', 'promo', 'coffee', 'seats', 'near']) {
+          await click(`[data-dis-category="${category}"]`);
+          assert.equal(await evaluate(`document.querySelector('.dis-copy-panel[data-active]').dataset.disCopy`), category);
+          assert.deepEqual(await positions(), initial, `${category} at ${width}px`);
+        }
+      }
+    } finally {
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    }
+  });
+  await check('map discovery link and goal filters retain markers and map fallback', async () => {
+    await navigate('#home');
+    await click('.dis-map');
+    await waitFor(`location.hash === '#explore' && !!document.querySelector('#exMap .mk')`);
     // Goal filtering itself still exists on the map page.
     await navigate('#explore');
     await click('[data-f="purpose"][data-v="Сурах"]');
@@ -113,6 +155,41 @@ try {
     await waitFor(`location.hash === '#cafes' && !!document.querySelector('#cgrid')`);
     await evaluate(`history.forward()`);
     await waitFor(`location.hash === '#explore' && !!document.querySelector('#exMap')`);
+  });
+  await check('desktop header stays aligned across navigation routes', async () => {
+    const layout = () => evaluate(`[...document.querySelectorAll('.hd, .hd .logo, .hd .nav a, .hd-r')].map(el => {
+      const { x, y, width, height } = el.getBoundingClientRect();
+      return [x, y, width, height];
+    })`);
+    await navigate('#home');
+    const homeLayout = await layout();
+    for (const [route, ready] of [['explore', '#exMap'], ['cafes', '#cgrid'], ['about', '.ab-hero'], ['partner', '#pf']]) {
+      await click(`.nav [data-nav="${route}"]`);
+      await waitFor(`location.hash === '#${route}' && !!document.querySelector(${JSON.stringify(ready)})`);
+      assert.deepEqual(await layout(), homeLayout, route);
+    }
+  });
+  await check('recommended café cards fit the reference desktop viewport with complete descriptions', async () => {
+    await send('Emulation.setDeviceMetricsOverride', { width: 1760, height: 929, deviceScaleFactor: 1, mobile: false });
+    try {
+      await navigate('#home');
+      const cards = await evaluate(`[...document.querySelectorAll('.dis-card')].map(card => {
+        const text = card.querySelector('.dis-card-detail > span > span');
+        return {
+          bottom: card.getBoundingClientRect().bottom,
+          clipped: text.scrollWidth > text.clientWidth || text.scrollHeight > text.clientHeight,
+          href: card.querySelector('a').hash
+        };
+      })`);
+      assert.equal(cards.length, 4);
+      for (const card of cards) {
+        assert.ok(card.bottom <= 929, JSON.stringify(card));
+        assert.equal(card.clipped, false);
+        assert.match(card.href, /^#cafe-/);
+      }
+    } finally {
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    }
   });
   await check('favorites persist across reloads', async () => {
     await navigate('#cafes');
@@ -228,6 +305,100 @@ try {
     assert.equal(await evaluate(`document.querySelector('.ccard .olamp').getAttribute('aria-label')`), 'Нээлттэй');
   });
 
+  await check('café detail keeps the complete floor plan and headline metrics in view', async () => {
+    try {
+      for (const [width, height] of [[1758, 923], [1280, 800], [320, 568], [375, 667], [390, 844], [430, 932], [768, 1024], [1366, 768], [1440, 900], [1920, 1080]]) {
+        const mobile = width < 821;
+        await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
+        await navigate('#cafe-F');
+        await waitFor(`!!document.querySelector('#planWrap canvas') && !!document.querySelector('.cd-menu-row')`);
+        const layout = await evaluate(`(() => {
+          const el = selector => document.querySelector(selector);
+          const rect = selector => el(selector).getBoundingClientRect();
+          return { plan: rect('#planWrap canvas').bottom, canvasRight: rect('#planWrap canvas').right,
+            metrics: rect('.cd-metrics').bottom, viewport: innerHeight, width: innerWidth, page: document.documentElement.scrollWidth,
+            cover: el('.cd-cover img').naturalWidth, scroll: scrollY, controls: getComputedStyle(el('.plan-tools')).display,
+            storyRight: rect('.cd-story').right, planLeft: rect('.plan-card').left, tabs: document.querySelectorAll('#tabbar a').length };
+        })()`);
+        const size = `${width}×${height}: ${JSON.stringify(layout)}`;
+        assert.equal(layout.scroll, 0, size);
+        assert.ok(layout.metrics <= layout.viewport && layout.page <= layout.width && layout.canvasRight <= layout.width && layout.cover, size);
+        if (mobile) {
+          assert.equal(layout.tabs, 5, size);
+          assert.equal(layout.controls, 'none', size);
+        } else {
+          assert.ok(layout.plan <= layout.viewport && layout.storyRight < layout.planLeft, size);
+        }
+        if (process.env.CAPTURE_CAFE_DETAIL && (width === 1440 || width === 390)) {
+          const save = async (name, options = {}) => {
+            const { data } = await send('Page.captureScreenshot', { format: 'png', ...options });
+            await writeFile(join(output, name + '.png'), Buffer.from(data, 'base64'));
+          };
+          await evaluate(`__advance(); document.getAnimations().forEach(a => { a.pause(); a.currentTime = 1000; });`);
+          await save(mobile ? 'mobile-initial' : 'desktop');
+          {
+            const { cssContentSize } = await send('Page.getLayoutMetrics');
+            await save(mobile ? 'mobile-full' : 'desktop-full', { captureBeyondViewport: true, clip: { x: 0, y: 0, width: cssContentSize.width, height: cssContentSize.height, scale: 1 } });
+          }
+          if (mobile) {
+            await evaluate(`document.querySelector('.plan-card').scrollIntoView()`);
+            await save('mobile-menu');
+            await click('[data-cd-plan-open]');
+            await evaluate(`__advance()`);
+            await save('mobile-seating-sheet');
+            await click('[data-cd-plan-close]');
+          }
+        }
+      }
+    } finally {
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    }
+  });
+
+  await check('mobile café seating sheet reuses the plan and restores scroll and focus; menu filters inline', async () => {
+    try {
+      await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      await navigate('#cafe-F');
+      await waitFor(`!!document.querySelector('#planWrap canvas') && !!document.querySelector('.cd-menu-row')`);
+      const scroll = await evaluate(`(() => {
+        window.detailCanvas = document.querySelector('#planWrap canvas');
+        window.scrollTo(0, 260);
+        return scrollY;
+      })()`);
+      await evaluate(`__advance(); document.getAnimations().forEach(a => { a.pause(); a.currentTime = 1000; });`);
+      await send('Emulation.setTouchEmulationEnabled', { enabled: true });
+      const point = await evaluate(`(() => { const {left,top,width,height} = detailCanvas.getBoundingClientRect(); return {x:Math.round(left + width / 2),y:Math.round(top + height / 2)} })()`);
+      assert.equal(await evaluate(`document.elementFromPoint(${point.x}, ${point.y})?.classList.contains('cd-plan-tap')`), true);
+      await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+      await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await waitFor(`document.querySelector('#cdPlanSheet').open`);
+      assert.equal(await evaluate(`document.querySelector('#cdPlanSheet canvas') === detailCanvas && document.activeElement.matches('[data-cd-plan-close]') && document.body.style.position === 'fixed'`), true);
+      const initialWidth = await evaluate(`detailCanvas.clientWidth`);
+      await click('[data-cd-sheet-view]');
+      assert.equal(await evaluate(`!document.querySelector('#cdPlanSheet #viewTable').hidden`), true);
+      await click('[data-cd-sheet-view]');
+      await click('#cdPlanSheet [data-pz="in"]');
+      assert.ok(await evaluate(`detailCanvas.clientWidth`) > initialWidth);
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+      await waitFor(`!document.querySelector('#cdPlanSheet').open && document.querySelector('#viewPlan canvas') === detailCanvas`);
+      assert.equal(await evaluate(`scrollY`), scroll);
+      assert.equal(await evaluate(`document.activeElement.matches('[data-cd-plan-open]') && !document.body.style.position`), true);
+      await click('[data-cd-plan-open]');
+      await click('[data-cd-plan-close]');
+      await waitFor(`!!document.querySelector('#viewPlan canvas')`);
+      await click('[data-menu-cat]:not([data-menu-cat="all"])');
+      assert.equal(await evaluate(`document.querySelector('[data-menu-cat]:not([data-menu-cat="all"])').getAttribute('aria-pressed')`), 'true');
+      await click('[data-demo-menu-expand]');
+      await waitFor(`!!document.querySelector('#cafeMenu .menu-group')`);
+      assert.equal(await evaluate(`!!document.querySelector('#goingPanel')`), false);
+      assert.equal(await evaluate(`[...document.querySelectorAll('#tabbar a')].map(a => a.textContent.trim()).join('/')`), 'Нүүр/Газрын зураг/Кафенууд/Тухай/Хамтрах');
+    } finally {
+      await send('Emulation.setTouchEmulationEnabled', { enabled: false });
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    }
+  });
+
   await check('staff page: advice, plan and current state fit the first screen; temporary status below', async () => {
     await navigate('#staff');
     const r = await evaluate(`(() => { const box = s => document.querySelector(s).getBoundingClientRect(); return { h: innerHeight, plan: box('#planWrap').bottom, advice: box('.st-advice').top, adviceBottom: box('.st-advice').bottom, now: box('.st-now').bottom, temp: box('#tsList').top, plan_top: box('#planWrap').top }; })()`);
@@ -244,7 +415,7 @@ try {
     await navigate('#about'); await click('summary');
     assert.equal(await evaluate(`document.querySelector('details').open`), true);
     await navigate('#missing');
-    assert.equal(await evaluate(`!!document.querySelector('.hero')`), true);
+    assert.equal(await evaluate(`!!document.querySelector('.discovery')`), true);
     await navigate('#cafe-missing');
     assert.equal(await evaluate(`!!document.querySelector('.empty')`), true);
   });
@@ -271,8 +442,129 @@ try {
     await click('#mfApply');
     assert.equal(await evaluate(`!!document.querySelector('[role="dialog"]')`), false);
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-    await waitFor(`!!document.querySelector('#exMap')`);
+    await waitFor(`document.querySelectorAll('#exMap .mk').length === 12`);
     assert.equal(await evaluate(`document.querySelectorAll('.mk').length`), 12);
+  });
+
+  await check('all nine widths retain the home layout, image and five mobile routes', async () => {
+    for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width <= 820 });
+      await navigate('#home');
+      const info = await evaluate(`(() => {
+        const input = document.querySelector('#hq');
+        const photo = document.querySelector('.dis-art img');
+        const heading = document.querySelector('.dis-desktop-copy h1');
+        return { viewport:innerWidth, width:document.documentElement.scrollWidth, picture:photo.complete && photo.naturalWidth > 0,
+          input: input.getBoundingClientRect().width, desktopHeading: heading.getClientRects().length > 0,
+          controls:[...document.querySelectorAll('#hs .dis-setting')].map(b => b.getBoundingClientRect().width) };
+      })()`);
+      assert.equal(info.viewport, width, `viewport width ${width}`);
+      assert.ok(info.width <= width, `homepage overflow at ${width}: ${info.width}`);
+      assert.ok(info.picture);
+      assert.ok(info.input >= 105);
+      assert.equal(info.desktopHeading, width > 820);
+      assert.deepEqual(info.controls, width <= 820 ? [46, 46] : [0, 46]);
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 660, deviceScaleFactor: 1, mobile: true });
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await navigate('#home');
+    assert.ok(await evaluate(`document.querySelector('.discovery').classList.contains('dis-no-motion')`));
+    assert.ok(await evaluate(`document.querySelector('.dis-mobile-heading').getBoundingClientRect().height <= 1`));
+    assert.ok(await evaluate(`!!document.querySelector('#hs button[type="submit"] svg circle')`));
+    await input('#hq', 'Кафе A');
+    await click('#hs button[type="submit"]');
+    await waitFor(`location.hash === '#explore' && document.querySelector('.pv')?.dataset.id === 'A'`);
+    await navigate('#home');
+    assert.equal(await evaluate(`document.querySelectorAll('.dis-search [data-dis-map]').length`), 1);
+    const expected = [['#home','Нүүр'], ['#explore','Газрын зураг'], ['#cafes','Кафенууд'], ['#about','Тухай'], ['#partner','Хамтрах']];
+    assert.deepEqual(await evaluate(`[...document.querySelectorAll('#tabbar a')].map(a=>[a.hash,a.textContent])`), expected);
+    for (const [hash] of expected) {
+      await click(`#tabbar a[href="${hash}"]`);
+      await waitFor(`location.hash === ${JSON.stringify(hash)} && document.querySelector('#tabbar a.on').hash === ${JSON.stringify(hash)}`);
+    }
+    await send('Emulation.setEmulatedMedia', { features: [] });
+    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  });
+
+  await check('mobile carousel swipes and keyboard dialogs preserve the page', async () => {
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 660, deviceScaleFactor: 1, mobile: true });
+    await navigate('#home');
+    assert.ok(await evaluate(`(() => {
+      const row = document.querySelector('.dis-chips');
+      const buttons = [...row.querySelectorAll('button')];
+      row.scrollLeft = 60;
+      const scrolls = row.scrollLeft > 0;
+      row.scrollLeft = 0;
+      return buttons.length === 6 && row.scrollWidth > row.clientWidth && scrolls &&
+        new Set(buttons.map(button => button.offsetTop)).size === 1;
+    })()`));
+    const y = await evaluate(`Math.round(document.querySelector('.dis-art').getBoundingClientRect().top + 66)`);
+    await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 280, y }] });
+    await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 160, y }] });
+    await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await waitFor(`document.querySelector('[data-dis-dot="dessert"]').getAttribute('aria-current') === 'true'`);
+    await waitFor(`document.querySelector('.dis-art img').currentSrc.endsWith('/cafe-pastry-cartoon.webp') && document.querySelector('.dis-art img').naturalWidth > 0`);
+    const filterOffset = await evaluate(`(() => {
+      const button = document.querySelector('#hs .dis-filter').getBoundingClientRect();
+      const icon = document.querySelector('#hs .dis-filter svg').getBoundingClientRect();
+      return [icon.x + icon.width / 2 - button.x - button.width / 2, icon.y + icon.height / 2 - button.y - button.height / 2];
+    })()`);
+    assert.deepEqual(filterOffset, [0, 0]);
+    await click('[data-dis-filter]');
+    await waitFor(`document.activeElement.matches('#modal [data-close]')`);
+    assert.equal(await evaluate(`document.querySelector('#modal .mdl').getAttribute('aria-labelledby')`), 'advanced-filters-title');
+    await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true }))`);
+    assert.ok(await evaluate(`document.activeElement.matches('[data-dis-filter]') && location.hash === '#home'`));
+    await input('#hq', 'Кафе A');
+    await click('[data-dis-map]');
+    await waitFor(`location.hash === '#explore' && document.querySelector('.pv')?.dataset.id === 'A'`);
+    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  });
+
+  await check('an empty or failed production catalogue never substitutes demo recommendations', async () => {
+    const mock = await send('Page.addScriptToEvaluateOnNewDocument', { source: `
+      const fetchOriginal = window.fetch;
+      window.fetch = (url, options) => {
+        const path = new URL(url, location.origin).pathname;
+        const json = (body, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {status, headers:{'Content-Type':'application/json'}}));
+        if (path === '/api/v1/health') return json({ ok:true });
+        if (path === '/api/v1/config') return json({ stream_enabled:false, poll_interval_sec:3600 });
+        if (path === '/api/v1/cafes') {
+          return location.hash === '#home-error' ? json({error:'local test'},503) : json({cafes:[]});
+        }
+        return fetchOriginal(url, options);
+      };`
+    });
+    try {
+      await navigate('#home-error');
+      assert.equal(await evaluate(`document.querySelectorAll('.dis-card').length`), 0);
+      assert.ok(await evaluate(`!!document.querySelector('[data-dis-retry]')`));
+      await navigate('#home');
+      assert.equal(await evaluate(`document.querySelectorAll('.dis-card').length`), 0);
+      assert.match(await evaluate(`document.querySelector('.dis-empty').textContent`), /Тохирох кафе олдсонгүй/);
+    } finally { await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: mock.identifier }) }
+  });
+
+  await check('public, account and protected entry routes fit every target viewport', async () => {
+    const routes = {
+      home: '.discovery', explore: '#exMap', cafes: '#cgrid', 'cafe-A': '.cd-summary',
+      'cafe-O': '.cd-summary', about: '.ab-hero', partner: '#pf', staff: '#planWrap canvas',
+      account: '.gate', owner: '.gate', admin: '.gate'
+    };
+    const failures = [];
+    for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height: width < 500 ? 660 : 900, deviceScaleFactor: 1, mobile: width <= 820 });
+      await navigate('#home');
+      for (const [route, selector] of Object.entries(routes)) {
+        await evaluate(`location.hash = ${JSON.stringify(route)}`);
+        await waitFor(`location.hash.slice(1) === ${JSON.stringify(route)} && !!document.querySelector(${JSON.stringify(selector)})`);
+        const layout = await evaluate(`({ width: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
+          tabBottom: Math.round(document.querySelector('#tabbar').getBoundingClientRect().bottom), height: innerHeight })`);
+        if (layout.width > width || layout.client !== width || (width <= 820 && layout.tabBottom !== layout.height)) failures.push({ route, width, ...layout });
+      }
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    assert.deepEqual(failures, []);
   });
 
   /* ---------- real map (MapLibre + OpenStreetMap tiles) ---------- */

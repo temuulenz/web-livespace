@@ -14,6 +14,7 @@ const session = createSession({ api, onLoginRequired: reason => bus.emit('login:
 
 export const platform = {
   online: false,
+  catalogueStatus: 'loading',
   api, session, bus,
   config: { poll_interval_sec: 60, stale_after_sec: 900 },
   liveStatus: 'stopped'
@@ -27,10 +28,18 @@ function applyLive(update) {
   bus.emit('cafe:updated', cafe.id);
 }
 
-export async function loadCatalogue() {
-  const { cafes } = await api.get('/cafes');
-  retainCafes(new Set(cafes.map(c => c.id)));
-  for (const record of cafes) upsertCafe(record);
+export async function loadCatalogue(options) {
+  try {
+    const { cafes } = await api.get('/cafes', options);
+    if (!Array.isArray(cafes)) throw new TypeError('Missing café catalogue');
+    retainCafes(new Set(cafes.map(c => c.id)));
+    for (const record of cafes) upsertCafe(record);
+    platform.catalogueStatus = 'ready';
+    showInterruption(false);
+  } catch (error) {
+    if (!options?.signal?.aborted) platform.catalogueStatus = 'error';
+    throw error;
+  }
 }
 
 let channel = null;
@@ -64,7 +73,12 @@ export async function initPlatform() {
   try {
     await api.get('/health', { timeout: 2500, retry: 0 });
   } catch (error) {
-    if(error.status===503){platform.online=true;showInterruption(true);document.documentElement.classList.add('ls-online');retainCafes(new Set());}
+    // A missing API explicitly selects the static demo; interruptions do not.
+    platform.catalogueStatus = error.status === 404 ? 'demo' : 'error';
+    if (platform.catalogueStatus === 'error') {
+      retainCafes(new Set());
+      showInterruption(true);
+    }
     session.store.set({ ready: true });
     return platform;
   }
@@ -72,7 +86,7 @@ export async function initPlatform() {
   document.documentElement.classList.add('ls-online');
   await Promise.allSettled([
     api.get('/config').then(config => { platform.config = config; }),
-    loadCatalogue().catch(error=>{if(error.status===503){retainCafes(new Set());showInterruption(true);}throw error;}),
+    loadCatalogue().catch(error => { retainCafes(new Set()); showInterruption(true); throw error; }),
     session.load()
   ]);
   startLive();

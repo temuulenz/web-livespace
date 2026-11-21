@@ -24,6 +24,7 @@ import { toast } from '../../components/feedback.js';
 import { openAuth, field } from '../authentication/auth-modal.js';
 import { signInPrompt } from '../account/account.js';
 import { IncomingOrders } from '../going/incoming-orders.js';
+import { OwnerMenu } from '../menu/owner-menu.js';
 import { MenuEditor } from '../menu/menu-editor.js';
 import { OwnerReport } from './owner-report.js';
 import { noiseWord, deviceWords } from './owner-words.js';
@@ -84,6 +85,16 @@ export class OwnerPage extends Component {
       'click [data-gate-login]': (e, b) => openAuth({ reason: b.dataset.gateLogin }),
       'click [data-own-cafe]': (e, b) => { Snd.ui('click'); this.setState({ selected: b.dataset.ownCafe, incoming: null }); this.loadIncoming(); },
       'click [data-own-tab]': (e, b) => this.go(b.dataset.ownTab),
+      'keydown [data-own-tab]': (e, b) => {
+        const index = TABS.findIndex(([key]) => key === b.dataset.ownTab);
+        const last = TABS.length - 1;
+        const next = { ArrowLeft: (index + last) % TABS.length, ArrowRight: (index + 1) % TABS.length, Home: 0, End: last }[e.key];
+        if (next === undefined) return;
+        e.preventDefault();
+        const [key] = TABS[next];
+        this.go(key);
+        this.$(`[data-own-tab="${key}"]`)?.focus();
+      },
       'click [data-own-go]': (e, b) => this.go(b.dataset.ownGo, true),
       // <details> нээлттэй эсэхийг төлөвт хадгална — дахин зурахад хаагдахгүй.
       'click [data-own-open]': (e, b) => { e.preventDefault(); const k = b.dataset.ownOpen; this.setState({ open: { ...this.state.open, [k]: !this.state.open[k] } }); },
@@ -118,6 +129,7 @@ export class OwnerPage extends Component {
   }
   // Ирэх зочид, захиалгын тоо — дээрх карт ба «Захиалга» табын тэмдэгт.
   async loadIncoming() {
+    if (this.current()?.data_mode !== 'demo') return;
     const id = this.state.selected; if (!id) return;
     try { const list = await customer.going.incoming(id); if (this.mounted && id === this.state.selected) this.setState({ incoming: list, now: Date.now() }); } catch { /* картууд «—» хэвээр */ }
   }
@@ -137,12 +149,13 @@ export class OwnerPage extends Component {
   // Incoming visitors / pre-orders and the menu editor for the selected café.
   syncCustomer() {
     const cafe = this.current(), orders = this.$('[data-own-orders]'), menu = this.$('[data-own-menu]');
-    if (cafe && orders && this.custCafe === cafe.id && this.ordersView?.el === orders) return;
+    const key = cafe && `${cafe.id}:${cafe.data_mode}:${this.state.tab}`;
+    if (key && this.custCafe === key) return;
     this.ordersView?.destroy(); this.menuView?.destroy(); this.ordersView = this.menuView = null; this.custCafe = null;
     if (!cafe || !orders || !menu) return;
-    this.custCafe = cafe.id;
-    this.ordersView = this.child(IncomingOrders, orders, { cafeId: cafe.id });
-    this.menuView = this.child(MenuEditor, menu, { cafeId: cafe.id, editor: 'owner' });
+    this.custCafe = key;
+    if (this.state.tab === 'orders' && cafe.data_mode === 'demo') this.ordersView = this.child(IncomingOrders, orders, { cafeId: cafe.id });
+    if (this.state.tab === 'menu') this.menuView = this.child(cafe.data_mode === 'demo' ? MenuEditor : OwnerMenu, menu, { cafeId: cafe.id, editor: 'owner' });
   }
   syncReport() {
     const cafe = this.current(), root = this.$('[data-own-report]');
@@ -173,7 +186,7 @@ export class OwnerPage extends Component {
 
   /* ---------- дээрх 3 карт ---------- */
   summaryHTML(c, sensor, trust) {
-    const { incoming, now } = this.state, demo = customer.mode === 'mock' ? html`<span class="badge b-demo">ДЕМО</span>` : '';
+    const { incoming, now } = this.state, demo = customer.mode === 'mock' && c.data_mode === 'demo' ? html`<span class="badge b-demo">ДЕМО</span>` : '';
     const soon = incoming ? arrivingWithin(incoming, now) : null;
     const waiting = incoming ? incoming.filter(v => v.lines.length && ['pending', 'accepted'].includes(v.status)).length : null;
     const people = sensor?.observedPeople;
@@ -218,9 +231,9 @@ export class OwnerPage extends Component {
 
       ${this.summaryHTML(c, sensor, trust)}
 
-      <div class="own-tabs" role="tablist" aria-label="Самбарын хэсэг">${TABS.map(([k, l]) => html`<button type="button" role="tab" data-own-tab="${k}" aria-selected="${k === tab}">${l}${k === 'orders' && waiting ? html`<span class="own-tab-n num" aria-label="${waiting} хүлээгдэж буй">${waiting}</span>` : ''}</button>`)}</div>
+      <div class="own-tabs" role="tablist" aria-label="Самбарын хэсэг">${TABS.map(([k, l]) => html`<button type="button" role="tab" data-own-tab="${k}" id="own-tab-${k}" aria-selected="${k === tab}" aria-controls="own-panel-${k}" tabindex="${k === tab ? 0 : -1}">${l}${k === 'orders' && waiting ? html`<span class="own-tab-n num" aria-label="${waiting} хүлээгдэж буй">${waiting}</span>` : ''}</button>`)}</div>
 
-      <div class="own-panel" data-own-panel="today" ${panel('today')}>
+      <div class="own-panel" data-own-panel="today" id="own-panel-today" role="tabpanel" aria-labelledby="own-tab-today" ${panel('today')}>
         ${statusCard}
         <section class="card own-live" data-key="live">
           <div class="card-h"><h2>Одоогийн байдал</h2><span class="badge ${badgeClass}">${badgeWord}</span></div>
@@ -252,9 +265,9 @@ export class OwnerPage extends Component {
         </section>
       </div>
 
-      <div class="own-panel" data-own-panel="orders" ${panel('orders')}><section class="card own-orders" data-key="orders"><div data-own-orders data-preserve data-key="orders-${c.id}"></div></section></div>
-      <div class="own-panel" data-own-panel="menu" ${panel('menu')}><section class="card own-menu" data-key="menu"><div data-own-menu data-preserve data-key="menu-${c.id}"></div></section></div>
-      <div class="own-panel" data-own-panel="report" ${panel('report')}>
+      <div class="own-panel" data-own-panel="orders" id="own-panel-orders" role="tabpanel" aria-labelledby="own-tab-orders" ${panel('orders')}><section class="card own-orders" data-key="orders"><div data-own-orders data-preserve data-key="orders-${c.id}">${c.data_mode !== 'demo' ? html`<h2>Захиалга</h2><p class="muted">Энэ кафед захиалгын үйлчилгээ холбогдоогүй байна.</p>` : ''}</div></section></div>
+      <div class="own-panel" data-own-panel="menu" id="own-panel-menu" role="tabpanel" aria-labelledby="own-tab-menu" ${panel('menu')}><section class="card own-menu" data-key="menu"><div data-own-menu data-preserve data-key="menu-${c.id}"></div></section></div>
+      <div class="own-panel" data-own-panel="report" id="own-panel-report" role="tabpanel" aria-labelledby="own-tab-report" ${panel('report')}>
         <section class="card own-report" data-key="report"><div data-own-report data-preserve data-key="report-${c.id}"></div></section>
         <details class="card own-tech" data-key="tech" ${open('tech')}><summary data-own-open="tech"><h2>Техникийн дэлгэрэнгүй</h2><small class="muted">Төхөөрөмжийн дугаар, хэмжилтийн түүхий утга, хүснэгт</small></summary>
           ${hasData ? raw(sensorPanelHTML(c, false, { staleAfterSec: stale })) : ''}

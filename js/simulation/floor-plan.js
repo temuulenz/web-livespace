@@ -57,9 +57,8 @@ const inRect = (x, y, [rx, ry, rw, rh]) => x >= rx && x <= rx + rw && y >= ry &&
 class FloorPlan {
   constructor(wrap, cafe, o) {
     this.wrap = wrap; this.cafe = cafe; this.o = o; this.W = 800; this.H = 520; this.sound = o.sound || 2; this.reduced = Prefs.reduced;
-    // o.portrait (café page on phones): the plan is shown turned upright, so the whole café fits
-    // the narrow screen without scrolling and is taller. Only the display turns; the world stays 800×520.
-    this.portrait = !!o.portrait; this.zoom = !this.portrait && isMobile() ? 1.5 : 1;
+    // Portrait rotates the display only. Fit starts a landscape preview at its full width.
+    this.portrait = !!o.portrait; this.zoom = !o.fit && !this.portrait && isMobile() ? 1.5 : 1;
     this.L = resolveLayout(o.layout, cafe);
     this.cv = document.createElement('canvas'); this.cv.setAttribute('role', 'img'); this.cv.setAttribute('aria-label', `${cafe.name}-ийн дээрээс харсан зураглал: сандал, ширээ, лангуу${this.L.kitchen ? ', гал тогоо' : ''}`); wrap.appendChild(this.cv); this.ctx = this.cv.getContext('2d');
     this.r = rng(seedOf(cafe.id)); this.layout(); this.buildGrid(); this.bg = this.drawStatic();
