@@ -16,8 +16,9 @@ import { SensorHistory } from '../sensors/sensor-history.js';
 import { PublicMenu } from '../menu/public-menu.js';
 import { OwnerMenu } from '../menu/owner-menu.js';
 import { MenuEditor } from '../menu/menu-editor.js';
+import { CafePhotoManager } from '../cafe/cafe-photo-manager.js';
 
-const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт']];
+const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт'], ['audit', 'Аудит'], ['health', 'Системийн төлөв'], ['settings', 'Платформын тохиргоо']];
 const when = iso => iso ? dateTime(iso) : '—';
 const statusBadge = status => html`<span class="badge ${status === 'active' ? 'b-live' : status === 'rejected' ? 'b-stale' : 'b-typ'}">${statusLabel(status)}</span>`;
 const modeBadge = mode => html`<span class="badge ${mode === 'demo' ? 'b-demo' : 'b-live'}">${mode === 'demo' ? 'ДЕМО' : 'БОДИТ'}</span>`;
@@ -26,7 +27,7 @@ const exampleBody = (cafeId, deviceId) => JSON.stringify({ schemaVersion: 1, typ
 export class AdminPage extends Component {
   initialState() {
     const tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab');
-    return { tab: TABS.some(([k]) => k === tab) ? tab : 'overview', data: {}, cafe: null, loading: false, error: null, token: null, suggestion: null, filter: { cafe_id: '', device_id: '' }, auto: false };
+    return { tab: TABS.some(([k]) => k === tab) ? tab : 'overview', data: {}, cafe: null, loading: false, error: null, token: null, suggestion: null, filter: { cafe_id: '', device_id: '' }, userRoleFilter: '', auto: false };
   }
   events() {
     return {
@@ -44,9 +45,13 @@ export class AdminPage extends Component {
       'click [data-rotate]': (e, b) => this.rotate(b.dataset.rotate),
       'click [data-revoke]': (e, b) => this.revoke(b.dataset.revoke),
       'click [data-enable-device]': (e, b) => this.toggleDevice(b.dataset.enableDevice, b.dataset.enabled !== 'true'),
+      'click [data-user-revoke-sessions]': (e, b) => this.revokeUserSessions(b.dataset.userRevokeSessions),
+      'click [data-user-delete]': (e, b) => this.deleteManagedUser(b.dataset.userDelete),
+      'click [data-cafe-archive]': (e, b) => this.archiveCafe(b.dataset.cafeArchive),
+      'click [data-cafe-delete]': (e, b) => this.deleteCafe(b.dataset.cafeDelete),
       'change [data-filter]': (e, el) => { this.setState({ filter: { ...this.state.filter, [el.name]: el.value } }); this.load(); },
       'change [data-auto]': (e, el) => this.setState({ auto: el.checked }),
-      'change [name="role"]': () => this.load()
+      'change [name="role"]': (e, el) => { this.setState({ userRoleFilter: el.value }); this.load(); }
     };
   }
   onMount() {
@@ -60,8 +65,14 @@ export class AdminPage extends Component {
     this.interval(() => { if (this.state.auto && !document.hidden && this.state.tab === 'measurements' && !this.state.cafe) this.load(); }, 15000);
     this.load();
   }
-  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); this.menuView?.destroy(); this.locOff?.(); }
-  onUpdate() { this.syncEditor(); this.syncHistory(); this.syncMenu(); this.syncLocation(); }
+  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); this.menuView?.destroy(); this.photoView?.destroy(); this.locOff?.(); }
+  onUpdate() { this.syncEditor(); this.syncHistory(); this.syncMenu(); this.syncPhotos(); this.syncLocation(); }
+  syncPhotos() {
+    const cafeId=this.state.cafe?.id,root=this.$('[data-admin-photos]');
+    if(cafeId&&root&&this.photoCafe===cafeId&&this.photoView?.el===root)return;
+    this.photoView?.destroy();this.photoView=null;this.photoCafe=null;
+    if(cafeId&&root&&platform.session.user?.is_super_admin){this.photoCafe=cafeId;this.photoView=this.child(CafePhotoManager,root,{cafeId});}
+  }
   // Location is picked on the map; one picker per opened café (it survives re-renders).
   syncLocation() {
     const host = this.$('[data-loc-map]'), key = host ? this.state.cafe?.id : null;
@@ -78,7 +89,7 @@ export class AdminPage extends Component {
     this.menuCafe = cafeId;
     const cafe = this.state.cafe;
     if (cafe.data_mode === 'demo') this.menuView = this.child(MenuEditor, root, { cafeId, editor: 'admin' });
-    else if (cafe.owner?.id === platform.session.user?.id) this.menuView = this.child(OwnerMenu, root, { cafeId });
+    else if (platform.session.user?.is_super_admin || cafe.owner?.id === platform.session.user?.id) this.menuView = this.child(OwnerMenu, root, { cafeId });
     else this.menuView = this.child(PublicMenu, root, { cafeId, preview: true });
   }
   syncHistory() {
@@ -107,8 +118,12 @@ export class AdminPage extends Component {
       if (tab === 'overview') data = await api.get('/admin/overview');
       else if (tab === 'applications') data = await api.get('/admin/applications');
       else if (tab === 'cafes') data = await api.get('/admin/cafes');
-      else if (tab === 'users') data = await api.get(`/admin/users${this.$('[name="role"]')?.value ? '?role=' + this.$('[name="role"]').value : ''}`);
+      else if (tab === 'users') data = await api.get(`/admin/users${this.state.userRoleFilter ? '?role=' + encodeURIComponent(this.state.userRoleFilter) : ''}`);
       else if (tab === 'devices') data = { ...(await api.get('/admin/devices')), ...(await api.get('/admin/cafes')) };
+      else if (tab === 'audit') data = platform.session.user?.is_super_admin ? await api.get('/admin/audit') : { events: [] };
+      else if (tab === 'health') data = await api.get('/health').catch(() => ({ ok: false, deployment: 'Unavailable', database: 'Unavailable' }));
+      else if (tab === 'settings' && platform.session.user?.is_super_admin) data = { ...(await api.get('/admin/settings/featured-cafe')), ...(await api.get('/admin/cafes')) };
+      else if (tab === 'settings') data = {};
       else if (tab === 'measurements') {
         const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v)).toString();
         data = { ...(await api.get(`/admin/measurements?limit=200${q ? '&' + q : ''}`)), ...(await api.get('/admin/cafes')), ...(await api.get('/admin/devices')) };
@@ -153,6 +168,10 @@ export class AdminPage extends Component {
     body.tags = v.tags.split(',').map(t => t.trim()).filter(Boolean);
     if (v.demo.trim()) { try { body.demo = JSON.parse(v.demo); } catch { toast('Демо утга JSON буруу байна'); return; } }
     if (await this.run(platform.api.patch(`/admin/cafes/${this.state.cafe.id}`, body), 'Хадгалагдлаа')) this.openCafe(this.state.cafe.id, true);
+  }
+  async saveFeatured(form) {
+    const cafe_id = readForm(form).cafe_id || null;
+    if (await this.run(platform.api.put('/admin/settings/featured-cafe', { cafe_id }), 'Онцлох кафе шинэчлэгдлээ')) { platform.featuredCafeId = cafe_id; this.load(); }
   }
   layoutFromForm(form) {
     const v = readForm(form);
@@ -207,7 +226,7 @@ export class AdminPage extends Component {
     return html`<div class="page"><div class="wrap adm">
       <div class="adm-head"><span class="badge" style="background:var(--brown);color:#fff">LIVESPACE БАГ</span><h1>Админ самбар</h1>
         <button class="btn btn-g" data-refresh>${loading ? 'Ачаалж байна…' : 'Шинэчлэх'}</button></div>
-      <nav class="chips adm-tabs">${TABS.map(([key, label]) => html`<button class="chip" data-tab="${key}" aria-pressed="${key === tab && !cafe}">${label}</button>`)}</nav>
+      <nav class="chips adm-tabs">${TABS.filter(([key]) => key !== 'settings' || platform.session.user?.is_super_admin).map(([key, label]) => html`<button class="chip" data-tab="${key}" aria-pressed="${key === tab && !cafe}">${label}</button>`)}</nav>
       ${error ? html`<p class="auth-msg" role="alert">${error}</p>` : ''}
       ${this.state.token ? this.tokenView() : ''}
       ${cafe ? this.cafeView() : this[`${tab}View`]()}
@@ -224,6 +243,12 @@ export class AdminPage extends Component {
 Authorization: Bearer ${value}
 
 ${exampleBody(cafeId, id)}</pre></details></section>`;
+  }
+  settingsView() {
+    if (!platform.session.user?.is_super_admin) return html`<p class="muted">Super Admin эрх шаардлагатай.</p>`;
+    const { cafes = [], cafe_id } = this.state.data;
+    return html`<section class="card"><h2>Нүүр хуудасны онцлох кафе</h2><p class="muted">Зөвхөн идэвхтэй бодит кафег сонгоно. Хэмжилтгүй үед бодит тоо зохиож харуулахгүй.</p>
+      <form class="form adm-form" data-form="saveFeatured"><label>Онцлох кафе<select name="cafe_id"><option value="">Сонгоогүй</option>${cafes.filter(c => c.status === 'active' && c.data_mode === 'live').map(c => html`<option value="${c.id}" ${raw(c.id === cafe_id ? 'selected' : '')}>${c.name} · ${c.id}</option>`)}</select></label><button class="btn btn-p">Хадгалах</button></form></section>`;
   }
 
   overviewView() {
@@ -249,8 +274,33 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
 
   cafesView() {
     const cafes = this.state.data.cafes || [];
-    return html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>Кафе</th><th>Төлөв</th><th>Өгөгдөл</th><th>Эзэмшигч</th><th>Төхөөрөмж</th><th>Сүүлийн хэмжилт</th><th>Зураглал</th><th></th></tr></thead><tbody>
-      ${cafes.map(c => html`<tr><td><b>${c.name}</b><br><small class="muted">${c.id}</small></td><td>${statusBadge(c.status)}</td><td>${modeBadge(c.data_mode)}</td><td>${c.owner_email || '—'}</td><td class="num">${c.device_count}</td><td class="num">${when(c.last_measurement_at)}</td><td>${visLabel(c.visualization_status)}</td><td><button class="btn btn-o" data-open-cafe="${c.id}">Засах</button> <button class="btn btn-g" data-open-menu="${c.id}">Цэс</button></td></tr>`)}</tbody></table></div>`;
+    return html`${platform.session.user?.is_super_admin ? html`<details><summary>Шинэ кафе үүсгэх</summary><form class="form adm-form" data-form="createCafe"><label>Кафены нэр<input name="name" maxlength="80" required></label><button class="btn btn-p">Үүсгэх</button></form></details>` : ''}
+      ${cafes.length ? html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>Кафе</th><th>Төлөв</th><th>Өгөгдөл</th><th>Эзэмшигч</th><th>Төхөөрөмж</th><th>Сүүлийн хэмжилт</th><th>Зураглал</th><th></th></tr></thead><tbody>
+      ${cafes.map(c => html`<tr><td><b>${c.name}</b><br><small class="muted">${c.id}</small></td><td>${statusBadge(c.status)}</td><td>${modeBadge(c.data_mode)}</td><td>${c.owner_email || '—'}</td><td class="num">${c.device_count}</td><td class="num">${when(c.last_measurement_at)}</td><td>${visLabel(c.visualization_status)}</td><td><button class="btn btn-o" data-open-cafe="${c.id}">Засах</button> <button class="btn btn-g" data-open-menu="${c.id}">Цэс</button>${platform.session.user?.is_super_admin && !['I','cafe_9f81309be58b4d48'].includes(c.id) ? html` <button class="btn btn-g" data-cafe-archive="${c.id}">Архивлах</button>${c.status === 'archived' && !c.owner_email ? html` <button class="btn btn-g" data-cafe-delete="${c.id}">Устгах</button>` : ''}` : ''}</td></tr>`)}</tbody></table></div>` : html`<p class="muted">Кафе алга.</p>`}`;
+  }
+
+  async createCafe(form) {
+    const name = readForm(form).name.trim();
+    if (!name) return;
+    const result = await this.run(platform.api.post('/admin/cafes', { name }), 'Кафе үүслээ');
+    if (result) { form.reset(); await this.load(); this.openCafe(result.cafe.id); }
+  }
+  async archiveCafe(id) {
+    if (!confirm('Энэ кафег архивлах уу? Нийтийн жагсаалтаас хасагдана.')) return;
+    if (await this.run(platform.api.post(`/admin/cafes/${encodeURIComponent(id)}/archive`), 'Кафе архивлагдлаа')) this.load();
+  }
+  async deleteCafe(id) {
+    if (!confirm('Архивлагдсан, холбоогүй кафег бүрмөсөн устгах уу?')) return;
+    if (await this.run(platform.api.del(`/admin/cafes/${encodeURIComponent(id)}`), 'Кафе устгагдлаа')) this.load();
+  }
+  auditView() {
+    if (!platform.session.user?.is_super_admin) return html`<p class="muted">Super Admin эрх шаардлагатай.</p>`;
+    const events = this.state.data.events || [];
+    return events.length ? html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>Огноо</th><th>Үйлдэл</th><th>Гүйцэтгэгч</th><th>Зорилт</th></tr></thead><tbody>${events.map(event => html`<tr><td class="num">${when(event.at)}</td><td>${event.action}</td><td>${event.actor_id}</td><td>${event.target_id}</td></tr>`)}</tbody></table></div>` : html`<p class="muted">Аудитын бүртгэл алга.</p>`;
+  }
+  healthView() {
+    const health = this.state.data;
+    return html`<section class="card"><h2>API ба өгөгдлийн сан</h2><p>${health.ok ? 'Ажиллаж байна' : 'Мэдээлэл авах боломжгүй'}</p><p class="muted">${health.deployment || 'Unavailable'} · ${health.database || 'Unavailable'} · ${when(health.time)}</p><p class="muted">Өөр байршуулалтын API, хадгалалт, ажлын дараалал болон алдааны хурд: Unavailable</p></section>`;
   }
 
   async confirmUserManagement(form) {
@@ -258,16 +308,27 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
     await this.run(platform.api.post('/auth/reauthenticate', { password }), 'Нэвтрэлтийг баталгаажууллаа · 5 минут');
   }
   async createManagedUser(form) {
-    const input = readForm(form); form.reset();
+    const input = readForm(form);
     const result = await this.run(platform.api.post('/admin/users', { email: input.email, name: input.name, role: input.account_role, password: input.password }), 'Хэрэглэгч үүслээ');
-    if (result) this.load();
+    if (result) { form.reset(); this.load(); }
   }
   async saveManagedUser(form) {
-    const input = readForm(form), password = input.password; form.querySelector('[name="password"]').value = '';
-    const result = password
-      ? await this.run(platform.api.post(`/admin/users/${encodeURIComponent(form.dataset.userId)}/password`, { password }), 'Нууц үг шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан')
-      : await this.run(platform.api.patch(`/admin/users/${encodeURIComponent(form.dataset.userId)}`, { name: input.name, role: input.account_role, disabled: form.querySelector('[name="disabled"]').checked }), 'Эрх шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
+    const input = readForm(form);
+    const result = await this.run(platform.api.patch(`/admin/users/${encodeURIComponent(form.dataset.userId)}`, { name: input.name, role: input.account_role, disabled: form.querySelector('[name="disabled"]').checked }), 'Эрх шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
     if (result) this.load();
+  }
+  async resetManagedUserPassword(form) {
+    const password = readForm(form).password;
+    const result = await this.run(platform.api.post(`/admin/users/${encodeURIComponent(form.dataset.userId)}/password`, { password }), 'Нууц үг шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
+    if (result) { form.reset(); this.load(); }
+  }
+  async revokeUserSessions(id) {
+    if (!confirm('Энэ хэрэглэгчийн бүх нэвтрэлтийг цуцлах уу?')) return;
+    if (await this.run(platform.api.post(`/admin/users/${encodeURIComponent(id)}/sessions/revoke`), 'Нэвтрэлтүүд цуцлагдлаа')) this.load();
+  }
+  async deleteManagedUser(id) {
+    if (!confirm('Энэ хэрэглэгчийг устгах уу? Холбоотой кафе эсвэл үйл ажиллагаатай бүртгэлийг устгахгүй.')) return;
+    if (await this.run(platform.api.del(`/admin/users/${encodeURIComponent(id)}`), 'Хэрэглэгч устгагдлаа')) this.load();
   }
   usersView() {
     const users = this.state.data.users || [], superAdmin = !!platform.session.user?.is_super_admin;
@@ -278,13 +339,17 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
         <label>И-мэйл<input name="email" type="email" maxlength="200" required autocomplete="off"></label><label>Нэр<input name="name" maxlength="100"></label>
         <label>Үүрэг<select name="account_role">${roles.map(role => html`<option value="${role}">${role}</option>`)}</select></label>
         <label>Шинэ нууц үг<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200" required></label><button class="btn btn-p">Үүсгэх</button></form></details>
-      <label class="adm-filter">Үүрэг: <select name="role"><option value="">Бүгд</option><option value="owner">Кафе эзэмшигч</option><option value="user">Хэрэглэгч</option><option value="admin">Админ</option></select></label>
+      <label class="adm-filter">Үүрэг: <select name="role"><option value="" ${raw(this.state.userRoleFilter === '' ? 'selected' : '')}>Бүгд</option><option value="owner" ${raw(this.state.userRoleFilter === 'owner' ? 'selected' : '')}>Кафе эзэмшигч</option><option value="user" ${raw(this.state.userRoleFilter === 'user' ? 'selected' : '')}>Хэрэглэгч</option><option value="admin" ${raw(this.state.userRoleFilter === 'admin' ? 'selected' : '')}>Админ</option></select></label>
+      ${!users.length ? html`<p class="muted">Энэ шүүлтүүрт хэрэглэгч алга.</p>` : ''}
       <div class="adm-scroll"><table class="adm-t"><thead><tr><th>И-мэйл</th><th>Нэр</th><th>Үүрэг</th><th>Кафе</th><th>Бүртгүүлсэн</th><th>Удирдлага</th></tr></thead><tbody>
       ${users.map(u => html`<tr><td>${u.email}</td><td>${u.name || '—'}</td><td>${u.is_super_admin ? 'Super Admin' : u.role}${u.disabled_at ? ' · идэвхгүй' : ''}</td><td>${u.cafes || '—'}</td><td class="num">${when(u.created_at)}</td><td>
         ${!u.is_super_admin && (u.role !== 'admin' || superAdmin) ? html`<details><summary>Засах</summary><form class="form adm-form" data-form="saveManagedUser" data-user-id="${u.id}">
           <label>Нэр<input name="name" value="${u.name}" maxlength="100"></label><label>Үүрэг<select name="account_role">${roles.map(role => html`<option value="${role}" ${raw(role === u.role ? 'selected' : '')}>${role}</option>`)}</select></label>
           <label><input name="disabled" type="checkbox" ${raw(u.disabled_at ? 'checked' : '')}>Идэвхгүй болгох</label>
-          <label>Нууц үг солих бол шинэ утга оруулах<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200"></label><button class="btn btn-o">Хадгалах / нууц үг солих</button></form></details>` : html`<span class="muted">Хамгаалагдсан</span>`}
+          <button class="btn btn-o">Өөрчлөлт хадгалах</button></form>
+          <form class="form adm-form" data-form="resetManagedUserPassword" data-user-id="${u.id}"><label>Шинэ нууц үг<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200" required></label><button class="btn btn-g">Нууц үг солих</button></form>
+          <button type="button" class="btn btn-g" data-user-revoke-sessions="${u.id}">Бүх нэвтрэлтийг цуцлах</button>
+          <button type="button" class="btn btn-g" data-user-delete="${u.id}">Устгах</button></details>` : html`<span class="muted">Хамгаалагдсан</span>`}
       </td></tr>`)}</tbody></table></div>`;
   }
 
@@ -382,6 +447,7 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
         </section>
 
         <section class="card adm-wide adm-menu" data-key="menu"><div data-admin-menu data-preserve data-key="admin-menu-${c.id}"></div></section>
+        ${platform.session.user?.is_super_admin?html`<section class="card adm-wide" data-key="public-photos"><div data-admin-photos data-preserve data-key="admin-photos-${c.id}"></div></section>`:''}
 
         <section class="card adm-wide"><h3>Хөдөлгөөнт зураглал</h3>
           <div class="adm-vis">

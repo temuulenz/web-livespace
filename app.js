@@ -265,7 +265,7 @@ function footer() {
   return `<footer><div class="wrap"><div class="ft"><div><a class="logo" href="#home" style="color:#fff"><b>Live</b><img class="logo-cup" src="logo.webp" alt=""><span>Space</span></a><p style="max-width:380px;margin-top:14px">Улаанбаатарын кафенуудын сул суудал, дуу чимээ, Wi-Fi-г очихоосоо өмнө харж, өөрт тохирох газраа сонгоорой.</p></div>
  <div><h4>ЦЭС</h4><a href="#explore">Газрын зураг</a><a href="#cafes">Кафенууд</a><a href="#about">Бидний тухай</a><a href="#partner">Хамтын ажиллагаа</a></div>
  <div><h4>КАФЕ ЭЗЭМШИГЧ</h4><a href="#staff">Ажилтны шууд хяналт</a><a href="#partner">Кафегаа нэмэх</a><span style="display:block;padding:4px 0">Улаанбаатар, Монгол</span></div></div>
- <div class="ft-b"><span>© 2026 LiveSpace</span><span>${CAFES.some(hasMeasurements) ? 'Демо болон бодит хэмжилтийг тус тусад нь тэмдэглэсэн' : 'Прототип · бүх утга демо өгөгдөл'}</span></div></div></footer>`}
+ <div class="ft-b"><span>© 2026 LiveSpace</span><span>${platform.online ? 'Бодит хэмжилт байхгүй үед утга харуулахгүй' : 'Прототип · бүх утга демо өгөгдөл'}</span></div></div></footer>`}
 const SSBG = ['', '#FBF4E8', '#F8EEDD', '#F4E5CC', '#EFDABA', '#E9CEA6'];
 function showAdvancedFilters(trigger, apply) {
   Snd.ui('whoosh');
@@ -274,7 +274,9 @@ function showAdvancedFilters(trigger, apply) {
 }
 
 function renderHome() {
+  const featured = platform.online ? CAFES.find(c => c.id === platform.featuredCafeId) : null;
   app.innerHTML = `<div class="dis-page">
+ ${featured ? `<div class="wrap"><section class="ls-featured" aria-label="Онцлох кафе"><div class="ls-featured-art" aria-hidden="true">${featured.cover_photo_id?`<img src="/api/v1/cafes/${encodeURIComponent(featured.id)}/photos/${encodeURIComponent(featured.cover_photo_id)}/file" alt="" decoding="async">`:I.cup}</div><div><span class="tagp">Онцлох кафе</span><h2>${escapeHTML(featured.name)}</h2><p>${escapeHTML([featured.address, featured.district, featured.hours].filter(Boolean).join(' · ') || 'Кафены мэдээлэл')}</p><a class="btn btn-p" href="#cafe-${encodeURIComponent(featured.id)}">Кафены хуудас →</a></div></section></div>` : ''}
  ${discoveryHTML({ query: F.q, filterCount: activeCount() })}
  <div class="wrap dis-sounds">
   <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Жишээ дуу — бодит бичлэг биш. Товчоор сонсоорой.</p></div>
@@ -493,10 +495,11 @@ function buildCafe(c) {
   app.innerHTML = `<div class="page"><div class="wrap cd cd-final">
  <div class="cd-story">
   <div class="cd-cover">
-   <picture><source media="(max-width:430px) and (max-resolution:1.5dppx)" srcset="js/features/home/cafe-cartoon-small.webp"><img src="js/features/home/cafe-cartoon.webp" alt="" fetchpriority="high"></picture>
+   ${c.cover_photo_id?'':`<span class="cd-cover-empty" aria-label="Кафены зураг оруулаагүй">${I.cup}<span>Кафены зураг оруулаагүй</span></span>`}
+   ${c.cover_photo_id?`<img src="/api/v1/cafes/${encodeURIComponent(c.id)}/photos/${encodeURIComponent(c.cover_photo_id)}/file" alt="${escapeHTML(c.name)} кафены зураг" decoding="async">`:''}
    <a class="ibtn cd-back" href="#explore" data-back aria-label="Буцах">${I.arr}</a>
-   <span class="cd-art-label">Жишээ зураглал</span>
   </div>
+  <div class="cd-gallery" id="cdGallery" aria-label="Кафены зургийн цомог" hidden></div>
   <div class="cd-intro">
    <div class="cd-titlebar"><h1>${escapeHTML(c.name)}</h1><div class="cd-act cd-actions">${favBtn(c.id)}${cmpBtn(c.id)}</div></div>
    ${location ? `<p class="cd-location">${I.pin}${location}</p>` : ''}
@@ -548,6 +551,11 @@ function buildCafe(c) {
    <button class="btn btn-o cd-sheet-view" data-cd-sheet-view aria-pressed="false">Хүснэгт</button>
  </dialog>` : ''}
  </div>${footer()}</div>`;
+  if(platform.online)platform.api.get(`/cafes/${encodeURIComponent(c.id)}/photos`).then(({photos})=>{
+    const gallery=$('#cdGallery');if(!gallery||location.hash!==`#cafe-${encodeURIComponent(c.id)}`)return;
+    const extras=photos.filter(p=>p.id!==c.cover_photo_id);
+    gallery.innerHTML=extras.map((p,i)=>`<img src="${p.url}" alt="${escapeHTML(c.name)} кафены нэмэлт зураг ${i+1}" loading="lazy" decoding="async">`).join('');gallery.hidden=!extras.length;
+  }).catch(()=>{});
   if ($('#publicSensorHistory')) sensorHistoryView = mount(SensorHistory, $('#publicSensorHistory'), { cafeId: c.id, source: c.live?.sensor?.dataSource || 'real', role: 'public', chart: true });
   mountCust(demo ? lazy.menuView : lazy.publicMenu, $('#cafeMenu'), { cafeId: c.id, detail: true, demo });
   if (!c.open) { tickFreshness(); return; }

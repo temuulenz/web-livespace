@@ -7,7 +7,7 @@ export function businessCommon({sql,fail}){
  async function cafe(cafe_id,user,publicOnly=false){
   if(!publicOnly){if(!user)fail(401,'unauthorized','Sign in required');if(!['owner','admin'].includes(user.role))fail(403,'forbidden','Owner role required');}
   const row=await sql.first('SELECT id,owner_id,status FROM cafes WHERE id=?',cafe_id);
-  if(!row||(publicOnly?row.status!=='active':row.owner_id!==user.id))fail(404,'not_found','Cafe not found');return row;
+  if(!row||(publicOnly?row.status!=='active':row.owner_id!==user.id&&!user.is_super_admin))fail(404,'not_found','Cafe not found');return row;
  }
  const user=u=>{if(!u)fail(401,'unauthorized','Sign in required');};
  return {invalid,object,int,page,cafe,user};

@@ -14,7 +14,7 @@ export function createMenuService({sql:storage,fail,id,clock=()=>new Date().toIS
  async function cafe(cafeId,user,publicOnly=false) {
   if(!publicOnly){if(!user)fail(401,'unauthorized','Sign in required');if(!['owner','admin'].includes(user.role))fail(403,'forbidden','Owner role required');}
   const row=await sql.first('SELECT id,owner_id,status FROM cafes WHERE id=?',cafeId);
-  if(!row || (publicOnly?row.status!=='active':row.owner_id!==user.id))fail(404,'not_found','Cafe not found');
+  if(!row || (publicOnly?row.status!=='active':row.owner_id!==user.id&&!user.is_super_admin))fail(404,'not_found','Cafe not found');
  }
  function spec(kind){if(!types[kind])fail(404,'not_found','Unknown menu entity');return types[kind];}
  function validate(kind,input,old) {

@@ -16,7 +16,10 @@ export function register(router, { db, config, cafes, hub }) {
     stale_after_sec: config.staleAfterSec
   }));
 
-  router.get('/api/v1/cafes', ctx => sendJson(ctx.res, 200, { cafes: cafes.listPublic(), server_time: new Date().toISOString() }));
+  router.get('/api/v1/cafes', ctx => {
+    const featured = db.prepare("SELECT c.id FROM platform_settings s JOIN cafes c ON c.id=s.value WHERE s.key='featured_cafe_id' AND c.status='active'").get();
+    sendJson(ctx.res, 200, { cafes: cafes.listPublic(), featured_cafe_id: featured?.id || null, server_time: new Date().toISOString() });
+  });
 
   router.get('/api/v1/cafes/:id', ctx => {
     const cafe = cafes.getPublic(ctx.params.id);
