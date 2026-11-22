@@ -13,6 +13,8 @@ export function register(router,{db,limit}) {
   router.post('/api/v1/admin/users',async ctx=>{protect(ctx);sendJson(ctx.res,201,{user:await access.create(ctx.user,await readJson(ctx))});});
   router.patch('/api/v1/admin/users/:id',async ctx=>{protect(ctx);sendJson(ctx.res,200,{user:await access.update(ctx.user,ctx.params.id,await readJson(ctx))});});
   router.post('/api/v1/admin/users/:id/password',async ctx=>{protect(ctx);sendJson(ctx.res,200,{user:await access.resetPassword(ctx.user,ctx.params.id,await readJson(ctx))});});
+  router.post('/api/v1/admin/users/:id/sessions/revoke',async ctx=>{protect(ctx);sendJson(ctx.res,200,{user:await access.revokeSessions(ctx.user,ctx.params.id)});});
+  router.delete('/api/v1/admin/users/:id',async ctx=>{protect(ctx);sendJson(ctx.res,200,await access.remove(ctx.user,ctx.params.id));});
   router.get('/api/v1/admin/audit',async ctx=>{protect(ctx);sendJson(ctx.res,200,{events:await access.audit(ctx.user)});});
   router.post('/api/v1/auth/reauthenticate',async ctx=>{
     limit(`reauth:${ctx.ip}:${ctx.user?.id}`,10,900000);

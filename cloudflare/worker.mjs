@@ -30,6 +30,7 @@ export { SensorGateway } from './sensors.mjs';
 const buckets=new Map();
 function limit(key,max,ms) {const t=Date.now();if(buckets.size>10000)for(const [k,b]of buckets)if(b.until<t)buckets.delete(k);let b=buckets.get(key);if(!b || b.until<t){b={count:0,until:t+ms};buckets.set(key,b);}if(++b.count>max)fail(429,'rate_limited','Too many requests');}
 const routeId=(p,re)=>re.exec(p)?.slice(1).map(x=>x===undefined?undefined:decodeURIComponent(x));
+const PROTECTED_CAFES=new Set(['I','cafe_9f81309be58b4d48']);
 async function createUser(db,input,role='user',auth) {
  const x=credentials(input);if(await first(db,'SELECT id FROM users WHERE email=?',x.email))fail(409,'email_taken','Email already registered');
  const u={id:id('usr'),email:x.email,name:x.name,role};
@@ -121,13 +122,15 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  const userAccess=createUserAccess({sql:{first:(query,...args)=>first(db,query,...args),all:(query,...args)=>all(db,query,...args),batch:entries=>batch(db,entries)},hashPassword:password=>auth.passwordHash(password),verifyPassword:(password,hash)=>auth.passwordVerify(password,hash),fail,id});
  const cafeOwnership=createCafeOwnership({sql:{first:(query,...args)=>first(db,query,...args),batch:entries=>batch(db,entries)},fail,id});
  if(p==='/api/v1/auth/reauthenticate' && m==='POST'){limit(`reauth:${user?.id}:${req.headers.get('cf-connecting-ip')}`,10,900000);return json(await userAccess.reauthenticate(user,(await body(req)).password));}
- if(p==='/api/v1/admin/users' || /^\/api\/v1\/admin\/users\/[^/]+(?:\/password)?$/.test(p) || p==='/api/v1/admin/audit') {
+ if(p==='/api/v1/admin/users' || /^\/api\/v1\/admin\/users\/[^/]+(?:\/password|\/sessions\/revoke)?$/.test(p) || p==='/api/v1/admin/audit') {
   guard(user,'admin');limit(`user-management:${user.id}`,30,60000);
   if(p==='/api/v1/admin/users' && m==='GET')return json({users:await userAccess.list(user,query.role)});
   if(p==='/api/v1/admin/users' && m==='POST')return json({user:await userAccess.create(user,await body(req))},201);
-  const target=routeId(p,/^\/api\/v1\/admin\/users\/([^/]+)(\/password)?$/);
+  const target=routeId(p,/^\/api\/v1\/admin\/users\/([^/]+)(\/password|\/sessions\/revoke)?$/);
   if(target && !target[1] && m==='PATCH')return json({user:await userAccess.update(user,target[0],await body(req))});
-  if(target?.[1] && m==='POST')return json({user:await userAccess.resetPassword(user,target[0],await body(req))});
+  if(target && !target[1] && m==='DELETE')return json(await userAccess.remove(user,target[0]));
+  if(target?.[1]==='/password' && m==='POST')return json({user:await userAccess.resetPassword(user,target[0],await body(req))});
+  if(target?.[1]==='/sessions/revoke' && m==='POST')return json({user:await userAccess.revokeSessions(user,target[0])});
   if(p==='/api/v1/admin/audit' && m==='GET')return json({events:await userAccess.audit(user)});
   fail(405,'method_not_allowed','Method not allowed');
  }
@@ -177,6 +180,8 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   guard(user,'admin');
   const secureBatch=entries=>authorizedBatch({batch:entries=>batch(db,entries)},fail,user,null,'admin',entries);
   const secureRun=(q,...args)=>secureBatch([[q,...args]]);
+  const superOnly=()=>{if(!user.is_super_admin)fail(403,'super_admin_required','Super Admin required');};
+  const secureSuperBatch=entries=>secureBatch([["SELECT json(CASE WHEN EXISTS(SELECT 1 FROM super_admin_identity WHERE user_id=?) THEN '{}' ELSE 'super_admin_required' END)",user.id],...entries]);
   if(p==='/api/v1/admin/settings/featured-cafe') {
    if(!user.is_super_admin)fail(403,'super_admin_required','Super Admin required');
    if(m==='GET')return json({cafe_id:(await first(db,"SELECT value FROM platform_settings WHERE key='featured_cafe_id'"))?.value||null});
@@ -194,11 +199,43 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
    const devices=await all(db,'SELECT * FROM devices WHERE revoked_at IS NULL');const views=await Promise.all(devices.map(d=>deviceView(db,d)));
    return json({cafes:await count('SELECT COUNT(*) n FROM cafes'),active:await count("SELECT COUNT(*) n FROM cafes WHERE status='active'"),pending_applications:await count("SELECT COUNT(*) n FROM applications a JOIN cafes c ON c.id=a.cafe_id WHERE c.status NOT IN ('active','rejected')"),owners:await count("SELECT COUNT(*) n FROM users WHERE role='owner'"),devices:devices.length,devices_online:views.filter(d=>d.online).length,measurements_24h:await count('SELECT COUNT(*) n FROM measurements WHERE received_at>?',new Date(Date.now()-86400000).toISOString()),stream_clients:0,config:{poll_interval_sec:10,stale_after_sec:900,device_offline_sec:600,visualization_provider:'manual'}});
   }
+  if(p==='/api/v1/admin/cafes' && m==='POST'){
+   superOnly();limit(`cafe-create:${user.id}`,20,60000);const x=await body(req);
+   if(!x||Object.keys(x).some(k=>k!=='name')||typeof x.name!=='string'||!x.name.trim()||x.name.length>80)fail(422,'validation_failed','A cafe name (1–80 characters) is required');
+   const cafeId=id('cafe'),t=now();await secureSuperBatch([
+    ["INSERT INTO cafes(id,name,status,data_mode,created_at,updated_at) VALUES(?,?,'submitted','live',?,?)",cafeId,x.name.trim(),t,t],
+    ['INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)',id('aud'),user.id,cafeId,'cafe.create',t,'{}']
+   ]);return json({cafe:{id:cafeId,name:x.name.trim(),status:'submitted'}},201);
+  }
+  const archive=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)\/archive$/);
+  if(archive&&m==='POST'){
+   superOnly();if(PROTECTED_CAFES.has(archive[0]))fail(403,'protected_cafe','Protected cafe');
+   const row=await first(db,'SELECT id,status FROM cafes WHERE id=?',archive[0]);if(!row)fail(404,'not_found','Cafe not found');
+   if(row.status==='archived')return json({ok:true,status:'archived'});
+   await secureSuperBatch([["UPDATE cafes SET status='archived',updated_at=? WHERE id=?",now(),row.id],['INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)',id('aud'),user.id,row.id,'cafe.archive',now(),'{}']]);
+   return json({ok:true,status:'archived'});
+  }
   if(p==='/api/v1/admin/applications' && m==='GET')return json({applications:(await all(db,`SELECT a.id,a.cafe_id,a.created_at,a.form,a.owner_id IS NOT NULL has_owner,c.status,c.name,u.email owner_email,(SELECT COUNT(*) FROM application_photos p WHERE p.application_id=a.id) photo_count FROM applications a JOIN cafes c ON c.id=a.cafe_id LEFT JOIN users u ON u.id=a.owner_id ORDER BY a.created_at DESC`)).map(r=>({...r,has_owner:!!r.has_owner,form:parse(r.form,{})}))});
   if(p==='/api/v1/admin/cafes' && m==='GET')return json({cafes:await all(db,`SELECT c.*,u.email owner_email,(SELECT COUNT(*) FROM devices d WHERE d.cafe_id=c.id AND d.revoked_at IS NULL) device_count,(SELECT MAX(ts) FROM measurements m WHERE m.cafe_id=c.id) last_measurement_at,(SELECT id FROM applications a WHERE a.cafe_id=c.id LIMIT 1) application_id,json_extract(c.visualization,'$.status') visualization_status FROM cafes c LEFT JOIN users u ON u.id=c.owner_id ORDER BY sort_order,created_at`)});
   a=routeId(p,/^\/api\/v1\/admin\/cafes\/([^/]+)(?:\/(status|visualization|owner))?$/);
   if(a) {
    const row=await first(db,'SELECT * FROM cafes WHERE id=?',a[0]);if(!row)fail(404,'not_found','Cafe not found');
+   if(m==='DELETE'&&!a[1]){
+    superOnly();if(PROTECTED_CAFES.has(row.id))fail(403,'protected_cafe','Protected cafe');
+    const created=await first(db,"SELECT 1 FROM user_audit_log WHERE target_id=? AND action='cafe.create'",row.id);
+    if(!created||row.status!=='archived'||row.owner_id)fail(409,'cafe_has_activity','Only an archived, unlinked admin-created cafe can be deleted');
+    const existing=(await all(db,"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")).map(r=>r.name);
+    const tables=[];
+    for(const table of existing){
+      const quoted='"'+table.replaceAll('"','""')+'"';
+      if((await all(db,`PRAGMA table_info(${quoted})`)).some(col=>col.name==='cafe_id'))tables.push(table);
+    }
+    const unlinked=tables.map(t=>`NOT EXISTS(SELECT 1 FROM ${t} WHERE cafe_id=?)`).join(' AND ');
+    const eventId=id('aud');await secureSuperBatch([[`DELETE FROM cafes WHERE id=? AND status='archived' AND owner_id IS NULL AND ${unlinked}`,row.id,...tables.map(()=>row.id)],
+      ['INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) SELECT ?,?,?,?,?,? WHERE changes()=1',eventId,user.id,row.id,'cafe.delete',now(),'{}']]);
+    if(!await first(db,'SELECT 1 FROM user_audit_log WHERE id=?',eventId))fail(409,'cafe_has_activity','Cafe has linked records or changed; archive and review first');
+    return json({deleted:true,id:row.id});
+   }
    if(a[1]==='owner' && m==='PUT'){limit(`cafe-owner:${user.id}:${req.headers.get('cf-connecting-ip')}`,30,60000);return json(await cafeOwnership.setOwner(user,row.id,await body(req)));}
    if(m==='GET' && !a[1])return json({cafe:{...await ownerView(db,row),owner:row.owner_id?publicUser(await first(db,'SELECT * FROM users WHERE id=?',row.owner_id)):null,public:row.status==='active'?await cafeView(db,row):null}});
    if(m==='PATCH' && !a[1]){const x=cleanCafe(await body(req));if((x.lat!=null || x.lng!=null) && x.map_x===undefined && x.map_y===undefined){const position=projectToMap(x.lat??row.lat,x.lng??row.lng);x.map_x=position.x;x.map_y=position.y;}await update(db,'cafes',row.id,{...x,updated_at:now()});return json({ok:true});}

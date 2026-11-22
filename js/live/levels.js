@@ -82,6 +82,6 @@ export const SETUP_STEPS = [
   ['active', 'Идэвхтэй']
 ];
 export const SETUP_STATUSES = [...SETUP_STEPS.map(([key]) => key), 'rejected'];
-export const statusLabel = key => key === 'rejected' ? 'Татгалзсан' : (SETUP_STEPS.find(([k]) => k === key)?.[1] || key);
+export const statusLabel = key => key === 'rejected' ? 'Татгалзсан' : key === 'archived' ? 'Архивласан' : (SETUP_STEPS.find(([k]) => k === key)?.[1] || key);
 
 export const VIS_STATUSES = [['not_started', 'Эхлээгүй'], ['in_progress', 'Бэлтгэж байна'], ['ready', 'Бэлэн']];

@@ -76,6 +76,31 @@ export function createUserAccess({ sql, hashPassword, verifyPassword, fail, id, 
       const hash=await hashPassword(body.password), [where,...args]=condition(actor,target,target.role);
       return commit(actor,userId,'user.password_reset',[`UPDATE users SET password_hash=?,auth_version=auth_version+1 WHERE id=? AND auth_version=? AND NOT EXISTS(SELECT 1 FROM super_admin_identity WHERE user_id=users.id) AND ${where}`,hash,userId,target.auth_version,...args]);
     },
+    async revokeSessions(actor,userId) {
+      const target=await get(userId); if(!target) fail(404,'not_found','User not found'); authorize(actor,target,target.role);
+      const [where,...args]=condition(actor,target,target.role);
+      return commit(actor,userId,'user.sessions_revoke',[`UPDATE users SET auth_version=auth_version+1 WHERE id=? AND auth_version=? AND NOT EXISTS(SELECT 1 FROM super_admin_identity WHERE user_id=users.id) AND ${where}`,userId,target.auth_version,...args]);
+    },
+    async remove(actor,userId) {
+      const target=await get(userId); if(!target) fail(404,'not_found','User not found'); authorize(actor,target,target.role);
+      const [where,...args]=condition(actor,target,target.role),eventId=id('audit'),at=now();
+      const hasClaims=!!await sql.first("SELECT 1 FROM sqlite_master WHERE type='table' AND name='claim_reservations'");
+      // A user with ownership, favourites, claims, reviews or reports is retained.
+      // Operational audit rows intentionally keep their historical actor/target ID.
+      const unlinked=`NOT EXISTS(SELECT 1 FROM cafes WHERE owner_id=users.id)
+        AND NOT EXISTS(SELECT 1 FROM applications WHERE owner_id=users.id)
+        AND NOT EXISTS(SELECT 1 FROM favorites WHERE user_id=users.id)
+        ${hasClaims?'AND NOT EXISTS(SELECT 1 FROM claim_reservations WHERE user_id=users.id)':''}
+        AND NOT EXISTS(SELECT 1 FROM reviews WHERE author_id=users.id)
+        AND NOT EXISTS(SELECT 1 FROM review_replies WHERE author_id=users.id)
+        AND NOT EXISTS(SELECT 1 FROM review_reports WHERE reporter_id=users.id)`;
+      await sql.batch([
+        [`DELETE FROM users WHERE id=? AND auth_version=? AND NOT EXISTS(SELECT 1 FROM super_admin_identity WHERE user_id=users.id) AND ${unlinked} AND ${where}`,userId,target.auth_version,...args],
+        ['INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) SELECT ?,?,?,?,?,? WHERE changes()=1',eventId,actor.id,userId,'user.delete',at,JSON.stringify({role:target.role})]
+      ]);
+      if(!await sql.first('SELECT id FROM user_audit_log WHERE id=?',eventId)) fail(409,'user_has_activity','User has linked cafe or activity, or access changed; suspend instead');
+      return {deleted:true,id:userId};
+    },
     async audit(actor) { admin(actor); if(!actor.is_super_admin) fail(403,'super_admin_required','Super Admin required'); return sql.all('SELECT * FROM user_audit_log ORDER BY at DESC LIMIT 200'); }
   };
 }

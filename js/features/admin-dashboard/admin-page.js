@@ -17,7 +17,7 @@ import { PublicMenu } from '../menu/public-menu.js';
 import { OwnerMenu } from '../menu/owner-menu.js';
 import { MenuEditor } from '../menu/menu-editor.js';
 
-const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт'], ['settings', 'Платформын тохиргоо']];
+const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт'], ['audit', 'Аудит'], ['health', 'Системийн төлөв'], ['settings', 'Платформын тохиргоо']];
 const when = iso => iso ? dateTime(iso) : '—';
 const statusBadge = status => html`<span class="badge ${status === 'active' ? 'b-live' : status === 'rejected' ? 'b-stale' : 'b-typ'}">${statusLabel(status)}</span>`;
 const modeBadge = mode => html`<span class="badge ${mode === 'demo' ? 'b-demo' : 'b-live'}">${mode === 'demo' ? 'ДЕМО' : 'БОДИТ'}</span>`;
@@ -44,6 +44,10 @@ export class AdminPage extends Component {
       'click [data-rotate]': (e, b) => this.rotate(b.dataset.rotate),
       'click [data-revoke]': (e, b) => this.revoke(b.dataset.revoke),
       'click [data-enable-device]': (e, b) => this.toggleDevice(b.dataset.enableDevice, b.dataset.enabled !== 'true'),
+      'click [data-user-revoke-sessions]': (e, b) => this.revokeUserSessions(b.dataset.userRevokeSessions),
+      'click [data-user-delete]': (e, b) => this.deleteManagedUser(b.dataset.userDelete),
+      'click [data-cafe-archive]': (e, b) => this.archiveCafe(b.dataset.cafeArchive),
+      'click [data-cafe-delete]': (e, b) => this.deleteCafe(b.dataset.cafeDelete),
       'change [data-filter]': (e, el) => { this.setState({ filter: { ...this.state.filter, [el.name]: el.value } }); this.load(); },
       'change [data-auto]': (e, el) => this.setState({ auto: el.checked }),
       'change [name="role"]': () => this.load()
@@ -78,7 +82,7 @@ export class AdminPage extends Component {
     this.menuCafe = cafeId;
     const cafe = this.state.cafe;
     if (cafe.data_mode === 'demo') this.menuView = this.child(MenuEditor, root, { cafeId, editor: 'admin' });
-    else if (cafe.owner?.id === platform.session.user?.id) this.menuView = this.child(OwnerMenu, root, { cafeId });
+    else if (platform.session.user?.is_super_admin || cafe.owner?.id === platform.session.user?.id) this.menuView = this.child(OwnerMenu, root, { cafeId });
     else this.menuView = this.child(PublicMenu, root, { cafeId, preview: true });
   }
   syncHistory() {
@@ -109,6 +113,8 @@ export class AdminPage extends Component {
       else if (tab === 'cafes') data = await api.get('/admin/cafes');
       else if (tab === 'users') data = await api.get(`/admin/users${this.$('[name="role"]')?.value ? '?role=' + this.$('[name="role"]').value : ''}`);
       else if (tab === 'devices') data = { ...(await api.get('/admin/devices')), ...(await api.get('/admin/cafes')) };
+      else if (tab === 'audit') data = platform.session.user?.is_super_admin ? await api.get('/admin/audit') : { events: [] };
+      else if (tab === 'health') data = await api.get('/health').catch(() => ({ ok: false, deployment: 'Unavailable', database: 'Unavailable' }));
       else if (tab === 'settings' && platform.session.user?.is_super_admin) data = { ...(await api.get('/admin/settings/featured-cafe')), ...(await api.get('/admin/cafes')) };
       else if (tab === 'settings') data = {};
       else if (tab === 'measurements') {
@@ -261,8 +267,33 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
 
   cafesView() {
     const cafes = this.state.data.cafes || [];
-    return html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>Кафе</th><th>Төлөв</th><th>Өгөгдөл</th><th>Эзэмшигч</th><th>Төхөөрөмж</th><th>Сүүлийн хэмжилт</th><th>Зураглал</th><th></th></tr></thead><tbody>
-      ${cafes.map(c => html`<tr><td><b>${c.name}</b><br><small class="muted">${c.id}</small></td><td>${statusBadge(c.status)}</td><td>${modeBadge(c.data_mode)}</td><td>${c.owner_email || '—'}</td><td class="num">${c.device_count}</td><td class="num">${when(c.last_measurement_at)}</td><td>${visLabel(c.visualization_status)}</td><td><button class="btn btn-o" data-open-cafe="${c.id}">Засах</button> <button class="btn btn-g" data-open-menu="${c.id}">Цэс</button></td></tr>`)}</tbody></table></div>`;
+    return html`${platform.session.user?.is_super_admin ? html`<details><summary>Шинэ кафе үүсгэх</summary><form class="form adm-form" data-form="createCafe"><label>Кафены нэр<input name="name" maxlength="80" required></label><button class="btn btn-p">Үүсгэх</button></form></details>` : ''}
+      ${cafes.length ? html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>Кафе</th><th>Төлөв</th><th>Өгөгдөл</th><th>Эзэмшигч</th><th>Төхөөрөмж</th><th>Сүүлийн хэмжилт</th><th>Зураглал</th><th></th></tr></thead><tbody>
+      ${cafes.map(c => html`<tr><td><b>${c.name}</b><br><small class="muted">${c.id}</small></td><td>${statusBadge(c.status)}</td><td>${modeBadge(c.data_mode)}</td><td>${c.owner_email || '—'}</td><td class="num">${c.device_count}</td><td class="num">${when(c.last_measurement_at)}</td><td>${visLabel(c.visualization_status)}</td><td><button class="btn btn-o" data-open-cafe="${c.id}">Засах</button> <button class="btn btn-g" data-open-menu="${c.id}">Цэс</button>${platform.session.user?.is_super_admin && !['I','cafe_9f81309be58b4d48'].includes(c.id) ? html` <button class="btn btn-g" data-cafe-archive="${c.id}">Архивлах</button>${c.status === 'archived' && !c.owner_email ? html` <button class="btn btn-g" data-cafe-delete="${c.id}">Устгах</button>` : ''}` : ''}</td></tr>`)}</tbody></table></div>` : html`<p class="muted">Кафе алга.</p>`}`;
+  }
+
+  async createCafe(form) {
+    const name = readForm(form).name.trim();
+    if (!name) return;
+    const result = await this.run(platform.api.post('/admin/cafes', { name }), 'Кафе үүслээ');
+    if (result) { form.reset(); await this.load(); this.openCafe(result.cafe.id); }
+  }
+  async archiveCafe(id) {
+    if (!confirm('Энэ кафег архивлах уу? Нийтийн жагсаалтаас хасагдана.')) return;
+    if (await this.run(platform.api.post(`/admin/cafes/${encodeURIComponent(id)}/archive`), 'Кафе архивлагдлаа')) this.load();
+  }
+  async deleteCafe(id) {
+    if (!confirm('Архивлагдсан, холбоогүй кафег бүрмөсөн устгах уу?')) return;
+    if (await this.run(platform.api.del(`/admin/cafes/${encodeURIComponent(id)}`), 'Кафе устгагдлаа')) this.load();
+  }
+  auditView() {
+    if (!platform.session.user?.is_super_admin) return html`<p class="muted">Super Admin эрх шаардлагатай.</p>`;
+    const events = this.state.data.events || [];
+    return events.length ? html`<div class="adm-scroll"><table class="adm-t"><thead><tr><th>Огноо</th><th>Үйлдэл</th><th>Гүйцэтгэгч</th><th>Зорилт</th></tr></thead><tbody>${events.map(event => html`<tr><td class="num">${when(event.at)}</td><td>${event.action}</td><td>${event.actor_id}</td><td>${event.target_id}</td></tr>`)}</tbody></table></div>` : html`<p class="muted">Аудитын бүртгэл алга.</p>`;
+  }
+  healthView() {
+    const health = this.state.data;
+    return html`<section class="card"><h2>API ба өгөгдлийн сан</h2><p>${health.ok ? 'Ажиллаж байна' : 'Мэдээлэл авах боломжгүй'}</p><p class="muted">${health.deployment || 'Unavailable'} · ${health.database || 'Unavailable'} · ${when(health.time)}</p><p class="muted">Өөр байршуулалтын API, хадгалалт, ажлын дараалал болон алдааны хурд: Unavailable</p></section>`;
   }
 
   async confirmUserManagement(form) {
@@ -281,6 +312,14 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
       : await this.run(platform.api.patch(`/admin/users/${encodeURIComponent(form.dataset.userId)}`, { name: input.name, role: input.account_role, disabled: form.querySelector('[name="disabled"]').checked }), 'Эрх шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
     if (result) this.load();
   }
+  async revokeUserSessions(id) {
+    if (!confirm('Энэ хэрэглэгчийн бүх нэвтрэлтийг цуцлах уу?')) return;
+    if (await this.run(platform.api.post(`/admin/users/${encodeURIComponent(id)}/sessions/revoke`), 'Нэвтрэлтүүд цуцлагдлаа')) this.load();
+  }
+  async deleteManagedUser(id) {
+    if (!confirm('Энэ хэрэглэгчийг устгах уу? Холбоотой кафе эсвэл үйл ажиллагаатай бүртгэлийг устгахгүй.')) return;
+    if (await this.run(platform.api.del(`/admin/users/${encodeURIComponent(id)}`), 'Хэрэглэгч устгагдлаа')) this.load();
+  }
   usersView() {
     const users = this.state.data.users || [], superAdmin = !!platform.session.user?.is_super_admin;
     const roles = superAdmin ? ['user', 'owner', 'admin'] : ['user', 'owner'];
@@ -296,7 +335,9 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
         ${!u.is_super_admin && (u.role !== 'admin' || superAdmin) ? html`<details><summary>Засах</summary><form class="form adm-form" data-form="saveManagedUser" data-user-id="${u.id}">
           <label>Нэр<input name="name" value="${u.name}" maxlength="100"></label><label>Үүрэг<select name="account_role">${roles.map(role => html`<option value="${role}" ${raw(role === u.role ? 'selected' : '')}>${role}</option>`)}</select></label>
           <label><input name="disabled" type="checkbox" ${raw(u.disabled_at ? 'checked' : '')}>Идэвхгүй болгох</label>
-          <label>Нууц үг солих бол шинэ утга оруулах<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200"></label><button class="btn btn-o">Хадгалах / нууц үг солих</button></form></details>` : html`<span class="muted">Хамгаалагдсан</span>`}
+          <label>Нууц үг солих бол шинэ утга оруулах<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200"></label><button class="btn btn-o">Хадгалах / нууц үг солих</button></form>
+          <button type="button" class="btn btn-g" data-user-revoke-sessions="${u.id}">Бүх нэвтрэлтийг цуцлах</button>
+          <button type="button" class="btn btn-g" data-user-delete="${u.id}">Устгах</button></details>` : html`<span class="muted">Хамгаалагдсан</span>`}
       </td></tr>`)}</tbody></table></div>`;
   }
 
