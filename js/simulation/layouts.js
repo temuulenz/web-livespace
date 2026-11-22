@@ -13,7 +13,13 @@
  *
  * `legacy` is the original interior including the kitchen. It is kept so the seeded
  * regression fixtures can prove the engine still behaves exactly like the original.
+ *
+ * Free-form objects (`items`: tables of any size, benches, glass partitions, wall murals,
+ * children's corners…) come from the catalogue in catalog.js. A café's own interior can be
+ * a design file (designs/index.js); a café listed there is drawn from its design.
  */
+import { sanitizeItems } from './catalog.js';
+import { DESIGNS, designOf, designFor } from './designs/index.js';
 
 const WINDOWS = [[175, 265], [265, 355], [355, 445], [445, 520]];
 const WINDOW_BAR = { x: 165, w: 350, stools: [205, 290, 375, 460], label: [340, 108] };
@@ -84,12 +90,15 @@ const presetOf = id => LAYOUTS[id] ? id : OLD_PRESETS[id] || null;
 
 /**
  * Resolve the interior for a café.
- * Accepts a preset id, a full layout object, or a { preset, overrides } config
+ * Accepts a preset id, a full layout object, or a { preset, overrides, look, items } config
  * produced by the admin layout editor (and later by an AI-assisted generator).
+ * A config naming a design ({ design: id }) or a café with a design file uses that design.
  */
 function resolveLayout(spec, cafe) {
   if (spec && typeof spec === 'object' && !spec.preset && spec.windowBar !== undefined) return spec;
-  const config = typeof spec === 'string' ? { preset: spec } : spec || cafe?.visualization?.layout || null;
+  let config = typeof spec === 'string' ? { preset: spec } : spec || cafe?.visualization?.layout || null;
+  const design = typeof spec === 'string' ? null : designOf(config?.design) || designFor(cafe);
+  if (design) config = design.layout;
   const presetId = presetOf(config?.preset) || DEMO_LAYOUT[cafe?.id] || 'minimal';
   const base = LAYOUTS[presetId];
   const overrides = config?.overrides && typeof config.overrides === 'object' ? config.overrides : {};
@@ -100,6 +109,9 @@ function resolveLayout(spec, cafe) {
   if (out.door === null) delete out.door; if (out.vip === null) delete out.vip; if (out.cuts === null) delete out.cuts;
   if (config?.look && typeof config.look === 'object') out.look = config.look;
   for (const key of ['round', 'long', 'sofas', 'chairs', 'plants', 'shelves']) if (!Array.isArray(out[key])) out[key] = [];
+  const items = sanitizeItems(config?.items);
+  if (items.length) out.items = items;
+  if (design) out.design = design.id;
   return out;
 }
 
@@ -109,4 +121,4 @@ function arrangementOf(layout) {
   return Object.fromEntries(EDITABLE.map(key => [key, copy[key] ?? null]));
 }
 
-export { LAYOUTS, LAYOUT_IDS, DEMO_LAYOUT, EDITABLE, resolveLayout, arrangementOf };
+export { LAYOUTS, LAYOUT_IDS, DEMO_LAYOUT, EDITABLE, DESIGNS, designFor, resolveLayout, arrangementOf };
