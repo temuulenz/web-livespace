@@ -27,7 +27,7 @@ const exampleBody = (cafeId, deviceId) => JSON.stringify({ schemaVersion: 1, typ
 export class AdminPage extends Component {
   initialState() {
     const tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab');
-    return { tab: TABS.some(([k]) => k === tab) ? tab : 'overview', data: {}, cafe: null, loading: false, error: null, token: null, suggestion: null, filter: { cafe_id: '', device_id: '' }, auto: false };
+    return { tab: TABS.some(([k]) => k === tab) ? tab : 'overview', data: {}, cafe: null, loading: false, error: null, token: null, suggestion: null, filter: { cafe_id: '', device_id: '' }, userRoleFilter: '', auto: false };
   }
   events() {
     return {
@@ -51,7 +51,7 @@ export class AdminPage extends Component {
       'click [data-cafe-delete]': (e, b) => this.deleteCafe(b.dataset.cafeDelete),
       'change [data-filter]': (e, el) => { this.setState({ filter: { ...this.state.filter, [el.name]: el.value } }); this.load(); },
       'change [data-auto]': (e, el) => this.setState({ auto: el.checked }),
-      'change [name="role"]': () => this.load()
+      'change [name="role"]': (e, el) => { this.setState({ userRoleFilter: el.value }); this.load(); }
     };
   }
   onMount() {
@@ -118,7 +118,7 @@ export class AdminPage extends Component {
       if (tab === 'overview') data = await api.get('/admin/overview');
       else if (tab === 'applications') data = await api.get('/admin/applications');
       else if (tab === 'cafes') data = await api.get('/admin/cafes');
-      else if (tab === 'users') data = await api.get(`/admin/users${this.$('[name="role"]')?.value ? '?role=' + this.$('[name="role"]').value : ''}`);
+      else if (tab === 'users') data = await api.get(`/admin/users${this.state.userRoleFilter ? '?role=' + encodeURIComponent(this.state.userRoleFilter) : ''}`);
       else if (tab === 'devices') data = { ...(await api.get('/admin/devices')), ...(await api.get('/admin/cafes')) };
       else if (tab === 'audit') data = platform.session.user?.is_super_admin ? await api.get('/admin/audit') : { events: [] };
       else if (tab === 'health') data = await api.get('/health').catch(() => ({ ok: false, deployment: 'Unavailable', database: 'Unavailable' }));
@@ -308,16 +308,19 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
     await this.run(platform.api.post('/auth/reauthenticate', { password }), 'Нэвтрэлтийг баталгаажууллаа · 5 минут');
   }
   async createManagedUser(form) {
-    const input = readForm(form); form.reset();
+    const input = readForm(form);
     const result = await this.run(platform.api.post('/admin/users', { email: input.email, name: input.name, role: input.account_role, password: input.password }), 'Хэрэглэгч үүслээ');
-    if (result) this.load();
+    if (result) { form.reset(); this.load(); }
   }
   async saveManagedUser(form) {
-    const input = readForm(form), password = input.password; form.querySelector('[name="password"]').value = '';
-    const result = password
-      ? await this.run(platform.api.post(`/admin/users/${encodeURIComponent(form.dataset.userId)}/password`, { password }), 'Нууц үг шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан')
-      : await this.run(platform.api.patch(`/admin/users/${encodeURIComponent(form.dataset.userId)}`, { name: input.name, role: input.account_role, disabled: form.querySelector('[name="disabled"]').checked }), 'Эрх шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
+    const input = readForm(form);
+    const result = await this.run(platform.api.patch(`/admin/users/${encodeURIComponent(form.dataset.userId)}`, { name: input.name, role: input.account_role, disabled: form.querySelector('[name="disabled"]').checked }), 'Эрх шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
     if (result) this.load();
+  }
+  async resetManagedUserPassword(form) {
+    const password = readForm(form).password;
+    const result = await this.run(platform.api.post(`/admin/users/${encodeURIComponent(form.dataset.userId)}/password`, { password }), 'Нууц үг шинэчлэгдлээ; хуучин нэвтрэлтүүд цуцлагдсан');
+    if (result) { form.reset(); this.load(); }
   }
   async revokeUserSessions(id) {
     if (!confirm('Энэ хэрэглэгчийн бүх нэвтрэлтийг цуцлах уу?')) return;
@@ -336,13 +339,15 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
         <label>И-мэйл<input name="email" type="email" maxlength="200" required autocomplete="off"></label><label>Нэр<input name="name" maxlength="100"></label>
         <label>Үүрэг<select name="account_role">${roles.map(role => html`<option value="${role}">${role}</option>`)}</select></label>
         <label>Шинэ нууц үг<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200" required></label><button class="btn btn-p">Үүсгэх</button></form></details>
-      <label class="adm-filter">Үүрэг: <select name="role"><option value="">Бүгд</option><option value="owner">Кафе эзэмшигч</option><option value="user">Хэрэглэгч</option><option value="admin">Админ</option></select></label>
+      <label class="adm-filter">Үүрэг: <select name="role"><option value="" ${raw(this.state.userRoleFilter === '' ? 'selected' : '')}>Бүгд</option><option value="owner" ${raw(this.state.userRoleFilter === 'owner' ? 'selected' : '')}>Кафе эзэмшигч</option><option value="user" ${raw(this.state.userRoleFilter === 'user' ? 'selected' : '')}>Хэрэглэгч</option><option value="admin" ${raw(this.state.userRoleFilter === 'admin' ? 'selected' : '')}>Админ</option></select></label>
+      ${!users.length ? html`<p class="muted">Энэ шүүлтүүрт хэрэглэгч алга.</p>` : ''}
       <div class="adm-scroll"><table class="adm-t"><thead><tr><th>И-мэйл</th><th>Нэр</th><th>Үүрэг</th><th>Кафе</th><th>Бүртгүүлсэн</th><th>Удирдлага</th></tr></thead><tbody>
       ${users.map(u => html`<tr><td>${u.email}</td><td>${u.name || '—'}</td><td>${u.is_super_admin ? 'Super Admin' : u.role}${u.disabled_at ? ' · идэвхгүй' : ''}</td><td>${u.cafes || '—'}</td><td class="num">${when(u.created_at)}</td><td>
         ${!u.is_super_admin && (u.role !== 'admin' || superAdmin) ? html`<details><summary>Засах</summary><form class="form adm-form" data-form="saveManagedUser" data-user-id="${u.id}">
           <label>Нэр<input name="name" value="${u.name}" maxlength="100"></label><label>Үүрэг<select name="account_role">${roles.map(role => html`<option value="${role}" ${raw(role === u.role ? 'selected' : '')}>${role}</option>`)}</select></label>
           <label><input name="disabled" type="checkbox" ${raw(u.disabled_at ? 'checked' : '')}>Идэвхгүй болгох</label>
-          <label>Нууц үг солих бол шинэ утга оруулах<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200"></label><button class="btn btn-o">Хадгалах / нууц үг солих</button></form>
+          <button class="btn btn-o">Өөрчлөлт хадгалах</button></form>
+          <form class="form adm-form" data-form="resetManagedUserPassword" data-user-id="${u.id}"><label>Шинэ нууц үг<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="200" required></label><button class="btn btn-g">Нууц үг солих</button></form>
           <button type="button" class="btn btn-g" data-user-revoke-sessions="${u.id}">Бүх нэвтрэлтийг цуцлах</button>
           <button type="button" class="btn btn-g" data-user-delete="${u.id}">Устгах</button></details>` : html`<span class="muted">Хамгаалагдсан</span>`}
       </td></tr>`)}</tbody></table></div>`;

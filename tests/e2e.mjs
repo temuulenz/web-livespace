@@ -429,6 +429,17 @@ try {
     await waitFor(`document.querySelector('.adm-t')?.textContent.includes('browser-created-admin@test.mn')`);
     assert.equal(db.prepare('SELECT role FROM users WHERE email=?').get('browser-created-admin@test.mn').role,'admin');
     assert.equal(await evaluate(`document.querySelector('[data-form="createManagedUser"] [name="password"]').value`),'');
+    const createdId=db.prepare('SELECT id FROM users WHERE email=?').get('browser-created-admin@test.mn').id;
+    await evaluate(`(() => { const filter=document.querySelector('[name="role"]');filter.value='owner';filter.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+    await waitFor(`document.querySelector('[name="role"]')?.value==='owner' && !document.querySelector('[data-user-id="${createdId}"]')`);
+    await evaluate(`(() => { const filter=document.querySelector('[name="role"]');filter.value='admin';filter.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+    await waitFor(`!!document.querySelector('[data-form="saveManagedUser"][data-user-id="${createdId}"]')`);
+    await evaluate(`(() => { const form=document.querySelector('[data-form="saveManagedUser"][data-user-id="${createdId}"]');form.name.value='Updated manager';form.requestSubmit(); })()`);
+    await waitFor(`document.querySelector('[data-form="saveManagedUser"][data-user-id="${createdId}"] [name="name"]')?.value==='Updated manager'`);
+    const oldHash=db.prepare('SELECT password_hash FROM users WHERE id=?').get(createdId).password_hash;
+    await evaluate(`(() => { const form=document.querySelector('[data-form="resetManagedUserPassword"][data-user-id="${createdId}"]');form.password.value='new-browser-managed-password';form.requestSubmit(); })()`);
+    await waitFor(`document.querySelector('[data-form="resetManagedUserPassword"][data-user-id="${createdId}"] [name="password"]')?.value===''`);
+    assert.notEqual(db.prepare('SELECT password_hash FROM users WHERE id=?').get(createdId).password_hash,oldHash);
   });
 
   await check('framework DOM layer: patch keeps input, focus, preserved and keyed nodes; components clean up', async () => {
