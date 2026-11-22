@@ -1,0 +1,153 @@
+.cd.cd-final {
+  display: grid;
+  grid-template-columns: minmax(0, .37fr) minmax(0, .63fr);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: "story experience" "directions experience" "secondary secondary";
+  align-items: start;
+  gap: 16px 20px;
+  width: min(96%, 1660px);
+  max-width: none;
+  margin: 0 auto;
+  padding: 16px 0 28px;
+}
+
+.cd-final :is(h1, h2, h3, p, dl) { margin: 0 }
+.cd-final :is(.cd-story, .cd-experience, .cd-secondary, .menu-card, .plan-card, #publicSensorHistory) { min-width: 0 }
+.cd-final :is(.cd-story, .menu-card, .plan-card, .cd-plan-empty, .pred, #publicSensorHistory) {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--sh1);
+}
+.cd-story { grid-area: story; overflow: hidden }
+.cd-cover { position: relative; background: var(--sand); aspect-ratio: 2 / 1 }
+.cd-cover-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:linear-gradient(145deg,#f7e5c8,#e6be84);color:var(--brown);font-weight:700}.cd-cover-empty svg{width:72px;height:72px}
+.cd-cover img { width: 100%; height: 100%; position: absolute; object-fit: cover }
+.cd-cover .cd-back, .cd-art-label { position: absolute; inset: 12px auto auto 12px; z-index: 1 }
+.cd-cover .cd-back { background: var(--paper) }
+.cd-back svg { transform: rotate(180deg) }
+.cd-art-label { inset: auto 12px 12px auto; padding: 4px 9px; border-radius: 99px; background: #331d12; color: #fff4e5; font-size: .72rem }
+.cd-intro { padding: clamp(14px, 2vw, 30px) }
+.cd-titlebar, .cd-actions, .cd-location, .cd-intro .cd-pills { display: flex; align-items: center; gap: 8px }
+.cd-titlebar { justify-content: space-between }
+.cd-titlebar h1 { font-size: clamp(2rem, 3vw, 3.6rem); line-height: 1.05; letter-spacing: -.04em; overflow-wrap: anywhere }
+.cd-final .cd-actions { position: static; flex: none; margin: 0 }
+.cd-final :is(.cd-back, .cd-actions :is(.heart,.cmpb), .cd-sheet-head button) { min-width: 44px; min-height: 44px }
+.cd-final .cd-location { margin-top: 6px; color: var(--ink2); align-items: flex-start; overflow-wrap: anywhere }
+.cd-final :is(.cd-location, .cd-direction-note, .cd-status, .cd-plan-open, .card-h h2) svg { flex: none; width: 19px; height: 19px }
+.cd-intro .cd-pills { justify-content: start; margin: 8px 0 0 }
+.cd-intro-description { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px }
+.cd-intro-description p { flex-basis: 100%; color: var(--ink2); overflow-wrap: anywhere }
+.cd-final #cdSummary { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; margin: 0 14px 14px; padding: 0; overflow: hidden; background: var(--paper); border-radius: 18px }
+.cd-status { display: flex; align-items: center; gap: 7px; padding: 8px 12px; background: var(--sand) }
+.cd-status.is-open { background: #e7eed3; color: #2f471b }
+.cd-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 2px 0; text-align: center }
+.cd-metric { display: grid; justify-items: center; align-content: start; gap: 3px; min-width: 0; padding: 2px 4px }
+.cd-metric + .cd-metric { border-inline-start: 1px solid var(--line) }
+.cd-metric svg { width: 23px; height: 23px; color: var(--accent2, var(--ink)) }
+.cd-metric strong { font-size: clamp(.87rem,1.15vw,1.18rem); line-height: 1.25; overflow-wrap: anywhere }
+.cd-metric span { font-size: .76rem; color: var(--ink2); overflow-wrap: anywhere }
+.cd-final #cdSummary .cs-trust { margin: 0; padding: 0 12px 8px; font-size: .75rem }
+.cd-experience { grid-area: experience; display: flex; flex-direction: column; gap: 12px }
+.cd.cd-final .plan-card, .cd-final :is(.cd-plan-empty, .menu-card, .pred, #publicSensorHistory) { padding: clamp(10px, 1.4vw, 20px); margin: 0 }
+.cd-final .plan-card .card-h { margin: 0 0 10px; display: flex; align-items: center; flex-direction: row; flex-wrap: wrap; gap: 6px 12px }
+.cd-final :is(.card-h h2, .cd-plan-empty h2) { font-size: 1.18rem; margin: 0; display: flex; align-items: center; gap: 7px }
+.cd-final .cd-plan-tabs { margin-inline-start: auto }
+.cd-final .cd-plan-open { display: inline-flex; min-height: 44px; gap: 5px }
+.cd-expand-narrow { display: none }
+.cd-final .cd-plan-open svg { width: 16px }
+.cd-final [data-plan-reliability], .cd-final #vipNote { margin: 0 0 8px; font-size: .75rem; line-height: 1.35 }
+.cd-final [data-plan-reliability]:empty { display: none }
+.cd-final .plan-outer { max-width: min(100%, 690px, max(400px, calc((100svh - 392px) * 800 / 520))); margin-inline: auto }
+.cd-final .cd-plan-tap { display: none }
+.cd-final .cd-sheet-view { margin-top: 8px; min-height: 44px }
+.cd-final .plan-wrap { min-height: 0; border-radius: 18px }
+.cd-final #viewTable { overflow-x: auto }
+.cd-final .plan-legend { gap: 5px 14px; margin-top: 8px; justify-content: center; font-size: .75rem }
+.cd-final .plan-legend.off { display: none }
+.cd-final .plan-tools button { width: 40px; height: 40px }
+.cd-final .cd-directions { grid-area: directions; min-width: 0 }
+.cd-final .cds-dir { width: 100%; min-height: 46px; justify-content: center }
+.cd-direction-note { display: flex; align-items: center; justify-content: center; padding: 10px; gap: 5px; text-align: center; color: var(--ink2); font-size: .87rem }
+.cd-secondary { grid-area: secondary }
+.cd-final #publicSensor:empty { display: none }
+.cd-final .side-stack { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); align-items: start; gap: 12px }
+.cd-mobile-description { display: none }
+.cd-final .cd-plan-sheet {
+  box-sizing: border-box;
+  width: min(calc(100% - 32px), 820px);
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  padding: clamp(12px, 2vw, 24px);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  margin: auto;
+  background: var(--paper);
+  color: var(--ink);
+  overscroll-behavior: contain;
+  overflow: auto;
+}
+.cd-plan-sheet::backdrop { background: rgb(39 23 15 / .56) }
+.cd-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px }
+.cd-sheet-head h2 { font-size: 1.2rem }
+.cd-final .cd-plan-sheet .plan-outer { max-width: min(100%, 740px) }
+.cd-sheet-summary { padding: 10px; margin-top: 10px; background: var(--sand); border-radius: 12px; text-align: center; font-weight: 700 }
+.cd-final .cd-history-chart { margin: 10px 0; padding: 8px 12px; border-radius: 12px; background: var(--sand); font-size: .8rem }
+.cd-history-bars { display: flex; gap: 4px; align-items: end; height: 54px; margin-block: 4px; border-bottom: 1px solid var(--line2) }
+.cd-history-bars span { flex: 1; height: max(2px, var(--level)); background: var(--brown); border-radius: 4px 4px 0 0 }
+.cd-history-range { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between }
+.cd-final #publicSensorHistory .adm-scroll { max-height: 180px }
+.cd-final .cd-menu .card-h { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 8px }
+.cd-final .cd-menu .card-h button { margin-inline-start: auto; min-height: 44px }
+.cd-final .cd-menu :is(.chips,.cd-menu-row) { display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; gap: 8px; padding: 4px; margin: 0 -4px 8px; scroll-snap-type: x proximity }
+.cd-final .cd-menu .chips .chip { flex: none; min-height: 44px }
+.cd-final .cd-menu .cd-menu-row > article { flex: 0 0 calc((100% - 32px) / 5); min-width: 130px; scroll-snap-align: start }
+.cd-final .cd-menu .menu-item { min-width: 0; overflow-wrap: anywhere }
+.cd-final .cd-menu .menu-item > img, .cd-final .cd-menu .pm-photo { width: 100%; height: auto; aspect-ratio: 1.9; object-fit: cover }
+.cd-final .cd-menu .pm-photo img { width: 100%; height: 100%; object-fit: cover }
+.cd-final .cd-menu .menu-grid:not(.cd-menu-row) { grid-template-columns: repeat(auto-fill,minmax(min(100%,130px),1fr)) }
+@media (min-width: 1001px) {
+  .cd-final .plan-card { display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: 14px }
+  .cd-final .plan-card > :is(.card-h, p, #viewTable) { grid-column: 1 / -1 }
+  .cd-final .plan-card #viewPlan { padding-inline-end: 48px }
+  .cd-final .plan-card .plan-tools { right: -48px; top: 0 }
+  .cd.cd-final .pred { padding: 10px 14px }
+  .cd.cd-final .pr-bars { height: 40px }
+  .cd-final .plan-card .plan-outer { max-width: min(100%, 660px, max(320px, calc((100svh - 600px) * 800 / 520))) }
+  .cd-final .plan-card > .plan-legend { flex-direction: column; align-items: start; align-self: center; gap: 10px }
+}
+@media (max-width: 1000px) {
+  .cd.cd-final { width: min(calc(100% - 20px), 700px); grid-template-columns: minmax(0,1fr); grid-template-rows: auto; grid-template-areas: "story" "plan" "menu" "directions" "history" "secondary"; gap: 10px; padding-top: 10px }
+  .cd-cover { aspect-ratio: 2.2 / 1; max-height: 300px }
+  .cd-intro { padding: 8px 12px }
+  .cd-titlebar h1 { font-size: clamp(1.55rem,6vw,2.4rem) }
+  .cd-intro-description { display: none }
+  .cd-mobile-description { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 }
+  .cd-mobile-description:empty { display: none }
+  .cd-mobile-description p { flex-basis: 100%; overflow-wrap: anywhere }
+  .cd-final #cdSummary { margin: 0 8px 8px; gap: 6px }
+  .cd-status { padding-block: 4px; font-size: .88rem }
+  .cd-experience { gap: 10px; display: contents }
+  .cd-final :is(.plan-card, .cd-plan-empty) { grid-area: plan }
+  .cd-final .menu-card { grid-area: menu }
+  .cd-final :is(.pred, #publicSensorHistory) { grid-area: history }
+  .cd-final .plan-card { position: relative }
+  .cd-final .plan-card :is(.cd-plan-tabs, .plan-tools, .plan-legend) { display: none }
+  .cd-final .plan-card .cd-plan-open { margin-inline-start: auto }
+  .cd-expand-wide { display: none }
+  .cd-expand-narrow { display: inline }
+  .cd-final #viewPlan { position: relative }
+  .cd-final .cd-plan-tap { display: block; position: absolute; inset: 0; width: 100%; border-radius: 18px; touch-action: pan-y }
+  .cd-final .plan-card .plan-outer { max-width: none }
+  .cd-final .side-stack { grid-template-columns: repeat(auto-fit,minmax(min(100%,250px),1fr)) }
+  .cd-final .cd-plan-sheet {
+    width: min(100%, 700px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)));
+    margin: auto auto 0;
+    border-radius: 24px 24px 0 0;
+    padding: 10px max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  .cd-final .cd-menu .cd-menu-row > article { flex-basis: calc((100% - 16px) / 3); min-width: 104px }
+}

@@ -13,6 +13,8 @@ import { signInPrompt } from '../account/account.js';
 import { liveTilesHTML, timelineHTML, visLabel } from '../owner-dashboard/owner-page.js';
 import { deviceDiagnosticsHTML, sensorStatusLabel, sensorSourceLabel } from '../../live/sensor-ui.js';
 import { SensorHistory } from '../sensors/sensor-history.js';
+import { PublicMenu } from '../menu/public-menu.js';
+import { OwnerMenu } from '../menu/owner-menu.js';
 import { MenuEditor } from '../menu/menu-editor.js';
 
 const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт'], ['settings', 'Платформын тохиргоо']];
@@ -74,7 +76,10 @@ export class AdminPage extends Component {
     this.menuView?.destroy(); this.menuView = null; this.menuCafe = null;
     if (!cafeId || !root) return;
     this.menuCafe = cafeId;
-    this.menuView = this.child(MenuEditor, root, { cafeId, editor: 'admin' });
+    const cafe = this.state.cafe;
+    if (cafe.data_mode === 'demo') this.menuView = this.child(MenuEditor, root, { cafeId, editor: 'admin' });
+    else if (cafe.owner?.id === platform.session.user?.id) this.menuView = this.child(OwnerMenu, root, { cafeId });
+    else this.menuView = this.child(PublicMenu, root, { cafeId, preview: true });
   }
   syncHistory() {
     const cafeId = this.state.cafe?.id || this.state.filter.cafe_id, root = this.$('[data-admin-sensor-history]');

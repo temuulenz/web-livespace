@@ -48,6 +48,17 @@ try {
   await navigateDocument('Page.navigate', { url: origin + '/#home' });
   await waitFor(`document.documentElement?.classList.contains('ls-online') && document.querySelector('#app')?.children.length > 0`);
 
+  async function checkProtectedWidths(selector) {
+    for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height: width <= 430 ? 660 : 900, deviceScaleFactor: 1, mobile: width <= 820 });
+      const layout = await evaluate(`({ viewport: innerWidth, content: document.documentElement.scrollWidth })`);
+      assert.equal(layout.viewport, width, selector + ' at ' + width);
+      assert.ok(layout.content <= width, selector + ' overflows at ' + width);
+      assert.ok(await evaluate(`document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect().width > 0`), selector + ' at ' + width);
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  }
+
   await check('guest explores without an account; real map shows every café', async () => {
     assert.equal(await evaluate(`document.querySelector('#accBtn').hidden`), false);
     await go('#explore');
@@ -60,14 +71,37 @@ try {
     assert.match(await evaluate(`document.querySelector('#cafeMenu').textContent`), /Латте/);
   });
 
+  await check('public registration shows the testing notice from the account menu on desktop and mobile', async () => {
+    for (const width of [1440, 390, 320]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width < 821 });
+      await click('#accBtn');
+      await click('[data-auth="register"]');
+      await waitFor(`!!document.querySelector('.auth-unavailable')`);
+      assert.match(await evaluate(`document.querySelector('.auth-unavailable').textContent`), /одоогоор бүртгүүлэх боломжгүй/);
+      assert.equal(await evaluate(`document.querySelectorAll('#modal form, #modal input').length`), 0);
+      assert.ok(await evaluate(`document.documentElement.scrollWidth <= innerWidth`));
+      await click('#modal [data-close]');
+      await waitFor(`!document.querySelector('.auth-unavailable')`);
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  });
+
   await check('saving a favourite asks to log in, then saves on the same page', async () => {
     await click('.cd-act [data-fav="A"]');
     await waitFor(`!!document.querySelector('#modal .auth-form')`);
     assert.match(await evaluate(`document.querySelector('#modal').innerText`), /Дуртай кафегаа хадгалахын тулд/);
     await shot('auth-modal');
     await click('[data-auth-mode="register"]');
-    await waitFor(`!!document.querySelector('#au-name')`);
-    await fill('#au-email', 'saraa@example.mn'); await fill('#au-password', 'correct horse'); await fill('#au-name', 'Сараа');
+    await waitFor(`!!document.querySelector('#modal .auth-unavailable')`);
+    assert.match(await evaluate(`document.querySelector('#modal').innerText`), /Туршилт явагдаж байгаа тул одоогоор бүртгүүлэх боломжгүй/);
+    assert.equal(await evaluate(`document.querySelectorAll('#modal form, #modal input').length`), 0);
+    assert.equal(events.filter(e => e.method === 'Network.requestWillBeSent' && e.params.request.url.endsWith('/auth/register')).length, 0);
+    // Seed an existing account in the isolated server to exercise login and pending favorites.
+    const fixture = await server.client().post('/api/v1/auth/register', { email: 'saraa@example.mn', password: 'correct horse', name: 'Сараа' });
+    assert.equal(fixture.status, 201);
+    await click('.auth-unavailable [data-auth-mode="login"]');
+    await waitFor(`!!document.querySelector('#au-email')`);
+    await fill('#au-email', 'saraa@example.mn'); await fill('#au-password', 'correct horse');
     await evaluate(`document.querySelector('#modal form').requestSubmit()`);
     await waitFor(`!document.querySelector('#modal .auth-form') && document.querySelector('.cd-act [data-fav="A"]').getAttribute('aria-pressed') === 'true'`);
     assert.equal(await evaluate(`location.hash`), '#cafe-A', 'stays on the same page');
@@ -118,6 +152,7 @@ try {
     assert.match(text, /тоо зохиож харуулахгүй/);
     assert.equal(await evaluate(`document.querySelectorAll('.own-photos img').length`), 3);
     await waitFor(`[...document.querySelectorAll('.own-photos img')].every(img => img.complete && img.naturalWidth > 0)`);
+    await checkProtectedWidths('.own-head');
     await shot('owner-dashboard-submitted');
     cafeId = (await pageFetch('/api/v1/owner/cafes')).cafes[0].id;
   });
@@ -160,6 +195,7 @@ try {
     await waitFor(`!!document.querySelector('.adm-token pre')`);
     token = await evaluate(`document.querySelector('.adm-token pre').innerText.trim()`);
     assert.match(token, /^lsd_/);
+    await checkProtectedWidths('.adm-cafe');
     await shot('admin-cafe');
     for (const status of ['sensors', 'testing', 'active']) {
       await evaluate(`(() => { const f = document.querySelector('[data-form="saveStatus"]'); f.status.value = '${status}'; f.requestSubmit(); })()`);
@@ -185,6 +221,7 @@ try {
     await waitFor(`!!document.querySelector('#cdFresh') && document.querySelector('#cdFresh').innerText.includes('ШУУД') && !!document.querySelector('canvas')`, 200);
     await waitFor(`document.querySelector('#freePct').textContent === '71%'`);
     assert.match(await evaluate(`document.querySelector('#freeSub').textContent`), /28-оос 20 сул · мэдрэгч/);
+    assert.match(await evaluate(`document.querySelector('.cd-directions a').href`), /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=[\d.,-]+$/);
     await shot('cafe-live-before');
     // Second measurement arrives while the page is open: updated in place via SSE.
     const canvas = await evaluate(`(() => { window.__cv = document.querySelector('canvas'); return true })()`);
@@ -332,7 +369,7 @@ try {
       await waitFor(`document.querySelector('#publicSensorHistory [data-history-reading]')?.textContent.includes('12')`);
       assert.equal(await evaluate(`document.querySelector('#publicSensorHistory [data-history-source]').value`), 'simulated');
       await evaluate(`(() => { const input = document.querySelector('#publicSensorHistory [data-history-interval]'); input.value = '15'; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-      await waitFor(`!!document.querySelector('#publicSensorHistory [data-history-bucket]')`);
+      await waitFor(`!!document.querySelector('#publicSensorHistory [data-history-bucket]') && !!document.querySelector('.cd-history-bars span')`);
     } finally { controller.abort(); await running; }
     await waitFor(`document.querySelector('#publicSensor [data-sensor-status]')?.dataset.sensorStatus === 'offline'`);
     await go('#admin?tab=devices');
@@ -384,6 +421,109 @@ try {
       root.querySelector('button').click(); await Promise.resolve(); out.noEventsAfterDestroy = root.querySelector('button').textContent === '2';
       root.remove(); return out; })()`);
     assert.deepEqual(result, { sameInput: true, typed: 'typed', focus: true, cls: 'x', preservedKept: true, keyedMoved: true, count: 3, clicks: '2', intervalStopped: true, destroyed: true, noEventsAfterDestroy: true });
+  });
+
+  await check('owner menu writes publish public products, variants and active promotions, then archive', async () => {
+    if (await evaluate(`!!document.querySelector('#accBtn .acc-dot')`)) await logout();
+    await go('#owner');
+    await waitFor(`!!document.querySelector('[data-gate-login]')`);
+    await click('[data-gate-login]');
+    await fill('#au-email', 'owner@nomt.mn');
+    await fill('#au-password', 'owner password');
+    await evaluate(`document.querySelector('.auth-form').requestSubmit()`);
+    await waitFor(`!!document.querySelector('[data-own-tab="menu"]')`);
+    await click('[data-own-tab="menu"]');
+    await waitFor(`!!document.querySelector('[data-om-kind="categories"]')`);
+    await checkProtectedWidths('.om');
+    const menuForm = '[data-om-form]';
+    async function submit(fields, checks = []) {
+      for (const [name, value] of Object.entries(fields)) await fill(`${menuForm} [name="${name}"]`, value);
+      for (const name of checks) await evaluate(`document.querySelector('${menuForm} [name="${name}"]').checked = true`);
+      await evaluate(`document.querySelector('${menuForm}').requestSubmit()`);
+      await waitFor(`!document.querySelector('${menuForm}') && document.querySelector('.om [role="status"]')?.textContent.includes('хадгалагдлаа')`);
+    }
+    const ownerBase = '/api/v1/owner/cafes/' + cafeId;
+    await click('[data-om-kind="categories"]');
+    await waitFor(`!!document.querySelector('[data-om-new]')`);
+    await click('[data-om-new]');
+    await submit({ name: 'Кофе' }, ['published']);
+    const { items: [category] } = await pageFetch(ownerBase + '/menu/categories');
+    await click('[data-om-kind="products"]');
+    await waitFor(`!!document.querySelector('[data-om-new]')`);
+    await click('[data-om-new]');
+    await submit({ name: 'Нийтэлсэн латте', category_id: category.id, base_price: '8500' }, ['published', 'featured']);
+    let { products: [product] } = await pageFetch('/api/v1/cafes/' + cafeId + '/menu');
+    assert.equal(product.name, 'Нийтэлсэн латте');
+    await waitFor(`!!document.querySelector('[data-om-edit="${product.id}"]')`);
+    await click(`[data-om-edit="${product.id}"]`);
+    await submit({ base_price: '9000' });
+    ({ products: [product] } = await pageFetch('/api/v1/cafes/' + cafeId + '/menu'));
+    assert.equal(product.base_price, 9000);
+    await click('[data-om-kind="variants"]');
+    await waitFor(`!!document.querySelector('[data-om-new]')`);
+    await click('[data-om-new]');
+    await submit({ name: 'Том', product_id: product.id, price: '11000' }, ['active']);
+    await click('[data-om-kind="promotions"]');
+    await waitFor(`!!document.querySelector('[data-om-new]')`);
+    await click('[data-om-new]');
+    const ub = shift => new Date(Date.now() + (8 + shift) * 3600000).toISOString().slice(0, 16);
+    await submit({ name: 'Туршилтын урамшуулал', starts_at: ub(-1), ends_at: ub(1), discount_value: '15' }, ['published']);
+    await go('#home');
+    await waitFor(`!!document.querySelector('[data-dis-map]')`);
+    const target = (await pageFetch('/api/v1/cafes')).cafes.find(c => c.id === cafeId);
+    assert.ok(target.district);
+    await click('.dis-map');
+    await waitFor(`location.hash === '#explore' && !!document.querySelector('[data-search-district]')`);
+    await evaluate(`(() => {
+      const field = document.querySelector('[data-search-district]');
+      field.value = ${JSON.stringify(target.district)};
+      field.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await go('#home');
+    await waitFor(`!!document.querySelector('[data-dis-dot="coffee"]:not([hidden])')`, 200);
+    await click('[data-dis-dot="coffee"]');
+    await waitFor(`document.querySelector('[data-dis-dot="coffee"]').getAttribute('aria-current') === 'true'`, 200);
+    assert.equal(await evaluate(`document.querySelector('.dis-details').hash`), '#cafe-' + cafeId);
+    await waitFor(`!!document.querySelector('[data-dis-dot="promo"]:not([hidden])')`, 200);
+    await click('[data-dis-dot="promo"]');
+    await waitFor(`document.querySelector('[data-dis-dot="promo"]').getAttribute('aria-current') === 'true'`, 200);
+    assert.match(await evaluate(`document.querySelector('.dis-feature p').textContent`), /Туршилтын урамшуулал/);
+    await click('.dis-details');
+    await waitFor(`document.querySelector('#cafeMenu .pm-item')?.textContent.includes('Нийтэлсэн латте')`);
+    await click('#cafeMenu [data-pm-chip="' + category.id + '"]');
+    await waitFor(`document.querySelector('#cafeMenu [data-pm-chip="${category.id}"]').getAttribute('aria-pressed') === 'true' && !!document.querySelector('#cafeMenu .pm-item')`);
+    assert.match(await evaluate(`document.querySelector('#cafeMenu').textContent`), /Том/);
+    await waitFor(`document.querySelector('#cafeMenu').textContent.includes('Туршилтын урамшуулал')`);
+    await go('#home');
+    await click('[data-dis-filter]');
+    await waitFor(`!!document.querySelector('#modal [data-f="purpose"]')`);
+    await click('#modal [data-f="purpose"][data-v="Сурах"]');
+    await click('#mfApply');
+    await waitFor(`location.hash === '#explore' && !!document.querySelector('[data-search-district]')`);
+    assert.equal(await evaluate(`document.querySelector('[data-search-district]').value`), target.district);
+    await go('#owner');
+    await waitFor(`!!document.querySelector('[data-om-ask="${product.id}"]')`);
+    await click(`[data-om-ask="${product.id}"]`);
+    await click(`[data-om-archive="${product.id}"]`);
+    await waitFor(`document.querySelector('.om .me-list')?.textContent.includes('Архивласан')`);
+    assert.equal((await pageFetch('/api/v1/cafes/' + cafeId + '/menu')).products.length, 0);
+  });
+
+  await check('autoplay advances after seven seconds, pauses on focus and respects reduced motion', async () => {
+    await go('#home');
+    const active = () => evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`);
+    const start = await active();
+    await delay(7300);
+    assert.notEqual(await active(), start);
+    await evaluate(`document.querySelector('#hq').focus()`);
+    const held = await active();
+    await delay(7400);
+    assert.equal(await active(), held);
+    await evaluate(`document.querySelector('#hq').blur()`);
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await delay(7400);
+    assert.equal(await active(), held);
+    await send('Emulation.setEmulatedMedia', { features: [] });
   });
 
   await check('browser console has no uncaught errors', async () => {

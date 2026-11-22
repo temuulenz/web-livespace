@@ -2,6 +2,8 @@
 
 This branch is a partial platform readiness change. It does not implement the complete Super Admin control center or public cafe photo pipeline. Production D1 was not read or changed from this workspace because the Wrangler API token is unavailable.
 
+The current `main` frontend redesign was merged into this branch. Its eight generated cafe image assets were removed; discovery cards and cafe detail covers now show an image-free state. The LiveSpace logo and drawn interface icons remain.
+
 ## Cafe identity and cleanup
 
 Protected IDs are `I` and `cafe_9f81309be58b4d48`. The latter is the configured Sunny Day ID only when its database row has the exact name `Sunny Day coffee shop`, is active, and uses live data. The local `data/livespace.db` contains 12 demo cafes, including `I`, and no Sunny Day row. It cannot establish the production duplicate's ID or relationships.

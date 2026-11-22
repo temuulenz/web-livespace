@@ -39,7 +39,7 @@ The `#explore` map is a real map of Ulaanbaatar. It uses [MapLibre GL JS](https:
 - **Markers, preview card, filters and mobile sheet:** unchanged.
 - **«Та энд»:** appears only after the visitor taps «Миний байршил». The location stays in the browser and is never sent to the server.
 - **Directions:** «Чиглэл авах» opens Google Maps. It is disabled for demo cafés, whose points are fictional and labelled ДЕМО.
-- **Fallback:** if the library, the tiles or WebGL fail, the site automatically shows the original drawn SVG map. The home-page preview always uses the drawing.
+- **Fallback:** if the library, the tiles or WebGL fail, the site automatically shows the original drawn SVG map. The homepage links to the map through a compact discovery strip.
 
 To switch tile providers, change `tiles` and `glyphs` in `js/map-config.js` to another OpenMapTiles-schema source. Then add its host to the Content-Security-Policy in `server/lib/http.mjs` and `cloudflare/security.mjs`. OpenFreeMap has no published usage limits but is a donation-funded public service, so use your own tile server or a paid provider for heavy traffic. The «© OpenStreetMap contributors» attribution must stay visible.
 
@@ -63,7 +63,7 @@ To switch tile providers, change `tiles` and `glyphs` in `js/map-config.js` to a
 | Backend: HTTP, SQLite, auth, SSE, routes, services | `server/` |
 | Reference device client for the ingestion API | `tools/device-client.mjs` |
 
-The stylesheets must stay in this order: `styles.css`, `styles/pages.css`, `styles/responsive.css`, `styles/refinements.css`, then `styles/livespace.css`. The first four are the original design and are byte-identical (a test checks this). The last file holds every addition in this version.
+The stylesheets must stay in this order: `styles.css`, `styles/pages.css`, `styles/responsive.css`, `styles/refinements.css`, then `styles/livespace.css`. The first four are the original design and are byte-identical (a test checks this). The existing enhancement stylesheet is followed by shared platform tokens and homepage styles in `styles/platform.css` and `styles/discovery.css`.
 
 ## Tests
 

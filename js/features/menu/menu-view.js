@@ -26,7 +26,7 @@ export const menuItemHTML = item => html`<article class="menu-item${item.availab
 export class MenuSection extends Component {
   initialState() { return { items: null, error: '', cat: 'all' }; }
   events() {
-    return { 'click [data-menu-cat]': (e, b) => { Snd.ui('click'); this.setState({ cat: b.dataset.menuCat }); } };
+    return { 'click [data-demo-menu-expand]': () => this.setState({ expanded: !this.state.expanded }), 'click [data-menu-cat]': (e, b) => { Snd.ui('click'); this.setState({ cat: b.dataset.menuCat }); } };
   }
   onMount() { this.onCleanup(customer.subscribe(() => this.load())); this.load(); }
   async load() {
@@ -35,18 +35,20 @@ export class MenuSection extends Component {
   }
   render() {
     const { items, error, cat } = this.state;
-    const head = html`<div class="card-h"><h2>${raw(I.cup)} Цэс</h2>${customer.mode === 'mock' ? html`<span class="badge b-demo">ДЕМО</span>` : ''}</div>`;
+    const head = html`<div class="card-h"><h2>${raw(I.cup)} Меню</h2>${this.props.detail && items?.length ? html`<button class="btn btn-o" data-demo-menu-expand aria-expanded="${!!this.state.expanded}" aria-controls="cdDemoMenu">${this.state.expanded ? 'Товч цэс' : 'Бүх меню'} ${raw(I.arr)}</button>` : ''}${this.props.demo || customer.mode === 'mock' ? html`<span class="badge b-demo">ДЕМО</span>` : ''}</div>`;
     if (error) return html`${head}<p class="muted">${error}</p>`;
     if (!items) return html`${head}<div class="skel" style="height:140px"></div>`;
     if (!items.length) return html`${head}<p class="muted">Энэ кафе цэсээ хараахан оруулаагүй байна.</p>`;
     const groups = groupMenu(items), cats = groups.map(([c]) => c);
     const shown = cat === 'all' || !cats.includes(cat) ? groups : groups.filter(([c]) => c === cat);
     const out = items.filter(item => !item.available).length;
-    return html`${head}
-      <p class="muted menu-note">Үнэ төгрөгөөр${out ? html` · <span class="menu-out-k">Дууссан</span> — өнөөдөр байхгүй` : ''} · Төлбөрийг кафе дээр төлнө.</p>
+    return html`<div class="${this.props.detail ? 'cd-menu' : ''}">${head}
+      ${!this.props.detail ? html`<p class="muted menu-note">Үнэ төгрөгөөр${out ? html` · <span class="menu-out-k">Дууссан</span> — өнөөдөр байхгүй` : ''} · Төлбөрийг кафе дээр төлнө.</p>` : ''}
       ${cats.length > 1 ? html`<div class="chips menu-cats" role="group" aria-label="Цэсийн ангилал">
         <button class="chip" data-menu-cat="all" aria-pressed="${cat === 'all' || !cats.includes(cat)}">Бүгд</button>
         ${MENU_CATEGORIES.filter(c => cats.includes(c)).map(c => html`<button class="chip" data-menu-cat="${c}" aria-pressed="${c === cat}">${c}</button>`)}</div>` : ''}
-      ${shown.map(([category, list]) => html`<section class="menu-group" data-key="mg-${category}"><h3>${category}</h3><div class="menu-grid">${list.map(menuItemHTML)}</div></section>`)}`;
+      <div id="cdDemoMenu">${this.props.detail && !this.state.expanded
+        ? html`<div class="menu-grid cd-menu-row">${shown.flatMap(([, list]) => list).slice(0, 5).map(menuItemHTML)}</div>`
+        : shown.map(([category, list]) => html`<section class="menu-group" data-key="mg-${category}"><h3>${category}</h3><div class="menu-grid">${list.map(menuItemHTML)}</div></section>`)}</div></div>`;
   }
 }
