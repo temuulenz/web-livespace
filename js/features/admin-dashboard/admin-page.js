@@ -16,6 +16,7 @@ import { SensorHistory } from '../sensors/sensor-history.js';
 import { PublicMenu } from '../menu/public-menu.js';
 import { OwnerMenu } from '../menu/owner-menu.js';
 import { MenuEditor } from '../menu/menu-editor.js';
+import { CafePhotoManager } from '../cafe/cafe-photo-manager.js';
 
 const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт'], ['audit', 'Аудит'], ['health', 'Системийн төлөв'], ['settings', 'Платформын тохиргоо']];
 const when = iso => iso ? dateTime(iso) : '—';
@@ -64,8 +65,14 @@ export class AdminPage extends Component {
     this.interval(() => { if (this.state.auto && !document.hidden && this.state.tab === 'measurements' && !this.state.cafe) this.load(); }, 15000);
     this.load();
   }
-  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); this.menuView?.destroy(); this.locOff?.(); }
-  onUpdate() { this.syncEditor(); this.syncHistory(); this.syncMenu(); this.syncLocation(); }
+  onDestroy() { this.editor?.destroy(); this.historyView?.destroy(); this.menuView?.destroy(); this.photoView?.destroy(); this.locOff?.(); }
+  onUpdate() { this.syncEditor(); this.syncHistory(); this.syncMenu(); this.syncPhotos(); this.syncLocation(); }
+  syncPhotos() {
+    const cafeId=this.state.cafe?.id,root=this.$('[data-admin-photos]');
+    if(cafeId&&root&&this.photoCafe===cafeId&&this.photoView?.el===root)return;
+    this.photoView?.destroy();this.photoView=null;this.photoCafe=null;
+    if(cafeId&&root&&platform.session.user?.is_super_admin){this.photoCafe=cafeId;this.photoView=this.child(CafePhotoManager,root,{cafeId});}
+  }
   // Location is picked on the map; one picker per opened café (it survives re-renders).
   syncLocation() {
     const host = this.$('[data-loc-map]'), key = host ? this.state.cafe?.id : null;
@@ -435,6 +442,7 @@ ${exampleBody(cafeId, id)}</pre></details></section>`;
         </section>
 
         <section class="card adm-wide adm-menu" data-key="menu"><div data-admin-menu data-preserve data-key="admin-menu-${c.id}"></div></section>
+        ${platform.session.user?.is_super_admin?html`<section class="card adm-wide" data-key="public-photos"><div data-admin-photos data-preserve data-key="admin-photos-${c.id}"></div></section>`:''}
 
         <section class="card adm-wide"><h3>Хөдөлгөөнт зураглал</h3>
           <div class="adm-vis">

@@ -38,7 +38,7 @@ Administrator-account management is restricted to the immutable Super Admin iden
 | Owner dashboard `#owner`: own café's status, visualization, devices, live data, edit hours/phone/description | | | ✓ own cafés only | ✓ |
 | Admin dashboard `#admin` | | | | ✓ |
 
-The logged-in site is the same as the guest site. The only additions are an account button in the header and the pages for each role. Photographs are private: only the café's owner and admins can load them.
+The logged-in site is the same as the guest site. The only additions are an account button in the header and the pages for each role. Partnership application photographs stay private. Owners and the bound Super Admin can separately publish café cover and gallery photographs; ready photographs of active cafés are public.
 
 ### Guest → favourite
 

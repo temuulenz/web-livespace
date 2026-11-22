@@ -61,6 +61,9 @@ test('Super Admin creates and archives cafes, manages another cafe menu, and del
     assert.match(cafe,/^cafe_/);
     const category=await root.post(`/api/v1/owner/cafes/${cafe}/menu/categories`,{name:'Coffee',published:true});
     assert.equal(category.status,201,JSON.stringify(category.data));
+    const product=await root.post(`/api/v1/owner/cafes/${cafe}/menu/products`,{category_id:category.data.item.id,name:'Espresso',base_price:4500,published:true});
+    assert.equal(product.status,201,JSON.stringify(product.data));
+    assert.equal((await root.patch(`/api/v1/owner/cafes/${cafe}/menu/products/${product.data.item.id}`,{version:product.data.item.version,name:'Double espresso'})).status,200);
     assert.equal((await root.post(`/api/v1/admin/cafes/${cafe}/archive`)).status,200);
     assert.equal((await root.del(`/api/v1/admin/cafes/${cafe}`)).status,409);
     const empty=(await root.post('/api/v1/admin/cafes',{name:'Empty cafe'})).data.cafe.id;

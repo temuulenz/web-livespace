@@ -8,7 +8,9 @@ import { categories, recommendationEntries, publishedMenuGroups, activePromotion
 
 const cafeLink = c => '#cafe-' + encodeURIComponent(c.id);
 const expand = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5h5v5m0-5-5 5M5 14v5h5m-5 0 5-5"/></svg>';
-function art() { return `<div class="dis-art-empty" aria-hidden="true">${I.cup}<span>Кафены зураг оруулаагүй</span></div>`; }
+function art(cafe) { return cafe?.cover_photo_id
+  ? `<picture><img src="/api/v1/cafes/${encodeURIComponent(cafe.id)}/photos/${encodeURIComponent(cafe.cover_photo_id)}/file" alt="" loading="lazy" decoding="async"></picture>`
+  : `<div class="dis-art-empty" aria-hidden="true">${I.cup}<span>Кафены зураг оруулаагүй</span></div>`; }
 const settings = filterCount => `
   <button class="dis-setting" type="button" data-dis-map aria-label="Газрын зураг руу очих">${I.map}</button>
   <button class="dis-setting dis-filter" type="button" data-dis-filter aria-label="Нарийвчилсан шүүлтүүр" aria-haspopup="dialog">${I.filter}<span class="dis-filter-count">${filterCount || ''}</span></button>`;
@@ -73,7 +75,7 @@ function featureHTML(entry, category) {
 
 function compactCard({ cafe, reason }, index, category) {
   return `<article class="dis-card dis-crop-${index}">
-    <a href="${cafeLink(cafe)}">${art()}<strong>${escapeHTML(cafe.name)}</strong><small><span data-dis-rating="${escapeHTML(cafe.id)}"></span>${[cafe.district, isDemoCafe(cafe) ? 'Демо' : ''].filter(Boolean).map(escapeHTML).join(' · ')}</small>
+    <a href="${cafeLink(cafe)}">${art(cafe)}<strong>${escapeHTML(cafe.name)}</strong><small><span data-dis-rating="${escapeHTML(cafe.id)}"></span>${[cafe.district, isDemoCafe(cafe) ? 'Демо' : ''].filter(Boolean).map(escapeHTML).join(' · ')}</small>
       <span class="dis-card-detail">${reason ? `<span title="${escapeHTML(reason)}">${category.icon}<span>${escapeHTML(reason)}</span></span>` : ''}<i aria-hidden="true">${I.chev}</i></span>
     </a>
     ${heart(cafe)}
@@ -118,14 +120,15 @@ export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters
     const rows = entryList(current);
     const available = cycle();
     const artwork = el('.dis-art');
-    if (artwork.dataset.category !== current.key) {
-      artwork.innerHTML = art();
-      artwork.dataset.category = current.key;
+    const artworkKey=current.key+':'+(rows[0]?.cafe.cover_photo_id||'')+':'+(rows[0]?.cafe.id||'');
+    if (artwork.dataset.category !== artworkKey) {
+      artwork.innerHTML = art(rows[0]?.cafe);
+      artwork.dataset.category = artworkKey;
     }
     const error = platform.catalogueStatus === 'error' && !cafes.length;
     const [first, ...additional] = rows;
     const displayed = additional.slice(0, 4);
-    const key = JSON.stringify([current.key, first?.cafe.id, first?.reason, first?.cafe.name, first?.cafe.district,
+    const key = JSON.stringify([current.key, first?.cafe.id, first?.cafe.cover_photo_id, first?.reason, first?.cafe.name, first?.cafe.district,
       displayed.map(({ cafe, reason }) => [cafe.id, cafe.name, cafe.district, reason]), error]);
     const demo = demoMode();
     $$('[data-dis-copy]', root).forEach(panel => {

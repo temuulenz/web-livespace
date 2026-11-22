@@ -4,6 +4,7 @@ import {authorizedBatch} from '../shared/business/write-authorization.mjs';
 import {reviewsRoute} from './reviews.mjs';
 import {inventoryRoute} from './inventory.mjs';
 import { menuRoute } from './menu.mjs';
+import { cafePhotosRoute } from './cafe-photos.mjs';
 import { resourceSnapshot } from './resources.mjs';
 import { validateAnalyticsBatch } from '../js/services/analytics-schema.js';
 import { readAnalytics } from './analytics.mjs';
@@ -63,6 +64,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  const reviewResponse=await reviewsRoute(req,env,limit);if(reviewResponse)return reviewResponse;
  const inventoryResponse=await inventoryRoute(req,env,limit);if(inventoryResponse)return inventoryResponse;
  const menuResponse=await menuRoute(req,env,limit);if(menuResponse)return menuResponse;
+ const cafePhotosResponse=await cafePhotosRoute(req,env,limit);if(cafePhotosResponse)return cafePhotosResponse;
  if(p==='/api/v1/analytics/events' && m==='POST') {
   if(env.LS_ANALYTICS_ENABLED!=='1'||!env.ANALYTICS)fail(404,'not_found','Analytics collection disabled');
   limit('analytics:'+(req.headers.get('cf-connecting-ip')||'local'),20,60000);
