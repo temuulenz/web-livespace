@@ -110,7 +110,7 @@ function recCard(c, k, n, plain = false) {
   <div class="rc-card">
    ${plain ? '' : `<div class="rc-roof">${roofSVG(k, n, uid)}</div>`}
    <div class="rc-body">
-    ${sceneSVG(c, k, uid)}
+    ${platform.online && c.live?.mode !== 'demo' ? `<div class="rc-no-photo" aria-hidden="true">${I.cup}<span>Зураг оруулаагүй</span></div>` : sceneSVG(c, k, uid)}
     <span class="rc-open${c.open ? '' : ' off'}"><span class="olamp ${c.open ? 'on' : 'off'}" aria-hidden="true">${I.lamp}</span>${op.open ? 'Нээлттэй' : 'Хаалттай'}</span>
     <button class="heart rc-heart" data-fav="${escapeHTML(c.id)}" aria-pressed="${favs.has(c.id)}" aria-label="${name} хадгалах">${I.heart}</button>
     <div class="rc-info">

@@ -15,7 +15,7 @@ import { deviceDiagnosticsHTML, sensorStatusLabel, sensorSourceLabel } from '../
 import { SensorHistory } from '../sensors/sensor-history.js';
 import { MenuEditor } from '../menu/menu-editor.js';
 
-const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт']];
+const TABS = [['overview', 'Тойм'], ['applications', 'Хүсэлтүүд'], ['cafes', 'Кафенууд'], ['users', 'Хэрэглэгчид'], ['devices', 'Төхөөрөмж'], ['measurements', 'Хэмжилт'], ['settings', 'Платформын тохиргоо']];
 const when = iso => iso ? dateTime(iso) : '—';
 const statusBadge = status => html`<span class="badge ${status === 'active' ? 'b-live' : status === 'rejected' ? 'b-stale' : 'b-typ'}">${statusLabel(status)}</span>`;
 const modeBadge = mode => html`<span class="badge ${mode === 'demo' ? 'b-demo' : 'b-live'}">${mode === 'demo' ? 'ДЕМО' : 'БОДИТ'}</span>`;
@@ -104,6 +104,8 @@ export class AdminPage extends Component {
       else if (tab === 'cafes') data = await api.get('/admin/cafes');
       else if (tab === 'users') data = await api.get(`/admin/users${this.$('[name="role"]')?.value ? '?role=' + this.$('[name="role"]').value : ''}`);
       else if (tab === 'devices') data = { ...(await api.get('/admin/devices')), ...(await api.get('/admin/cafes')) };
+      else if (tab === 'settings' && platform.session.user?.is_super_admin) data = { ...(await api.get('/admin/settings/featured-cafe')), ...(await api.get('/admin/cafes')) };
+      else if (tab === 'settings') data = {};
       else if (tab === 'measurements') {
         const q = new URLSearchParams(Object.entries(filter).filter(([, v]) => v)).toString();
         data = { ...(await api.get(`/admin/measurements?limit=200${q ? '&' + q : ''}`)), ...(await api.get('/admin/cafes')), ...(await api.get('/admin/devices')) };
@@ -148,6 +150,10 @@ export class AdminPage extends Component {
     body.tags = v.tags.split(',').map(t => t.trim()).filter(Boolean);
     if (v.demo.trim()) { try { body.demo = JSON.parse(v.demo); } catch { toast('Демо утга JSON буруу байна'); return; } }
     if (await this.run(platform.api.patch(`/admin/cafes/${this.state.cafe.id}`, body), 'Хадгалагдлаа')) this.openCafe(this.state.cafe.id, true);
+  }
+  async saveFeatured(form) {
+    const cafe_id = readForm(form).cafe_id || null;
+    if (await this.run(platform.api.put('/admin/settings/featured-cafe', { cafe_id }), 'Онцлох кафе шинэчлэгдлээ')) { platform.featuredCafeId = cafe_id; this.load(); }
   }
   layoutFromForm(form) {
     const v = readForm(form);
@@ -202,7 +208,7 @@ export class AdminPage extends Component {
     return html`<div class="page"><div class="wrap adm">
       <div class="adm-head"><span class="badge" style="background:var(--brown);color:#fff">LIVESPACE БАГ</span><h1>Админ самбар</h1>
         <button class="btn btn-g" data-refresh>${loading ? 'Ачаалж байна…' : 'Шинэчлэх'}</button></div>
-      <nav class="chips adm-tabs">${TABS.map(([key, label]) => html`<button class="chip" data-tab="${key}" aria-pressed="${key === tab && !cafe}">${label}</button>`)}</nav>
+      <nav class="chips adm-tabs">${TABS.filter(([key]) => key !== 'settings' || platform.session.user?.is_super_admin).map(([key, label]) => html`<button class="chip" data-tab="${key}" aria-pressed="${key === tab && !cafe}">${label}</button>`)}</nav>
       ${error ? html`<p class="auth-msg" role="alert">${error}</p>` : ''}
       ${this.state.token ? this.tokenView() : ''}
       ${cafe ? this.cafeView() : this[`${tab}View`]()}
@@ -219,6 +225,12 @@ export class AdminPage extends Component {
 Authorization: Bearer ${value}
 
 ${exampleBody(cafeId, id)}</pre></details></section>`;
+  }
+  settingsView() {
+    if (!platform.session.user?.is_super_admin) return html`<p class="muted">Super Admin эрх шаардлагатай.</p>`;
+    const { cafes = [], cafe_id } = this.state.data;
+    return html`<section class="card"><h2>Нүүр хуудасны онцлох кафе</h2><p class="muted">Зөвхөн идэвхтэй бодит кафег сонгоно. Хэмжилтгүй үед бодит тоо зохиож харуулахгүй.</p>
+      <form class="form adm-form" data-form="saveFeatured"><label>Онцлох кафе<select name="cafe_id"><option value="">Сонгоогүй</option>${cafes.filter(c => c.status === 'active' && c.data_mode === 'live').map(c => html`<option value="${c.id}" ${raw(c.id === cafe_id ? 'selected' : '')}>${c.name} · ${c.id}</option>`)}</select></label><button class="btn btn-p">Хадгалах</button></form></section>`;
   }
 
   overviewView() {

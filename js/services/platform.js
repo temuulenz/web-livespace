@@ -14,6 +14,7 @@ const session = createSession({ api, onLoginRequired: reason => bus.emit('login:
 
 export const platform = {
   online: false,
+  featuredCafeId: null,
   api, session, bus,
   config: { poll_interval_sec: 60, stale_after_sec: 900 },
   liveStatus: 'stopped'
@@ -28,7 +29,8 @@ function applyLive(update) {
 }
 
 export async function loadCatalogue() {
-  const { cafes } = await api.get('/cafes');
+  const { cafes, featured_cafe_id } = await api.get('/cafes');
+  platform.featuredCafeId = featured_cafe_id || null;
   retainCafes(new Set(cafes.map(c => c.id)));
   for (const record of cafes) upsertCafe(record);
 }

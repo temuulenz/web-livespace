@@ -71,8 +71,8 @@ export function createCafeService(db, config) {
   }
 
   return {
-    listPublic() { const minutes = ulaanbaatarMinutes(); return activeRows.all().map(row => publicCafe(row, minutes)); },
-    getPublic(id) { const row = byId.get(id); return row && row.status === 'active' ? publicCafe(row) : null; },
+    listPublic() { const minutes = ulaanbaatarMinutes(); return activeRows.all().filter(row => row.name !== 'Sunny Day coffee shop' || row.id === 'cafe_9f81309be58b4d48').map(row => publicCafe(row, minutes)); },
+    getPublic(id) { const row = byId.get(id); return row && row.status === 'active' && (row.name !== 'Sunny Day coffee shop' || row.id === 'cafe_9f81309be58b4d48') ? publicCafe(row) : null; },
     get: id => byId.get(id),
     publicCafe,
     liveSummary

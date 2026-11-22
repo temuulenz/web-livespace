@@ -79,8 +79,9 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
  if(p==='/api/v1/config')return json({poll_interval_sec:Number(env.LS_POLL_INTERVAL_SEC || 10),stale_after_sec:900,sensor_stale_after_sec:staleAfterSec,sensor_expected_interval_sec:expectedIntervalSec,stream_enabled:false,browser_realtime:env.LS_BROWSER_REALTIME_ENABLED==='1'&&!!env.BROWSER_ROOMS});
  if(p==='/api/v1/stream')return json({error:{code:'polling_required',message:'Use /api/v1/live polling'}},503,{'Retry-After':'60'});
  if((p==='/api/v1/cafes' || p==='/api/v1/live') && m==='GET') {
-  const rows=await all(db,"SELECT * FROM cafes WHERE status='active' ORDER BY sort_order,created_at");const cafes=await Promise.all(rows.map(r=>cafeView(db,r)));
-  return json(p.endsWith('/live')?{updates:cafes.filter(c=>c.live.mode!=='demo').map(liveUpdate),server_time:now()}:{cafes,server_time:now()});
+  const rows=await all(db,"SELECT * FROM cafes WHERE status='active' AND (name<>'Sunny Day coffee shop' OR id='cafe_9f81309be58b4d48') ORDER BY sort_order,created_at");const cafes=await Promise.all(rows.map(r=>cafeView(db,r)));
+  const featured=p.endsWith('/cafes')?await first(db,"SELECT c.id FROM platform_settings s JOIN cafes c ON c.id=s.value WHERE s.key='featured_cafe_id' AND c.status='active'"):null;
+  return json(p.endsWith('/live')?{updates:cafes.filter(c=>c.live.mode!=='demo').map(liveUpdate),server_time:now()}:{cafes,featured_cafe_id:featured?.id||null,server_time:now()});
  }
  const profile=routeId(p,/^\/api\/v1\/cafes\/([^/]+)\/profile$/);
  if(profile && m==='GET') {
@@ -88,7 +89,7 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   if(!value)fail(404,'not_found','Cafe not found');return json({profile:value});
  }
  let a=routeId(p,/^\/api\/v1\/cafes\/([^/]+)$/);
- if(a && m==='GET'){const row=await first(db,"SELECT * FROM cafes WHERE id=? AND status='active'",a[0]);if(!row)fail(404,'not_found','Cafe not found');return json({cafe:await cafeView(db,row)});}
+ if(a && m==='GET'){const row=await first(db,"SELECT * FROM cafes WHERE id=? AND status='active' AND (name<>'Sunny Day coffee shop' OR id='cafe_9f81309be58b4d48')",a[0]);if(!row)fail(404,'not_found','Cafe not found');return json({cafe:await cafeView(db,row)});}
  const user=await session(db,req);
  const update=(db,table,key,x)=>updateWithAuthorization(db,table,key,x,user,p.startsWith('/api/v1/owner/')?'owner':'admin');
  if(p==='/api/v1/admin/resources' && m==='GET') {
@@ -176,6 +177,18 @@ async function handle(req,env,historyCache=new Map(),profiles,ctx) {
   guard(user,'admin');
   const secureBatch=entries=>authorizedBatch({batch:entries=>batch(db,entries)},fail,user,null,'admin',entries);
   const secureRun=(q,...args)=>secureBatch([[q,...args]]);
+  if(p==='/api/v1/admin/settings/featured-cafe') {
+   if(!user.is_super_admin)fail(403,'super_admin_required','Super Admin required');
+   if(m==='GET')return json({cafe_id:(await first(db,"SELECT value FROM platform_settings WHERE key='featured_cafe_id'"))?.value||null});
+   if(m==='PUT') {
+    limit(`featured:${user.id}:${req.headers.get('cf-connecting-ip')||'local'}`,20,60000);
+    const x=await body(req);if(!x || (x.cafe_id!==null && (typeof x.cafe_id!=='string'||!/^[A-Za-z0-9_.:-]{1,80}$/.test(x.cafe_id))))fail(422,'validation_failed','Invalid cafe ID');
+    if(x.cafe_id){const cafe=await first(db,'SELECT status,data_mode FROM cafes WHERE id=?',x.cafe_id);if(!cafe||cafe.status!=='active'||cafe.data_mode!=='live')fail(422,'validation_failed','Featured cafe must be active and real');}
+    const entries=x.cafe_id?[["INSERT INTO platform_settings(key,value,updated_at,actor_id) VALUES('featured_cafe_id',?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at,actor_id=excluded.actor_id",x.cafe_id,now(),user.id]]:[["DELETE FROM platform_settings WHERE key='featured_cafe_id'"]];
+    entries.push(['INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)',id('aud'),user.id,x.cafe_id||'platform','platform.featured_cafe.set',now(),'{}']);
+    await secureBatch(entries);return json({cafe_id:x.cafe_id});
+   }
+  }
   if(p==='/api/v1/admin/overview' && m==='GET') {
    const count=async(sql,...args)=>(await first(db,sql,...args)).n;
    const devices=await all(db,'SELECT * FROM devices WHERE revoked_at IS NULL');const views=await Promise.all(devices.map(d=>deviceView(db,d)));

@@ -36,6 +36,30 @@ export function register(router, deps) {
   const getCafe = id => { const row = db.prepare('SELECT * FROM cafes WHERE id = ?').get(id); if (!row) throw notFound('Кафе олдсонгүй'); return row; };
   const deviceView = d => ({ ...d, token_hash: undefined, is_test: !!d.is_test, enabled: !!d.enabled, status: deviceStatus(db, config, d), last_status: json(d.last_status), online: deviceStatus(db, config, d) === 'online' });
 
+  router.get('/api/v1/admin/settings/featured-cafe', ctx => {
+    admin(ctx);
+    if (!ctx.user.is_super_admin) throw new HttpError(403, 'super_admin_required', 'Super Admin required');
+    sendJson(ctx.res, 200, { cafe_id: db.prepare("SELECT value FROM platform_settings WHERE key='featured_cafe_id'").get()?.value || null });
+  });
+  router.put('/api/v1/admin/settings/featured-cafe', async ctx => {
+    admin(ctx);
+    if (!ctx.user.is_super_admin) throw new HttpError(403, 'super_admin_required', 'Super Admin required');
+    deps.limit(`featured:${ctx.user.id}:${ctx.ip}`, 20, 60000);
+    const body = await readJson(ctx);
+    if (!body || (body.cafe_id !== null && (typeof body.cafe_id !== 'string' || !/^[A-Za-z0-9_.:-]{1,80}$/.test(body.cafe_id)))) throw new HttpError(422, 'validation_failed', 'Invalid cafe ID');
+    if (body.cafe_id) {
+      const cafe = getCafe(body.cafe_id);
+      if (cafe.status !== 'active' || cafe.data_mode !== 'live') throw new HttpError(422, 'validation_failed', 'Featured cafe must be active and real');
+    }
+    authorizedWrite(db, ctx.user, null, 'admin', () => {
+      if (!db.prepare('SELECT 1 FROM super_admin_identity WHERE user_id=?').get(ctx.user.id)) throw new HttpError(403, 'super_admin_required', 'Super Admin required');
+      if (body.cafe_id) db.prepare("INSERT INTO platform_settings(key,value,updated_at,actor_id) VALUES('featured_cafe_id',?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at,actor_id=excluded.actor_id").run(body.cafe_id, now(), ctx.user.id);
+      else db.prepare("DELETE FROM platform_settings WHERE key='featured_cafe_id'").run();
+      db.prepare('INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)').run(newId('aud'), ctx.user.id, body.cafe_id || 'platform', 'platform.featured_cafe.set', now(), '{}');
+    });
+    sendJson(ctx.res, 200, { cafe_id: body.cafe_id });
+  });
+
   // Tell open browsers when the public catalogue or a café's state changed.
   // Anonymous subscribers only learn about cafés that are, or just stopped being, public:
   // non-public setup states (under review, rejected, ...) never leave the admin surface.

@@ -110,7 +110,7 @@ See [SENSOR_API.md](SENSOR_API.md) for the legacy HTTP format, SSE/polling and d
 | `LS_STALE_AFTER_SEC` | `900` | Values older than this are labelled outdated |
 | `LS_DEVICE_OFFLINE_SEC` | `600` | Device shown offline after this silence |
 | `LS_ADMIN_EMAIL`, `LS_ADMIN_PASSWORD` | — | Create or promote the first admin at start (or use `npm run create-admin`) |
-| `LS_SEED_DEMO` | `1` | Seed the 12 demo cafés into an empty database |
+| `LS_SEED_DEMO` | `1` in development, disabled in production | Seed the 12 demo cafés into an empty development database; production ignores this flag |
 | `LS_MAX_PHOTO_MB` | `4` | Per-photo upload limit |
 | `NODE_ENV=production` or `LS_SECURE_COOKIES=1` | | `Secure` cookies (HTTPS) |
 | `LS_TRUST_PROXY=1` | | Use `X-Forwarded-For` for rate limits behind a proxy |

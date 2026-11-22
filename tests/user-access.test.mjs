@@ -19,6 +19,19 @@ async function setup() {
   return {server,db,root,admin,sql};
 }
 
+test('featured cafe setting is real-only, Super Admin scoped and audited', async () => {
+  const {server,db,root,admin}=await setup();
+  try {
+    db.prepare("INSERT INTO cafes(id,name,status,data_mode,created_at,updated_at) VALUES('cafe_9f81309be58b4d48','Sunny Day coffee shop','active','live',?,?)").run(new Date().toISOString(),new Date().toISOString());
+    const path='/api/v1/admin/settings/featured-cafe';
+    assert.equal((await admin.put(path,{cafe_id:'cafe_9f81309be58b4d48'})).status,403);
+    assert.equal((await root.put(path,{cafe_id:'I'})).status,422);
+    assert.equal((await root.put(path,{cafe_id:'cafe_9f81309be58b4d48'})).status,200);
+    assert.equal((await server.client().get('/api/v1/cafes')).data.featured_cafe_id,'cafe_9f81309be58b4d48');
+    assert.equal(db.prepare("SELECT count(*) n FROM user_audit_log WHERE action='platform.featured_cafe.set'").get().n,1);
+  } finally { await server.stop(); }
+});
+
 test('only immutable-ID Super Admin can create, promote, demote, disable or reset administrators',async()=>{
   const {server,root,admin,db}=await setup();
   try {
