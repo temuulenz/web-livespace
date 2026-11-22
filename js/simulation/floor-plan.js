@@ -3,10 +3,9 @@ import { Prefs } from '../state.js';
 import { Snd } from '../audio.js';
 import { resolveLayout } from './layouts.js';
 import { isRealMode, sensorState } from '../live/sensor-state.js';
-import { counterBox, counterPoint, itemSeats, itemObstacles, inObstacle, drawItems } from './catalog.js';
 
 /* ================= FLOOR PLAN (canvas, top-down) ================= */
-const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' }, chair: { d: 'Ганц сандал.', q: 'Дунд зэргийн чимээтэй.' }, round: { d: 'Дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, lounge: { d: 'Буйдан — зөөлөн, тухтай суудал.', q: 'Тухтай бүс.' }, vip: { d: 'VIP өрөө — тусдаа, урьдчилан захиалж ордог (коворкинг, уулзалтад).', q: 'Нам гүм, хаалттай өрөө.' }, table: { d: 'Ширээ.', q: 'Дунд зэргийн чимээтэй.' }, bench: { d: 'Вандан сандал — ширээний дэргэд.', q: 'Дунд зэргийн чимээтэй.' } };
+const ZONES = { bar: { d: 'Цонхны баар — цонхны гэрэлтэй.', q: 'Чимээгүй бүс.' }, t1: { d: 'Төв дугуй ширээ — захиалгын лангуунаас холхон.', q: 'Дунд зэргийн чимээтэй.' }, t2: { d: 'Төв дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, t3: { d: 'Лангууны хажуугийн ширээ — кофены машины чимээ сонсогдоно.', q: 'Чимээтэй бүс.' }, long: { d: 'Урт ширээ — багаар сурах, ажиллахад тохиромжтой.', q: 'Дунд зэргийн чимээтэй.' }, sofa: { d: 'Буйдан — энэ хэсгийн мэдрэгч одоогоор холбогдоогүй.', q: 'Тухтай бүс.' }, chair: { d: 'Ганц сандал.', q: 'Дунд зэргийн чимээтэй.' }, round: { d: 'Дугуй ширээ.', q: 'Дунд зэргийн чимээтэй.' }, lounge: { d: 'Буйдан — зөөлөн, тухтай суудал.', q: 'Тухтай бүс.' }, vip: { d: 'VIP өрөө — тусдаа, урьдчилан захиалж ордог (коворкинг, уулзалтад).', q: 'Нам гүм, хаалттай өрөө.' } };
 const DIRS = { N: -Math.PI / 2, S: Math.PI / 2, E: 0, W: Math.PI };
 // Single-letter demo ids keep their original seeds; longer ids get a stable hash.
 const seedOf = id => id.length === 1 ? id.charCodeAt(0) * 31 : [...id].reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261);
@@ -85,10 +84,7 @@ class FloorPlan {
     }
   }
   // The barista walks behind the counter, wherever the counter is placed.
-  barista() {
-    // A resized or turned counter carries the barista's walk with it.
-    if (this.cbox?.custom) { const P = (a, b) => counterPoint(this.cbox, a, b), [x, y] = P(690, 105); return { x, y, pts: [P(650, 105), P(720, 105), P(745, 150), P(690, 150)], i: 0, wait: 0, shirt: '#7B542F', hair: '#3E2A17', skin: '#F2C9A0', barista: true } }
-    const dx = this.cdx, dy = this.cdy; return { x: 690 + dx, y: 105 + dy, pts: [[650 + dx, 105 + dy], [720 + dx, 105 + dy], [745 + dx, 150 + dy], [690 + dx, 150 + dy]], i: 0, wait: 0, shirt: '#7B542F', hair: '#3E2A17', skin: '#F2C9A0', barista: true } }
+  barista() { const dx = this.cdx, dy = this.cdy; return { x: 690 + dx, y: 105 + dy, pts: [[650 + dx, 105 + dy], [720 + dx, 105 + dy], [745 + dx, 150 + dy], [690 + dx, 150 + dy]], i: 0, wait: 0, shirt: '#7B542F', hair: '#3E2A17', skin: '#F2C9A0', barista: true } }
   // Editor: show a changed layout immediately (seats, obstacles and background are rebuilt).
   setLayout(L) { this.L = L; this.sel = null; this.layout(); this.buildGrid(); this.staff = [this.barista()]; this.bg = this.drawStatic(this.k); this.draw() }
   // Camera counts control visitors only; positions are illustrative and seats stay unknown.
@@ -171,12 +167,9 @@ class FloorPlan {
     L.long.forEach(t => { const k = t.seats.length; t.seats.forEach((x, i) => add(x, t.y - 18, Math.PI / 2, t.zone || 'long', `${t.name} ${i + 1}`)); t.seats.forEach((x, i) => add(x, t.y + 54, -Math.PI / 2, t.zone || 'long', `${t.name} ${i + 1 + k}`)) });
     L.sofas.forEach(f => f.seats.forEach((x, i) => add(x, f.y + 12, -Math.PI / 2, f.zone || 'sofa', `${f.name || 'Буйдан'} ${i + 1}`, f.sensor ? 'free' : 'unknown', 'sofa')));
     (L.chairs || []).forEach((ch, i) => add(ch.x, ch.y, DIRS[ch.dir] ?? DIRS.N, 'chair', `Сандал ${i + 1}`));
-    // Free-form objects from the catalogue (js/simulation/catalog.js) add their own seats.
-    if (!L.kitchen) for (const s of itemSeats(L.items)) add(s.x, s.y, s.ang, s.zone, s.label, 'free', s.kind);
     this.tables = L.round.map(t => [t.x, t.y]);
     const counter = L.counter || { x: 600, y: 24 }; this.cdx = counter.x - 600; this.cdy = counter.y - 24;
-    this.cbox = L.kitchen ? counterBox(null) : counterBox(counter);
-    this.door = [90, 514]; this.order = this.cbox.custom ? counterPoint(this.cbox, 580, 112) : [580 + this.cdx, 112 + this.cdy];
+    this.door = [90, 514]; this.order = [580 + this.cdx, 112 + this.cdy];
     // Where guests appear (just outside the door) and the first step inside.
     const D = doorOf(L), at = D.at;
     this.entry = { bottom: [at, 518], top: [at, 2], left: [2, at], right: [798, at] }[D.side];
@@ -188,11 +181,9 @@ class FloorPlan {
   }
   buildGrid() {
     const C = 10, cols = 80, rows = 52, g = new Uint8Array(cols * rows); const R = [], Cc = []; const rect = (x, y, w, h, p = 9) => R.push([x - p, y - p, x + w + p, y + h + p]); const circ = (x, y, r) => Cc.push([x, y, r]);
-    const L = this.L, O = L.kitchen ? { rects: [], circles: [] } : itemObstacles(L.items), cb = this.cbox;
-    // A resized or turned counter blocks its own turned area instead of the fixed rectangle.
-    const counterRect = (h, p) => { if (!cb.custom) { rect(598 + this.cdx, 20 + this.cdy, 182, h, p); return } const [cx, cy] = counterPoint(cb, 689, 138), a = cb.rot * Math.PI / 180; O.rects.push({ cx, cy, c: Math.cos(a), s: Math.sin(a), hw: 91 * cb.w / 176 + p, hh: 118 * cb.h / 226 + p }) };
+    const L = this.L;
     // Without a kitchen the staff area is only the barista corner; the rest is customer floor.
-    if (!this.custom) { rect(20, 20, 760, 8); rect(20, 20, 8, 484); rect(772, 20, 8, 484); rect(20, 496, 40, 8); rect(120, 496, 660, 8); counterRect(L.kitchen ? 484 : 236, 4); rect(0, 504, 50, 16, 0); rect(130, 504, 670, 16, 0); rect(0, 0, 800, 12, 0); }
+    if (!this.custom) { rect(20, 20, 760, 8); rect(20, 20, 8, 484); rect(772, 20, 8, 484); rect(20, 496, 40, 8); rect(120, 496, 660, 8); rect(598 + this.cdx, 20 + this.cdy, 182, L.kitchen ? 484 : 236, 4); rect(0, 504, 50, 16, 0); rect(130, 504, 670, 16, 0); rect(0, 0, 800, 12, 0); }
     else {
       // Walls with a gap at the door, the outside strip with a gap in front of it.
       const D = doorOf(L), gap = (lo, hi, at, half, make) => { if (at == null) { make(lo, hi); return } if (at - half > lo) make(lo, at - half); if (at + half < hi) make(at + half, hi) };
@@ -201,16 +192,14 @@ class FloorPlan {
       gap(20, 504, on('left'), 30, (a, b) => rect(20, a, 8, b - a)); gap(20, 504, on('right'), 30, (a, b) => rect(772, a, 8, b - a));
       gap(0, 800, on('top'), 40, (a, b) => rect(a, 0, b - a, 12, 0)); gap(0, 800, on('bottom'), 40, (a, b) => rect(a, 504, b - a, 16, 0));
       gap(0, 520, on('left'), 40, (a, b) => rect(0, a, 12, b - a, 0)); gap(0, 520, on('right'), 40, (a, b) => rect(788, a, 12, b - a, 0));
-      counterRect(236, 4);
+      rect(598 + this.cdx, 20 + this.cdy, 182, 236, 4);
       (L.cuts || []).forEach(([x, y, w, h]) => rect(x, y, w, h));
       if (L.vip) { const { x, y, w, h } = L.vip, mid = x + w / 2; rect(x, y, w, 6, 4); rect(x, y, 6, h, 4); rect(x + w - 6, y, 6, h, 4); rect(x, y + h - 6, mid - 28 - x, 6, 4); rect(mid + 28, y + h - 6, x + w - mid - 28, 6, 4); }
     }
     if (L.windowBar) rect(L.windowBar.x, 30, L.windowBar.w, 24); L.long.forEach(t => rect(t.x, t.y, t.w, 36)); L.sofas.forEach(f => { rect(f.x, f.y - 4, f.w, 36); if (f.table) circ(f.table[0], f.table[1], 32) }); L.shelves.forEach(b => rect(b.x, b.y, b.w, b.h));
     this.tables.forEach(([x, y]) => circ(x, y, 34)); this.seats.forEach(s => circ(s.x, s.y, s.kind === 'stool' ? 18 : 19));
     L.plants.forEach(([x, y, r]) => circ(x, y, r + 3));
-    O.circles.forEach(([x, y, r]) => circ(x, y, r));
-    const turned = O.rects.length ? (x, y) => O.rects.some(q => inObstacle(q, x, y)) : () => false;
-    for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) { const x = c * C + 5, y = r * C + 5; if (R.some(q => x >= q[0] && x <= q[2] && y >= q[1] && y <= q[3]) || Cc.some(q => Math.hypot(x - q[0], y - q[1]) < q[2]) || turned(x, y)) g[r * cols + c] = 1 }
+    for (let r = 0; r < rows; r++)for (let c = 0; c < cols; c++) { const x = c * C + 5, y = r * C + 5; if (R.some(q => x >= q[0] && x <= q[2] && y >= q[1] && y <= q[3]) || Cc.some(q => Math.hypot(x - q[0], y - q[1]) < q[2])) g[r * cols + c] = 1 }
     this.g = g; this.cols = cols; this.rows = rows; this.standingPlaces = null
   }
   path(sx, sy, tx, ty) {
@@ -308,7 +297,7 @@ class FloorPlan {
     }
     this.people = this.people.filter(p => p.alpha > 0);
     for (const s of this.staff) { if (red) break; if (s.wait > 0) { s.wait -= dt; continue } const tg = s.pts[s.i], dx = tg[0] - s.x, dy = tg[1] - s.y, d = Math.hypot(dx, dy); if (d < 1) { s.i = (s.i + 1) % s.pts.length; s.wait = 1 + this.r() * 2; continue } s.ang = Math.atan2(dy, dx); s.x += dx / d * Math.min(d, 38 * dt); s.y += dy / d * Math.min(d, 38 * dt); s.walk = true }
-    if (!red) { if (this.L.kitchen && this.r() < dt * 9) this.parts.push({ x: 672 + this.r() * 14, y: 322, vy: -14 - this.r() * 10, vx: (this.r() - .5) * 6, l: 1, r: 3 + this.r() * 3 }); if (this.r() < dt * 2.5) { if (this.cbox.custom) { const [sx, sy] = counterPoint(this.cbox, 712 + this.r() * 8, 50); this.parts.push({ x: sx, y: sy, vy: -10, vx: (this.r() - .5) * 4, l: .8, r: 2.5 }) } else this.parts.push({ x: 712 + this.cdx + this.r() * 8, y: 50 + this.cdy, vy: -10, vx: (this.r() - .5) * 4, l: .8, r: 2.5 }) } }
+    if (!red) { if (this.L.kitchen && this.r() < dt * 9) this.parts.push({ x: 672 + this.r() * 14, y: 322, vy: -14 - this.r() * 10, vx: (this.r() - .5) * 6, l: 1, r: 3 + this.r() * 3 }); if (this.r() < dt * 2.5) this.parts.push({ x: 712 + this.cdx + this.r() * 8, y: 50 + this.cdy, vy: -10, vx: (this.r() - .5) * 4, l: .8, r: 2.5 }) }
     this.parts.forEach(q => { q.x += q.vx * dt; q.y += q.vy * dt; q.l -= dt * .7; q.r += dt * 3 }); this.parts = this.parts.filter(q => q.l > 0);
     this.nextBub -= dt * 1000; if (this.nextBub <= 0 && this.sound >= 3 && !red) { const sat = this.people.filter(p => p.state === 'seated'); if (sat.length) { const p = sat[Math.floor(this.r() * sat.length)]; this.bubbles.push({ p, t: 0, big: this.sound >= 4 }) } this.nextBub = [0, 0, 0, 1600, 800, 450][this.sound] + this.r() * 500 }
     this.bubbles.forEach(b => b.t += dt); this.bubbles = this.bubbles.filter(b => b.t < 2.2 && b.p.state === 'seated');
@@ -391,15 +380,12 @@ class FloorPlan {
     const c = document.createElement('canvas'); c.width = Math.round(this.W * k); c.height = Math.round(this.H * k); const x = c.getContext('2d'); x.scale(k, k); const rr = (X, y, w, h, r) => this.rr(x, X, y, w, h, r); const r = rng(5); const L = this.L;
     const T = L.look ? lookTheme(L.look) : THEMES[L.theme] || THEMES.minimal, dx = this.cdx, dy = this.cdy;
     const disc = (px, py, rad, fill) => { x.fillStyle = fill; x.beginPath(); x.arc(px, py, rad, 0, 7); x.fill() };
-    // Catalogue objects (layout.items) are drawn per layer; the counter may be resized and turned.
-    const H = { rr, disc, label: (t, a, b) => this.label(x, t, a, b) }, layer = name => drawItems(x, L.items, name, T, H), cb = this.cbox, inCounter = fn => { x.save(); this.counterTf(x); fn(); x.restore() };
     x.fillStyle = T.outside; x.fillRect(0, 0, 800, 520);
     // floor
     x.fillStyle = T.floor; x.fillRect(24, 24, 752, 476);
     if (T.floorStyle === 'tiles') { x.strokeStyle = T.floorLine; x.lineWidth = 1; for (let xx = 24; xx < 776; xx += 48) { x.beginPath(); x.moveTo(xx, 24); x.lineTo(xx, 500); x.stroke() } for (let yy = 24; yy < 500; yy += 48) { x.beginPath(); x.moveTo(24, yy); x.lineTo(776, yy); x.stroke() } }
     else if (T.floorStyle === 'wood') { x.strokeStyle = T.floorLine; x.lineWidth = 1; for (let yy = 24, row = 0; yy < 500; yy += 22, row++) { x.beginPath(); x.moveTo(24, yy); x.lineTo(776, yy); x.stroke(); for (let xx = 24 + (row % 2) * 55 + r() * 30; xx < 776; xx += 90 + r() * 40) { x.beginPath(); x.moveTo(xx, yy); x.lineTo(xx, Math.min(500, yy + 22)); x.stroke() } } }
     else { x.save(); x.globalAlpha = .75; for (let i = 0; i < 520; i++) disc(24 + r() * 752, 24 + r() * 476, .6 + r() * 1.4, T.speckles[i % T.speckles.length]); x.restore() }
-    layer('floor0');
     // window light
     const W = windowsOf(L);
     x.save(); x.globalAlpha = T.lightAlpha;
@@ -412,10 +398,8 @@ class FloorPlan {
       if (T.rugPattern) { x.fillStyle = T.rug[0]; rr(rx, ry, rw, rh, 14); x.fill(); x.save(); rr(rx + 8, ry + 8, rw - 16, rh - 16, 10); x.clip(); x.fillStyle = T.rug[1]; x.globalAlpha = .6; for (let i = -rh; i < rw; i += 28) { x.beginPath(); x.moveTo(rx + i, ry + rh); x.lineTo(rx + i + 7, ry + rh); x.lineTo(rx + i + 7 + rh, ry); x.lineTo(rx + i + rh, ry); x.fill() } x.restore(); x.strokeStyle = T.rug[2]; x.lineWidth = 3; rr(rx + 5, ry + 5, rw - 10, rh - 10, 11); x.stroke() }
       else { x.fillStyle = T.rug[0]; rr(rx, ry, rw, rh, 10); x.fill(); x.strokeStyle = T.rug[1]; x.lineWidth = 1; rr(rx + 6, ry + 6, rw - 12, rh - 12, 6); x.stroke() }
     }
-    layer('floor');
     // barista area floor
-    if (cb.custom) inCounter(() => { x.fillStyle = T.staffFloor; x.fillRect(600, 24, 176, 226) });
-    else { x.fillStyle = T.staffFloor; x.fillRect(600 + dx, 24 + dy, 176, 226); }
+    x.fillStyle = T.staffFloor; x.fillRect(600 + dx, 24 + dy, 176, 226);
     // pendant lamp light pools over round tables
     if (T.pendants) this.tables.forEach(([tx, ty]) => { const g = x.createRadialGradient(tx, ty, 10, tx, ty, 70); g.addColorStop(0, 'rgba(255,214,140,.45)'); g.addColorStop(1, 'rgba(255,214,140,0)'); x.fillStyle = g; x.beginPath(); x.arc(tx, ty, 70, 0, 7); x.fill() });
     // VIP room floor
@@ -435,15 +419,11 @@ class FloorPlan {
       x.save(); x.beginPath(); x.rect(20, 20, 760, 484); x.clip(); x.strokeStyle = T.wall; x.lineWidth = 8; x.strokeRect(cx - 4, cy - 4, cw + 8, ch + 8); x.restore();
     });
     x.fillStyle = T.wall;
-    if (cb.custom) inCounter(() => { x.fillStyle = T.wall; x.fillRect(598, 250, 90, 6); x.fillRect(740, 250, 36, 6); x.fillRect(596, 190, 6, 66); x.fillRect(596, 20, 184, 6); x.fillRect(774, 20, 6, 236) });
-    else {
-      x.fillRect(598 + dx, 250 + dy, 90, 6); x.fillRect(740 + dx, 250 + dy, 36, 6); x.fillRect(596 + dx, 190 + dy, 6, 66);
-      if (dy > 0) x.fillRect(596 + dx, 20 + dy, 184, 6);
-      if (dx < 0) x.fillRect(774 + dx, 20 + dy, 6, 236);
-    }
+    x.fillRect(598 + dx, 250 + dy, 90, 6); x.fillRect(740 + dx, 250 + dy, 36, 6); x.fillRect(596 + dx, 190 + dy, 6, 66);
+    if (dy > 0) x.fillRect(596 + dx, 20 + dy, 184, 6);
+    if (dx < 0) x.fillRect(774 + dx, 20 + dy, 6, 236);
     const glass = (side, a, b, y, h) => side === 'top' ? x.fillRect(a + 4, y, b - a - 8, h) : side === 'bottom' ? x.fillRect(a + 4, 516 - y - h, b - a - 8, h) : side === 'left' ? x.fillRect(y, a + 4, h, b - a - 8) : x.fillRect(800 - y - h, a + 4, h, b - a - 8);
     x.fillStyle = '#BFE1F2'; W.forEach(({ side, a, b }) => glass(side, a, b, 20, 8)); x.fillStyle = '#9ACBE5'; W.forEach(({ side, a, b }) => glass(side, a, b, 23, 2));
-    layer('wall');
     // VIP room walls with its own door, and its name
     if (L.vip) {
       const { x: vx, y: vy, w: vw, h: vh } = L.vip, mid = vx + vw / 2; x.fillStyle = T.wall;
@@ -483,17 +463,16 @@ class FloorPlan {
       else { disc(px, py, s * .7, T.pot); for (let a = 0; a < 5; a++) { x.fillStyle = T.plant[a % 2]; x.beginPath(); x.ellipse(px + Math.cos(a * 1.257) * s * .4, py + Math.sin(a * 1.257) * s * .4, s * .42, s * .22, a * 1.257, 0, 7); x.fill() } disc(px, py, s * .16, T.plant[0]) }
     });
     // order counter (L shape) and coffee machine
-    x.save(); if (cb.custom) this.counterTf(x); else x.translate(dx, dy);
+    x.save(); x.translate(dx, dy);
     x.fillStyle = 'rgba(0,0,0,.12)'; x.fillRect(603, 64, 170, 30); x.fillStyle = T.counter[0]; rr(600, 60, 176, 28, 4); x.fill(); rr(600, 60, 28, 130, 4); x.fill(); x.fillStyle = T.counter[1]; rr(603, 63, 170, 22, 3); x.fill(); rr(603, 63, 22, 124, 3); x.fill();
     x.fillStyle = '#C9C2B4'; rr(690, 40, 52, 24, 4); x.fill(); x.strokeStyle = '#8C8577'; x.lineWidth = 1.5; x.stroke(); disc(704, 58, 4, '#3E2A17'); disc(728, 58, 4, '#3E2A17');
     x.fillStyle = T.counter[0]; rr(750, 38, 16, 22, 4); x.fill();
     x.fillStyle = 'rgba(191,225,242,.7)'; rr(605, 96, 18, 60, 3); x.fill(); [0, 1, 2, 3].forEach(i => disc(614, 104 + i * 14, 4.5, T.accents[i % T.accents.length]));
     for (let i = 0; i < 4; i++) { disc(640 + i * 12, 74, 4, '#fff'); x.strokeStyle = '#C9C2B4'; x.lineWidth = 1; x.stroke() }
     x.restore();
-    layer('object');
     // labels
     const entryLabel = { bottom: [D.at, 486], top: [D.at, 44], left: [56, D.at + 4], right: [744, D.at + 4] }[D.side];
-    const labels = [['Орц', ...entryLabel], ['Кофе захиалга', ...(cb.custom ? counterPoint(cb, 690, 110) : [690 + dx, 110 + dy])]];
+    const labels = [['Орц', ...entryLabel], ['Кофе захиалга', 690 + dx, 110 + dy]];
     if (L.windowBar) labels.push(['Цонхны баар', ...L.windowBar.label]);
     L.long.forEach(t => t.label && labels.push([t.name, ...t.label]));
     L.sofas.forEach(f => f.label && labels.push([f.name || 'Буйдан', ...f.label]));
@@ -511,11 +490,8 @@ class FloorPlan {
       const w = x.measureText(t).width + 14, cx = L.vip.x + L.vip.w / 2, cy = L.vip.y + 18;
       x.fillStyle = T.floor; if (!this.portrait) { rr(cx - w / 2, cy - 12, w, 18, 9); x.fill() } x.fillStyle = T.label; this.label(x, t, cx, cy + 1);
     }
-    layer('overhead');
     return c
   }
-  // Maps the original counter drawing (x 600–776, y 24–250) onto a resized or turned counter.
-  counterTf(x) { const b = this.cbox; x.translate(b.x + b.w / 2, b.y + b.h / 2); if (b.rot) x.rotate(b.rot * Math.PI / 180); x.scale(b.w / 176, b.h / 226); x.translate(-688, -137) }
   person(x, p, px, py, ang, walking, time = p.t) {
     const s = walking ? Math.sin(time * 11) * 3.6 : 0; x.save(); x.translate(px, py); x.rotate(ang + Math.PI / 2); x.globalAlpha = p.alpha ?? 1;
     x.fillStyle = 'rgba(62,42,23,.18)'; x.beginPath(); x.ellipse(1, 3, 10, 7, 0, 0, 7); x.fill();
