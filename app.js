@@ -274,9 +274,7 @@ function showAdvancedFilters(trigger, apply) {
 }
 
 function renderHome() {
-  const featured = platform.online ? CAFES.find(c => c.id === platform.featuredCafeId) : null;
   app.innerHTML = `<div class="dis-page">
- ${featured ? `<div class="wrap"><section class="ls-featured" aria-label="Онцлох кафе"><div class="ls-featured-art" aria-hidden="true">${featured.cover_photo_id?`<img src="/api/v1/cafes/${encodeURIComponent(featured.id)}/photos/${encodeURIComponent(featured.cover_photo_id)}/file" alt="" decoding="async">`:I.cup}</div><div><span class="tagp">Онцлох кафе</span><h2>${escapeHTML(featured.name)}</h2><p>${escapeHTML([featured.address, featured.district, featured.hours].filter(Boolean).join(' · ') || 'Кафены мэдээлэл')}</p><a class="btn btn-p" href="#cafe-${encodeURIComponent(featured.id)}">Кафены хуудас →</a></div></section></div>` : ''}
  ${discoveryHTML({ query: F.q, filterCount: activeCount() })}
  <div class="wrap dis-sounds">
   <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Жишээ дуу — бодит бичлэг биш. Товчоор сонсоорой.</p></div>

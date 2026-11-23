@@ -35,7 +35,7 @@ The tool creates a consistent SQLite backup before a transactional delete, rolls
 
 ## Featured cafe
 
-Node migration 11 and D1 migration 0015 add `platform_settings`. They initialize the featured cafe only if the exact protected Sunny Day row is active and live when the migration runs. Super Admin can change or clear it through the authenticated, audited `admin/settings/featured-cafe` endpoint and the Admin settings tab. The public cafe list returns the active featured ID. The homepage displays its authentic cover once uploaded. A second cafe named Sunny Day with another ID is hidden from the public catalogue; no row is deleted. Production ownership verification is still required before assigning photographs.
+Node migration 11 and D1 migration 0015 add `platform_settings`. They initialize the featured cafe only if the exact protected Sunny Day row is active and live when the migration runs. Super Admin can change or clear it through the authenticated, audited `admin/settings/featured-cafe` endpoint and the Admin settings tab. The public cafe list returns the active featured ID. On the homepage the featured cafe takes the first, «Онцлох кафе» place of the discovery list (where the first cafe, such as `I`, appeared before) in every category it qualifies for, and its uploaded cover becomes that place's picture. There is no separate full-width featured block. This is frontend-only (`pinFeatured` in `js/features/home/recommendations.js`). A second cafe named Sunny Day with another ID is hidden from the public catalogue; no row is deleted. Production ownership verification is still required before assigning photographs.
 
 ## Current limits
 

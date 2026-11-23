@@ -95,7 +95,7 @@ export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters
   let tour = null, touching = null, visible = true, busy = false, afterInteraction = 0, renderedKey = '';
   const demoMode = () => cafes.length > 0 && cafes.every(isDemoCafe);
   const entryList = category => recommendationEntries(cafes.filter(matches), category, evidence, {
-    staleAfterSec: platform.config.stale_after_sec ?? 900, demo: demoMode()
+    staleAfterSec: platform.config.stale_after_sec ?? 900, demo: demoMode(), featuredId: platform.featuredCafeId
   });
   const cycle = () => categories.filter(c => c.key === 'near' || entryList(c).length);
   const dataOptions = { signal, timeout: 4500, retry: 0 };

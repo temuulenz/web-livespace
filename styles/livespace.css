@@ -1971,12 +1971,7 @@ html.rm .ml-you-pulse {
   .own-vis .own-plan { max-width: 100% }
 }
 @media (max-width:420px) { .own-sum { grid-template-columns: 1fr 1fr } .own-sum-c:first-child { grid-column: 1/-1 } }
-.ls-featured{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:clamp(20px,4vw,60px);align-items:center;margin:32px 0;padding:clamp(22px,4vw,48px);border:1px solid var(--line);border-radius:28px;background:var(--cream);box-shadow:0 12px 36px rgba(62,42,23,.08)}
-.ls-featured-art{display:grid;place-items:center;min-height:clamp(260px,30vw,430px);border-radius:22px;background:linear-gradient(145deg,#f7e5c8,#e6be84);color:var(--brown);font-size:96px}
-.ls-featured-art svg{width:96px;height:96px}
 .rc-no-photo{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(145deg,#f7e5c8,#e6be84);color:var(--brown);font-weight:700}.rc-no-photo svg{width:70px;height:70px}
-.ls-featured h2{font-family:var(--f-disp);font-size:clamp(32px,4vw,60px);line-height:1.08;margin:14px 0}.ls-featured p{color:var(--ink2);line-height:1.6;margin:0 0 24px}
-@media(max-width:700px){.ls-featured{grid-template-columns:1fr;margin:20px 0}.ls-featured-art{min-height:200px}.ls-featured h2{font-size:34px}}
 
 /* ---------- partner form: essentials first, progress, examples, camera ---------- */
 .pf-progress { grid-column: 1/-1; margin: -4px 0 0; font-size: 13px; font-weight: 800; color: var(--ink2) }
