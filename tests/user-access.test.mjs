@@ -19,60 +19,6 @@ async function setup() {
   return {server,db,root,admin,sql};
 }
 
-test('featured cafe setting is real-only, Super Admin scoped and audited', async () => {
-  const {server,db,root,admin}=await setup();
-  try {
-    db.prepare("INSERT INTO cafes(id,name,status,data_mode,created_at,updated_at) VALUES('cafe_9f81309be58b4d48','Sunny Day coffee shop','active','live',?,?)").run(new Date().toISOString(),new Date().toISOString());
-    const path='/api/v1/admin/settings/featured-cafe';
-    assert.equal((await admin.put(path,{cafe_id:'cafe_9f81309be58b4d48'})).status,403);
-    assert.equal((await root.put(path,{cafe_id:'I'})).status,422);
-    assert.equal((await root.put(path,{cafe_id:'cafe_9f81309be58b4d48'})).status,200);
-    assert.equal((await server.client().get('/api/v1/cafes')).data.featured_cafe_id,'cafe_9f81309be58b4d48');
-    assert.equal(db.prepare("SELECT count(*) n FROM user_audit_log WHERE action='platform.featured_cafe.set'").get().n,1);
-  } finally { await server.stop(); }
-});
-
-test('user deletion refuses linked activity and protected identity; session revocation is immediate', async () => {
-  const {server,db,root,admin}=await setup();
-  try {
-    const created=await root.post('/api/v1/admin/users',{email:'disposable@example.invalid',password:'disposable-password-123',role:'user'});
-    assert.equal(created.status,201);
-    const id=created.data.user.id,client=server.client();
-    assert.equal((await client.post('/api/v1/auth/login',{email:'disposable@example.invalid',password:'disposable-password-123'})).status,200);
-    assert.equal((await root.post(`/api/v1/admin/users/${id}/sessions/revoke`)).status,200);
-    assert.equal((await client.get('/api/v1/auth/me')).status,401);
-    assert.equal((await admin.del('/api/v1/admin/users/root-id')).status,403);
-    db.prepare("INSERT INTO cafes(id,name,owner_id,status,created_at,updated_at) VALUES('linked','Linked',?,'active','2026-01-01','2026-01-01')").run(id);
-    assert.equal((await root.del(`/api/v1/admin/users/${id}`)).status,409);
-    db.prepare("UPDATE cafes SET owner_id=NULL WHERE id='linked'").run();
-    assert.equal((await root.del(`/api/v1/admin/users/${id}`)).status,200);
-    assert.equal(db.prepare('SELECT id FROM users WHERE id=?').get(id),undefined);
-    assert.equal(db.prepare("SELECT count(*) n FROM user_audit_log WHERE action='user.delete' AND target_id=?").get(id).n,1);
-  } finally {await server.stop();}
-});
-
-test('Super Admin creates and archives cafes, manages another cafe menu, and deletes only empty cafes', async () => {
-  const {server,root,admin}=await setup();
-  try {
-    assert.equal((await admin.post('/api/v1/admin/cafes',{name:'Denied'})).status,403);
-    assert.equal((await root.post('/api/v1/admin/cafes/I/archive')).status,403);
-    const created=await root.post('/api/v1/admin/cafes',{name:'Real cafe'});
-    assert.equal(created.status,201,JSON.stringify(created.data));const cafe=created.data.cafe.id;
-    assert.match(cafe,/^cafe_/);
-    const category=await root.post(`/api/v1/owner/cafes/${cafe}/menu/categories`,{name:'Coffee',published:true});
-    assert.equal(category.status,201,JSON.stringify(category.data));
-    const product=await root.post(`/api/v1/owner/cafes/${cafe}/menu/products`,{category_id:category.data.item.id,name:'Espresso',base_price:4500,published:true});
-    assert.equal(product.status,201,JSON.stringify(product.data));
-    assert.equal((await root.patch(`/api/v1/owner/cafes/${cafe}/menu/products/${product.data.item.id}`,{version:product.data.item.version,name:'Double espresso'})).status,200);
-    assert.equal((await root.post(`/api/v1/admin/cafes/${cafe}/archive`)).status,200);
-    assert.equal((await root.del(`/api/v1/admin/cafes/${cafe}`)).status,409);
-    const empty=(await root.post('/api/v1/admin/cafes',{name:'Empty cafe'})).data.cafe.id;
-    assert.equal((await root.post(`/api/v1/admin/cafes/${empty}/archive`)).status,200);
-    assert.equal((await root.del(`/api/v1/admin/cafes/${empty}`)).status,200);
-    assert.equal((await root.get(`/api/v1/admin/cafes/${empty}`)).status,404);
-  } finally {await server.stop();}
-});
-
 test('only immutable-ID Super Admin can create, promote, demote, disable or reset administrators',async()=>{
   const {server,root,admin,db}=await setup();
   try {
@@ -101,7 +47,7 @@ test('Super Admin is immutable and public requests cannot claim its authority',a
     for(const actor of [root,admin]) {
       for(const input of [{role:'user'},{disabled:true},{name:'Alter root'},{is_super_admin:false},{email:'other@test.mn'}]) assert.ok([403,422].includes((await actor.patch('/api/v1/admin/users/root-id',input)).status));
       assert.equal((await actor.post('/api/v1/admin/users/root-id/password',{password:'changed-password-123'})).status,403);
-      assert.equal((await actor.del('/api/v1/admin/users/root-id')).status,403);
+      assert.ok([404,405].includes((await actor.del('/api/v1/admin/users/root-id')).status));
     }
     const guest=server.client();
     assert.equal((await guest.post('/api/v1/auth/register',{email:'escalation@test.mn',password:'test-password-123',role:'admin'})).status,422);

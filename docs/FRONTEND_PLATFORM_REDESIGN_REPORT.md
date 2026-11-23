@@ -86,3 +86,4 @@ Chromium runs used the installed `chromium-1255` executable through `BROWSER_PAT
 The working diff contains the shell/style changes, replaced home components, new business-menu views, bounded public evidence lookups, related account/accessibility updates, and the browser/unit/report additions. No deployment, infrastructure, database, API implementation, sensor pipeline, dependency or original style fixture changed. Generated screenshots and local build outputs are ignored. The tracked history still points to `cdeb370` and no commit was created.
 
 **READY FOR REVIEW**
+

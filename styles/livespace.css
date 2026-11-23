@@ -1940,7 +1940,7 @@ html.rm .ml-you-pulse {
 .own-vis > summary::after, .own-tech > summary::after, .own-active summary::after { content: "▾"; margin-left: auto; color: var(--ink3); transition: transform .2s }
 .own-vis[open] > summary::after, .own-tech[open] > summary::after, .own-active[open] summary::after { transform: rotate(180deg) }
 .own-active[open] .own-steps, .own-vis[open] .own-plan, .own-tech[open] > :not(summary):first-of-type { margin-top: 14px }
-  .own-vis .own-plan { width: 100%; max-width: 1100px; margin-inline: auto }
+.own-vis .own-plan { max-width: 620px; margin-inline: auto }
 .own-devices-tech li { display: grid; gap: 4px }
 /* report chart */
 .rep .card-h { flex-wrap: wrap; gap: 8px }
@@ -1971,7 +1971,6 @@ html.rm .ml-you-pulse {
   .own-vis .own-plan { max-width: 100% }
 }
 @media (max-width:420px) { .own-sum { grid-template-columns: 1fr 1fr } .own-sum-c:first-child { grid-column: 1/-1 } }
-.rc-no-photo{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(145deg,#f7e5c8,#e6be84);color:var(--brown);font-weight:700}.rc-no-photo svg{width:70px;height:70px}
 
 /* ---------- partner form: essentials first, progress, examples, camera ---------- */
 .pf-progress { grid-column: 1/-1; margin: -4px 0 0; font-size: 13px; font-weight: 800; color: var(--ink2) }

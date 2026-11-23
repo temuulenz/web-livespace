@@ -79,14 +79,13 @@ try {
     })()`));
     assert.ok(await evaluate(`document.querySelectorAll('.dis-card').length > 0 && document.querySelectorAll('.dis-card').length <= 4`));
     assert.equal(await evaluate(`document.querySelector('.dis-map').hash`), '#explore');
-    assert.equal(await evaluate(`document.querySelectorAll('.dis-art img').length`), 0);
-    assert.ok(await evaluate(`document.querySelector('.dis-art-empty').textContent.includes('зураг оруулаагүй')`));
+    assert.match(await evaluate(`document.querySelector('.dis-art img').currentSrc`), /cafe-dessert\.webp$/);
     assert.equal(await evaluate(`document.querySelectorAll('#miniMap,.dis-window .mk').length`), 0);
     assert.equal(await evaluate(`document.querySelectorAll('[data-dis-dot]:not([hidden])').length`), 6);
     await click('[data-dis-step="1"]');
     assert.equal(await evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`), 'dessert');
     assert.match(await evaluate(`document.querySelector('.dis-feature p').textContent`), /^Жишээ ·/);
-    await waitFor(`document.querySelector('.dis-art-empty') !== null`);
+    await waitFor(`document.querySelector('.dis-art img').currentSrc.endsWith('/cafe-bakery-desktop.webp') && document.querySelector('.dis-art img').naturalWidth > 0`);
     await click('[data-dis-step="1"]');
     assert.equal(await evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`), 'work');
     assert.match(await evaluate(`document.querySelector('.dis-copy-panel[data-active] h1').textContent`), /Ажиллахад/);
@@ -318,7 +317,7 @@ try {
           const rect = selector => el(selector).getBoundingClientRect();
           return { plan: rect('#planWrap canvas').bottom, canvasRight: rect('#planWrap canvas').right,
             metrics: rect('.cd-metrics').bottom, viewport: innerHeight, width: innerWidth, page: document.documentElement.scrollWidth,
-            cover: !!el('.cd-cover-empty'), scroll: scrollY, controls: getComputedStyle(el('.plan-tools')).display,
+            cover: el('.cd-cover img').naturalWidth, scroll: scrollY, controls: getComputedStyle(el('.plan-tools')).display,
             storyRight: rect('.cd-story').right, planLeft: rect('.plan-card').left, tabs: document.querySelectorAll('#tabbar a').length };
         })()`);
         const size = `${width}×${height}: ${JSON.stringify(layout)}`;
@@ -447,15 +446,15 @@ try {
     assert.equal(await evaluate(`document.querySelectorAll('.mk').length`), 12);
   });
 
-  await check('all nine widths retain the home layout, image-free state and five mobile routes', async () => {
+  await check('all nine widths retain the home layout, image and five mobile routes', async () => {
     for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
       await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width <= 820 });
       await navigate('#home');
       const info = await evaluate(`(() => {
         const input = document.querySelector('#hq');
-        const photo = document.querySelector('.dis-art-empty');
+        const photo = document.querySelector('.dis-art img');
         const heading = document.querySelector('.dis-desktop-copy h1');
-        return { viewport:innerWidth, width:document.documentElement.scrollWidth, picture:!!photo && photo.getBoundingClientRect().height > 0,
+        return { viewport:innerWidth, width:document.documentElement.scrollWidth, picture:photo.complete && photo.naturalWidth > 0,
           input: input.getBoundingClientRect().width, desktopHeading: heading.getClientRects().length > 0,
           controls:[...document.querySelectorAll('#hs .dis-setting')].map(b => b.getBoundingClientRect().width) };
       })()`);
@@ -504,7 +503,7 @@ try {
     await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 160, y }] });
     await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await waitFor(`document.querySelector('[data-dis-dot="dessert"]').getAttribute('aria-current') === 'true'`);
-    await waitFor(`document.querySelector('.dis-art-empty') !== null`);
+    await waitFor(`document.querySelector('.dis-art img').currentSrc.endsWith('/cafe-pastry-cartoon.webp') && document.querySelector('.dis-art img').naturalWidth > 0`);
     const filterOffset = await evaluate(`(() => {
       const button = document.querySelector('#hs .dis-filter').getBoundingClientRect();
       const icon = document.querySelector('#hs .dis-filter svg').getBoundingClientRect();

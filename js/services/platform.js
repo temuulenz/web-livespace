@@ -14,7 +14,6 @@ const session = createSession({ api, onLoginRequired: reason => bus.emit('login:
 
 export const platform = {
   online: false,
-  featuredCafeId: null,
   catalogueStatus: 'loading',
   api, session, bus,
   config: { poll_interval_sec: 60, stale_after_sec: 900 },
@@ -31,9 +30,8 @@ function applyLive(update) {
 
 export async function loadCatalogue(options) {
   try {
-    const { cafes, featured_cafe_id } = await api.get('/cafes', options);
+    const { cafes } = await api.get('/cafes', options);
     if (!Array.isArray(cafes)) throw new TypeError('Missing café catalogue');
-    platform.featuredCafeId = featured_cafe_id || null;
     retainCafes(new Set(cafes.map(c => c.id)));
     for (const record of cafes) upsertCafe(record);
     platform.catalogueStatus = 'ready';

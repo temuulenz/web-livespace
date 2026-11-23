@@ -49,18 +49,7 @@ function freshFreePct(cafe, now, staleAfterSec) {
   return Number.isFinite(live.free_pct) && live.free_pct > 0 && live.free_pct <= 100 ? live.free_pct : null;
 }
 
-// The featured café (platform setting) takes the first, "Онцлох кафе" place of any list it
-// qualifies for; the others keep their order. It is never added to a list it does not qualify for.
-export function pinFeatured(entries, featuredId) {
-  const index = featuredId ? entries.findIndex(entry => entry.cafe.id === featuredId) : -1;
-  return index > 0 ? [entries[index], ...entries.slice(0, index), ...entries.slice(index + 1)] : entries;
-}
-
-export function recommendationEntries(cafes, category, evidence, { now = Date.now(), staleAfterSec = 900, demo = false, featuredId = null } = {}) {
-  return pinFeatured(recommendationList(cafes, category, evidence, { now, staleAfterSec, demo }), featuredId);
-}
-
-function recommendationList(cafes, category, evidence, { now, staleAfterSec, demo }) {
+export function recommendationEntries(cafes, category, evidence, { now = Date.now(), staleAfterSec = 900, demo = false } = {}) {
   return cafes.flatMap(cafe => {
     const entry = { cafe, reason: cafe.description || cafe.note || cafe.district || '', score: Number(Boolean(cafe.open)) };
     if (demo && isDemoCafe(cafe)) {

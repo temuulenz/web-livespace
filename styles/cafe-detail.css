@@ -21,7 +21,6 @@
 }
 .cd-story { grid-area: story; overflow: hidden }
 .cd-cover { position: relative; background: var(--sand); aspect-ratio: 2 / 1 }
-.cd-cover-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:linear-gradient(145deg,#f7e5c8,#e6be84);color:var(--brown);font-weight:700}.cd-cover-empty svg{width:72px;height:72px}
 .cd-cover img { width: 100%; height: 100%; position: absolute; object-fit: cover }
 .cd-cover .cd-back, .cd-art-label { position: absolute; inset: 12px auto auto 12px; z-index: 1 }
 .cd-cover .cd-back { background: var(--paper) }

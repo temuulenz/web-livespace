@@ -126,7 +126,6 @@ try {
   });
 
   let cafeId;
-  let publicPhotoId;
   await check('partner application with photos → owner account → owner dashboard', async () => {
     await go('#partner');
     await waitFor(`!!document.querySelector('#pf')`);
@@ -156,22 +155,6 @@ try {
     await checkProtectedWidths('.own-head');
     await shot('owner-dashboard-submitted');
     cafeId = (await pageFetch('/api/v1/owner/cafes')).cafes[0].id;
-  });
-
-  await check('owner uploads and selects a real gallery cover in the responsive dashboard', async () => {
-    await waitFor(`!!document.querySelector('[data-owner-photos] [data-photo-add]')`);
-    await evaluate(`(async () => { const input=document.querySelector('[data-owner-photos] [data-photo-add]');
-      const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;
-      const ctx=canvas.getContext('2d');ctx.fillStyle='#a36b43';ctx.fillRect(0,0,640,480);
-      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-      const files=new DataTransfer();files.items.add(new File([blob],'test-cafe.png',{type:'image/png'}));
-      input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
-    await waitFor(`document.querySelectorAll('[data-owner-photos] .cafe-photo-grid img').length===1`);
-    const first=(await pageFetch('/api/v1/owner/cafes/'+cafeId+'/photos')).photos[0];
-    assert.equal(first.is_cover,true);
-    assert.equal((await pageFetch('/api/v1/cafes/'+cafeId+'/photos')).error.code,'not_found');
-    await checkProtectedWidths('.cafe-photo-manager');
-    publicPhotoId=first.id;
   });
 
   let token;
@@ -219,21 +202,6 @@ try {
       await delay(250);
     }
     await waitFor(`document.querySelector('.adm-cafe .adm-head .badge')?.innerText.includes('Идэвхтэй')`);
-  });
-
-  await check('public cover, gallery and persisted featured cafe render at mobile widths', async () => {
-    const listed=(await pageFetch('/api/v1/cafes/'+cafeId+'/photos')).photos;
-    assert.deepEqual(listed.map(p=>p.id),[publicPhotoId]);
-    server.app.deps.db.prepare("INSERT INTO platform_settings(key,value,updated_at) VALUES('featured_cafe_id',?,?)").run(cafeId,new Date().toISOString());
-    await go('#home');
-    await navigateDocument('Page.reload');
-    await waitFor(`document.querySelector('.dis-feature-card h2')?.textContent==='Номт кафе'`);
-    await waitFor(`document.querySelector('.dis-art img')?.naturalWidth>0`);
-    assert.equal(await evaluate(`document.querySelector('.ls-featured')`),null,'no separate full-width featured block');
-    await checkProtectedWidths('.dis-feature-card');
-    await go('#cafe-'+cafeId);
-    await waitFor(`document.querySelector('.cd-cover img')?.naturalWidth>0`);
-    assert.equal(await evaluate(`document.querySelector('.cd-cover-empty')===null`),true);
   });
 
   await check('sensor JSON → server → open café page updates live (no reload)', async () => {
@@ -430,17 +398,6 @@ try {
     await waitFor(`document.querySelector('.adm-t')?.textContent.includes('browser-created-admin@test.mn')`);
     assert.equal(db.prepare('SELECT role FROM users WHERE email=?').get('browser-created-admin@test.mn').role,'admin');
     assert.equal(await evaluate(`document.querySelector('[data-form="createManagedUser"] [name="password"]').value`),'');
-    const createdId=db.prepare('SELECT id FROM users WHERE email=?').get('browser-created-admin@test.mn').id;
-    await evaluate(`(() => { const filter=document.querySelector('[name="role"]');filter.value='owner';filter.dispatchEvent(new Event('change',{bubbles:true})); })()`);
-    await waitFor(`document.querySelector('[name="role"]')?.value==='owner' && !document.querySelector('[data-user-id="${createdId}"]')`);
-    await evaluate(`(() => { const filter=document.querySelector('[name="role"]');filter.value='admin';filter.dispatchEvent(new Event('change',{bubbles:true})); })()`);
-    await waitFor(`!!document.querySelector('[data-form="saveManagedUser"][data-user-id="${createdId}"]')`);
-    await evaluate(`(() => { const form=document.querySelector('[data-form="saveManagedUser"][data-user-id="${createdId}"]');form.name.value='Updated manager';form.requestSubmit(); })()`);
-    await waitFor(`document.querySelector('[data-form="saveManagedUser"][data-user-id="${createdId}"] [name="name"]')?.value==='Updated manager'`);
-    const oldHash=db.prepare('SELECT password_hash FROM users WHERE id=?').get(createdId).password_hash;
-    await evaluate(`(() => { const form=document.querySelector('[data-form="resetManagedUserPassword"][data-user-id="${createdId}"]');form.password.value='new-browser-managed-password';form.requestSubmit(); })()`);
-    await waitFor(`document.querySelector('[data-form="resetManagedUserPassword"][data-user-id="${createdId}"] [name="password"]')?.value===''`);
-    assert.notEqual(db.prepare('SELECT password_hash FROM users WHERE id=?').get(createdId).password_hash,oldHash);
   });
 
   await check('framework DOM layer: patch keeps input, focus, preserved and keyed nodes; components clean up', async () => {

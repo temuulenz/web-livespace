@@ -25,7 +25,6 @@ import { openAuth, field } from '../authentication/auth-modal.js';
 import { signInPrompt } from '../account/account.js';
 import { IncomingOrders } from '../going/incoming-orders.js';
 import { OwnerMenu } from '../menu/owner-menu.js';
-import { CafePhotoManager } from '../cafe/cafe-photo-manager.js';
 import { MenuEditor } from '../menu/menu-editor.js';
 import { OwnerReport } from './owner-report.js';
 import { noiseWord, deviceWords } from './owner-words.js';
@@ -117,7 +116,7 @@ export class OwnerPage extends Component {
     this.interval(() => { if (!document.hidden) this.loadIncoming(); }, 15000);
     this.load();
   }
-  onDestroy() { this.fp?.destroy(); this.historyView?.destroy(); this.photoView?.destroy(); }
+  onDestroy() { this.fp?.destroy(); this.historyView?.destroy(); }
   async load() {
     if(this.loadingRequest || Date.now()<(this.retryAfter || 0))return;
     if (!platform.online || !platform.session.hasRole('owner', 'admin')) { this.setState({ cafes: null }); return; }
@@ -146,13 +145,7 @@ export class OwnerPage extends Component {
   }
   current() { return this.state.cafes?.find(c => c.id === this.state.selected); }
   source(c) { return c.live?.sensor?.dataSource || (c.devices.length && c.devices.every(d => d.is_test) ? 'simulated' : 'real'); }
-  onUpdate() { this.syncPlan(); this.syncHistory(); this.syncCustomer(); this.syncReport(); this.syncPhotos(); }
-  syncPhotos() {
-    const cafe=this.current(),root=this.$('[data-owner-photos]');
-    if(cafe&&root&&this.photoCafe===cafe.id&&this.photoView?.el===root)return;
-    this.photoView?.destroy();this.photoView=null;this.photoCafe=null;
-    if(cafe&&root){this.photoCafe=cafe.id;this.photoView=this.child(CafePhotoManager,root,{cafeId:cafe.id});}
-  }
+  onUpdate() { this.syncPlan(); this.syncHistory(); this.syncCustomer(); this.syncReport(); }
   // Incoming visitors / pre-orders and the menu editor for the selected café.
   syncCustomer() {
     const cafe = this.current(), orders = this.$('[data-own-orders]'), menu = this.$('[data-own-menu]');
@@ -260,7 +253,6 @@ export class OwnerPage extends Component {
           : html`<section class="card own-vis" data-key="vis"><div class="card-h"><h2>Танхимын зураглал</h2><span class="badge b-typ">${visLabel(c.visualization.status).toUpperCase()}</span></div><p class="own-msg">${c.visualization.status === 'in_progress' ? 'Таны илгээсэн зургаар кафены өөрийн зураглалыг бэлтгэж байна.' : 'Манай баг тантай холбогдсоны дараа таны зургаар кафены өөрийн хөдөлгөөнт зураглалыг бүтээнэ.'}</p></section>`}
         ${c.application?.photos.length ? html`<section class="card own-photos" data-key="photos"><div class="card-h"><h2>Илгээсэн зураг</h2></div>
           <div class="ph-grid">${c.application.photos.map((p, i) => html`<figure class="ph"><img src="${p.url}" alt="Кафены зураг ${i + 1}" loading="lazy" decoding="async"></figure>`)}</div></section>` : ''}
-        <section class="card own-photos" data-key="public-photos"><div data-owner-photos data-preserve data-key="owner-photos-${c.id}"></div></section>
         <section class="card own-info" data-key="info">
           <div class="card-h"><h2>Кафены мэдээлэл</h2></div>
           <form class="form own-edit" novalidate>

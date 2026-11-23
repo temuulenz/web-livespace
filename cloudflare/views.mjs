@@ -36,8 +36,7 @@ export async function liveSummary(db,row,staleAfterSec=30) {
 }
 export async function cafeView(db,row,staleAfterSec=30) {
  const visualization=parse(row.visualization,{}),live=await liveSummary(db,row,staleAfterSec);
- const cover=await first(db,'SELECT id FROM cafe_photos WHERE cafe_id=? AND ready=1 ORDER BY is_cover DESC,position,id LIMIT 1',row.id);
- const base={id:row.id,name:row.name,cover_photo_id:cover?.id||null,x:row.map_x,y:row.map_y,hours:row.hours,tags:parse(row.tags,[]),category:row.category,district:row.district,address:row.address,description:row.description,visualization:{status:visualization.status || 'not_started',layout:visualization.status==='ready'?visualization.layout || null:null}};
+ const base={id:row.id,name:row.name,x:row.map_x,y:row.map_y,hours:row.hours,tags:parse(row.tags,[]),category:row.category,district:row.district,address:row.address,description:row.description,visualization:{status:visualization.status || 'not_started',layout:visualization.status==='ready'?visualization.layout || null:null}};
  if(row.data_mode==='demo' && parse(row.demo))return {...base,...parse(row.demo),live};
  const {open,opens}=openState(row.hours,ulaanbaatarMinutes()),{dist,walk}=walkFrom(row.map_x??500,row.map_y??340),has=['live','test'].includes(live.mode);
  return {...base,dist,walk,open:open&&has,opens:has?opens:null,note:row.description.slice(0,120),status_text:has?null:'Бодит хэмжилт хараахан ирээгүй',occ:live.free_pct!=null?100-live.free_pct:null,sound:live.noise_level||0,wifi:live.wifi_level||0,mbps:live.wifi_mbps!=null?Math.round(live.wifi_mbps):null,live};

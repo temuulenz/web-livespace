@@ -10,7 +10,6 @@ export function createCafeService(db, config) {
     ORDER BY ts DESC, id DESC LIMIT 30`);
   const activeRows = db.prepare("SELECT * FROM cafes WHERE status = 'active' ORDER BY sort_order, created_at");
   const byId = db.prepare('SELECT * FROM cafes WHERE id = ?');
-  const cover = db.prepare('SELECT id FROM cafe_photos WHERE cafe_id=? AND ready=1 ORDER BY is_cover DESC,position,id LIMIT 1');
 
   // Each field takes its most recent reported value (devices may report different things).
   function liveFromRows(rows, mode) {
@@ -49,7 +48,7 @@ export function createCafeService(db, config) {
     const demo = json(row.demo);
     const visualization = json(row.visualization, {});
     const base = {
-      id: row.id, name: row.name, cover_photo_id: cover.get(row.id)?.id || null, x: row.map_x, y: row.map_y, hours: row.hours, tags: json(row.tags, []),
+      id: row.id, name: row.name, x: row.map_x, y: row.map_y, hours: row.hours, tags: json(row.tags, []),
       category: row.category, district: row.district, address: row.address, description: row.description,
       visualization: { status: visualization.status || 'not_started', layout: visualization.status === 'ready' ? visualization.layout || null : null }
     };
@@ -72,8 +71,8 @@ export function createCafeService(db, config) {
   }
 
   return {
-    listPublic() { const minutes = ulaanbaatarMinutes(); return activeRows.all().filter(row => row.name !== 'Sunny Day coffee shop' || row.id === 'cafe_9f81309be58b4d48').map(row => publicCafe(row, minutes)); },
-    getPublic(id) { const row = byId.get(id); return row && row.status === 'active' && (row.name !== 'Sunny Day coffee shop' || row.id === 'cafe_9f81309be58b4d48') ? publicCafe(row) : null; },
+    listPublic() { const minutes = ulaanbaatarMinutes(); return activeRows.all().map(row => publicCafe(row, minutes)); },
+    getPublic(id) { const row = byId.get(id); return row && row.status === 'active' ? publicCafe(row) : null; },
     get: id => byId.get(id),
     publicCafe,
     liveSummary

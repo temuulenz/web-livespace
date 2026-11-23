@@ -16,7 +16,6 @@ import { createSensorService } from './services/sensors.mjs';
 import { createSensorGateway } from './lib/sensor-gateway.mjs';
 import { seedDemoCafes, ensureAdmin } from './seed.mjs';
 import * as menuRoutes from './routes/menu.mjs';
-import * as cafePhotoRoutes from './routes/cafe-photos.mjs';
 import * as publicRoutes from './routes/public.mjs';
 import * as authRoutes from './routes/auth.mjs';
 import * as partnerRoutes from './routes/partner.mjs';
@@ -42,7 +41,7 @@ export async function createApp(config) {
   };
 
   const api = createRouter();
-  for (const routes of [analyticsRoutes, promotionRoutes, reviewRoutes, inventoryRoutes, menuRoutes, cafePhotoRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
+  for (const routes of [analyticsRoutes, promotionRoutes, reviewRoutes, inventoryRoutes, menuRoutes, publicRoutes, authRoutes, partnerRoutes, ownerRoutes, adminRoutes, ingestRoutes, sensorHistoryRoutes, userManagementRoutes]) routes.register(api, deps);
   const serveStatic = createStaticHandler(config.staticDir);
 
   async function handle(req, res) {

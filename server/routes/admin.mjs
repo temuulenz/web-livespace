@@ -9,8 +9,6 @@ import { ownerCafeView } from './owner.mjs';
 import { deviceStatus } from '../services/sensor-state.mjs';
 import { createCafeOwnership } from '../services/cafe-ownership.mjs';
 
-const PROTECTED_CAFES = new Set(['I','cafe_9f81309be58b4d48']);
-
 const EDITABLE = { name: ['text', 80], category: ['text', 40], district: ['text', 40], address: ['text', 200], hours: ['hours'], phone: ['text', 30], contact_name: ['text', 80], email: ['text', 200], description: ['text', 1000], lat: ['number', -90, 90], lng: ['number', -180, 180], map_x: ['number', 0, 1000], map_y: ['number', 0, 680], total_seats: ['int', 1, 2000], sort_order: ['int', 0, 100000], data_mode: ['enum', ['demo', 'live']], tags: ['tags'], demo: ['demo'] };
 
 function cleanEdit(body) {
@@ -36,42 +34,7 @@ export function register(router, deps) {
   const admin = requireRole('admin');
   const online = lastSeen => !!lastSeen && Date.now() - Date.parse(lastSeen) < config.deviceOfflineSec * 1000;
   const getCafe = id => { const row = db.prepare('SELECT * FROM cafes WHERE id = ?').get(id); if (!row) throw notFound('Кафе олдсонгүй'); return row; };
-  const superAdmin = ctx => { admin(ctx); if(!ctx.user.is_super_admin || !db.prepare('SELECT 1 FROM super_admin_identity WHERE user_id=?').get(ctx.user.id)) throw new HttpError(403,'super_admin_required','Super Admin required'); };
-  const cafeDependencies = id => {
-    const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(r=>r.name);
-    return tables.flatMap(table=>{
-      const quoted=`"${table.replaceAll('"','""')}"`;
-      const columns=new Set(db.prepare(`PRAGMA table_info(${quoted})`).all().map(col=>col.name));
-      const refs=db.prepare(`PRAGMA foreign_key_list(${quoted})`).all().filter(fk=>fk.table==='cafes'&&fk.to==='id').map(fk=>fk.from);
-      return [...new Set([...refs,...(columns.has('cafe_id')?['cafe_id']:[])])].map(column=>({table,column}));
-    })
-      .filter(({table,column})=>db.prepare(`SELECT 1 FROM "${table.replaceAll('"','""')}" WHERE "${column.replaceAll('"','""')}"=? LIMIT 1`).get(id));
-  };
   const deviceView = d => ({ ...d, token_hash: undefined, is_test: !!d.is_test, enabled: !!d.enabled, status: deviceStatus(db, config, d), last_status: json(d.last_status), online: deviceStatus(db, config, d) === 'online' });
-
-  router.get('/api/v1/admin/settings/featured-cafe', ctx => {
-    admin(ctx);
-    if (!ctx.user.is_super_admin) throw new HttpError(403, 'super_admin_required', 'Super Admin required');
-    sendJson(ctx.res, 200, { cafe_id: db.prepare("SELECT value FROM platform_settings WHERE key='featured_cafe_id'").get()?.value || null });
-  });
-  router.put('/api/v1/admin/settings/featured-cafe', async ctx => {
-    admin(ctx);
-    if (!ctx.user.is_super_admin) throw new HttpError(403, 'super_admin_required', 'Super Admin required');
-    deps.limit(`featured:${ctx.user.id}:${ctx.ip}`, 20, 60000);
-    const body = await readJson(ctx);
-    if (!body || (body.cafe_id !== null && (typeof body.cafe_id !== 'string' || !/^[A-Za-z0-9_.:-]{1,80}$/.test(body.cafe_id)))) throw new HttpError(422, 'validation_failed', 'Invalid cafe ID');
-    if (body.cafe_id) {
-      const cafe = getCafe(body.cafe_id);
-      if (cafe.status !== 'active' || cafe.data_mode !== 'live') throw new HttpError(422, 'validation_failed', 'Featured cafe must be active and real');
-    }
-    authorizedWrite(db, ctx.user, null, 'admin', () => {
-      if (!db.prepare('SELECT 1 FROM super_admin_identity WHERE user_id=?').get(ctx.user.id)) throw new HttpError(403, 'super_admin_required', 'Super Admin required');
-      if (body.cafe_id) db.prepare("INSERT INTO platform_settings(key,value,updated_at,actor_id) VALUES('featured_cafe_id',?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at,actor_id=excluded.actor_id").run(body.cafe_id, now(), ctx.user.id);
-      else db.prepare("DELETE FROM platform_settings WHERE key='featured_cafe_id'").run();
-      db.prepare('INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)').run(newId('aud'), ctx.user.id, body.cafe_id || 'platform', 'platform.featured_cafe.set', now(), '{}');
-    });
-    sendJson(ctx.res, 200, { cafe_id: body.cafe_id });
-  });
 
   // Tell open browsers when the public catalogue or a café's state changed.
   // Anonymous subscribers only learn about cafés that are, or just stopped being, public:
@@ -105,43 +68,6 @@ export function register(router, deps) {
         (SELECT id FROM applications a WHERE a.cafe_id = c.id LIMIT 1) AS application_id
       FROM cafes c LEFT JOIN users u ON u.id = c.owner_id ORDER BY c.sort_order, c.created_at`).all();
     sendJson(ctx.res, 200, { cafes: rows.map(r => ({ id: r.id, name: r.name, status: r.status, data_mode: r.data_mode, owner_email: r.owner_email, district: r.district, hours: r.hours, device_count: r.device_count, last_measurement_at: r.last_measurement_at, application_id: r.application_id, visualization_status: json(r.visualization, {}).status || 'not_started', created_at: r.created_at, updated_at: r.updated_at })) });
-  });
-
-  router.post('/api/v1/admin/cafes', async ctx => {
-    superAdmin(ctx); deps.limit(`cafe-create:${ctx.user.id}:${ctx.ip}`,20,60000);
-    const body=await readJson(ctx);
-    if(!body || Object.keys(body).some(k=>k!=='name') || typeof body.name!=='string' || !body.name.trim() || body.name.length>80) throw new HttpError(422,'validation_failed','A cafe name (1–80 characters) is required');
-    const id=newId('cafe'),t=now();
-    authorizedWrite(db,ctx.user,null,'admin',()=>{
-      if(!db.prepare('SELECT 1 FROM super_admin_identity WHERE user_id=?').get(ctx.user.id)) throw new HttpError(403,'super_admin_required','Super Admin required');
-      db.prepare("INSERT INTO cafes(id,name,status,data_mode,created_at,updated_at) VALUES(?,?,'submitted','live',?,?)").run(id,body.name.trim(),t,t);
-      db.prepare('INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)').run(newId('aud'),ctx.user.id,id,'cafe.create',t,'{}');
-    });
-    sendJson(ctx.res,201,{cafe:{id,name:body.name.trim(),status:'submitted'}});
-  });
-
-  router.post('/api/v1/admin/cafes/:id/archive', ctx => {
-    superAdmin(ctx); if(PROTECTED_CAFES.has(ctx.params.id)) throw new HttpError(403,'protected_cafe','Protected cafe');
-    const cafe=getCafe(ctx.params.id); if(cafe.status==='archived') return sendJson(ctx.res,200,{ok:true,status:'archived'});
-    authorizedWrite(db,ctx.user,null,'admin',()=>{
-      if(!db.prepare('SELECT 1 FROM super_admin_identity WHERE user_id=?').get(ctx.user.id)) throw new HttpError(403,'super_admin_required','Super Admin required');
-      db.prepare("UPDATE cafes SET status='archived',updated_at=? WHERE id=?").run(now(),cafe.id);
-      db.prepare('INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)').run(newId('aud'),ctx.user.id,cafe.id,'cafe.archive',now(),'{}');
-    });
-    publish(getCafe(cafe.id),cafe.status); sendJson(ctx.res,200,{ok:true,status:'archived'});
-  });
-
-  router.delete('/api/v1/admin/cafes/:id', ctx => {
-    superAdmin(ctx); if(PROTECTED_CAFES.has(ctx.params.id)) throw new HttpError(403,'protected_cafe','Protected cafe');
-    const cafe=getCafe(ctx.params.id);
-    authorizedWrite(db,ctx.user,null,'admin',()=>{
-      if(!db.prepare('SELECT 1 FROM super_admin_identity WHERE user_id=?').get(ctx.user.id)) throw new HttpError(403,'super_admin_required','Super Admin required');
-      const created=db.prepare("SELECT 1 FROM user_audit_log WHERE target_id=? AND action='cafe.create'").get(cafe.id);
-      if(!created || cafe.status!=='archived' || cafe.owner_id || cafeDependencies(cafe.id).length) throw new HttpError(409,'cafe_has_activity','Only an archived, unlinked admin-created cafe can be deleted');
-      db.prepare('DELETE FROM cafes WHERE id=?').run(cafe.id);
-      db.prepare('INSERT INTO user_audit_log(id,actor_id,target_id,action,at,details) VALUES(?,?,?,?,?,?)').run(newId('aud'),ctx.user.id,cafe.id,'cafe.delete',now(),'{}');
-    });
-    sendJson(ctx.res,200,{deleted:true,id:cafe.id});
   });
 
   router.get('/api/v1/admin/cafes/:id', ctx => {
