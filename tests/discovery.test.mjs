@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { categories, matchesDiscovery, recommendationEntries, publishedMenuGroups, activePromotion, ratingText } from '../js/features/home/recommendations.js';
+import { categories, matchesDiscovery, recommendationEntries, pinFeatured, publishedMenuGroups, activePromotion, ratingText } from '../js/features/home/recommendations.js';
 
 const now = Date.parse('2026-11-21T11:00:00Z');
 const fresh = { mode: 'live', updated_at: new Date(now - 1000).toISOString(), free_pct: 42 };
@@ -48,4 +48,16 @@ test('rating belongs to the displayed café and comes from actual reviews', () =
   assert.equal(ratingText(review, 'two'), '');
   assert.equal(ratingText({ ...review, review_count: 0 }, 'one'), '');
   assert.equal(ratingText({ ...review, overall_average: 7 }, 'one'), '');
+});
+
+test('the featured café takes the first "Онцлох кафе" place only in lists it qualifies for', () => {
+  const others = ['I', 'F', 'T'].map(id => ({ ...cafe, id, name: id }));
+  const sunny = { ...cafe, id: 'sunny', name: 'Sunny Day coffee shop' };
+  const near = recommendationEntries([...others, sunny], category('near'), evidence(), { now, featuredId: 'sunny' });
+  assert.deepEqual(near.map(entry => entry.cafe.id), ['sunny', 'I', 'F', 'T'], 'the others keep their order');
+  assert.deepEqual(recommendationEntries(others, category('near'), evidence(), { now, featuredId: 'sunny' }).map(e => e.cafe.id), ['I', 'F', 'T']);
+  assert.equal(recommendationEntries([...others, sunny], category('dessert'), evidence(), { now, featuredId: 'sunny' }).length, 0, 'no list without evidence');
+  assert.deepEqual(recommendationEntries([...others, sunny], category('near'), evidence(), { now }).map(e => e.cafe.id), ['I', 'F', 'T', 'sunny'], 'no setting, no change');
+  const list = [{ cafe: { id: 'a' } }, { cafe: { id: 'b' } }];
+  assert.equal(pinFeatured(list, 'a'), list); assert.equal(pinFeatured(list, null), list);
 });

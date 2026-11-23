@@ -227,9 +227,10 @@ try {
     server.app.deps.db.prepare("INSERT INTO platform_settings(key,value,updated_at) VALUES('featured_cafe_id',?,?)").run(cafeId,new Date().toISOString());
     await go('#home');
     await navigateDocument('Page.reload');
-    await waitFor(`document.querySelector('.ls-featured h2')?.textContent==='Номт кафе'`);
-    await waitFor(`document.querySelector('.ls-featured img')?.naturalWidth>0`);
-    await checkProtectedWidths('.ls-featured');
+    await waitFor(`document.querySelector('.dis-feature-card h2')?.textContent==='Номт кафе'`);
+    await waitFor(`document.querySelector('.dis-art img')?.naturalWidth>0`);
+    assert.equal(await evaluate(`document.querySelector('.ls-featured')`),null,'no separate full-width featured block');
+    await checkProtectedWidths('.dis-feature-card');
     await go('#cafe-'+cafeId);
     await waitFor(`document.querySelector('.cd-cover img')?.naturalWidth>0`);
     assert.equal(await evaluate(`document.querySelector('.cd-cover-empty')===null`),true);
