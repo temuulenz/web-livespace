@@ -36,7 +36,7 @@ const lazy = {
 };
 let navToken = 0;   // a lazily loaded page only renders if the visitor is still on it
 const loadFailed = () => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">Энэ хэсгийг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.</p></div></div>`;
-import { discoveryHTML, bindDiscovery } from './js/features/home/discovery.js';
+import { homeHTML, bindHome } from './js/features/home/home-page.js';
 import { matchesDiscovery } from './js/features/home/recommendations.js';
 
 // Customer features (menu, «Очих», pre-orders) mounted into the original pages; released on navigation.
@@ -274,37 +274,14 @@ function showAdvancedFilters(trigger, apply) {
 }
 
 function renderHome() {
-  app.innerHTML = `<div class="dis-page">
- ${discoveryHTML({ query: F.q, filterCount: activeCount() })}
- <div class="wrap dis-sounds">
-  <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Жишээ дуу — бодит бичлэг биш. Товчоор сонсоорой.</p></div>
-   <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Орчны дууны жишээ сонсох</button></div>`).join('')}</div>
-   <div class="ss-dots" aria-hidden="true">${[1, 2, 3, 4, 5].map((l, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></section>
- </div>${footer()}</div>`;
-  const search = query => {
-    F.q = query;
-    const results = CAFES.filter(matches);
-    if (query && results.length === 1) selId = results[0].id;
-    else if (selId && !results.some(c => c.id === selId)) selId = null;
-    Snd.ui('whoosh');
-    location.hash = 'explore';
-  };
-  homeDiscovery = bindDiscovery($('.discovery'), {
+  app.innerHTML = homeHTML({ footer });
+  homeDiscovery = bindHome($('.hm'), {
     cafes: CAFES,
-    matches: cafe => matchesWithQuery(cafe, ''),
-    onSearch: search,
-    onMap: () => search($('#hq').value.trim()),
-    onFilters: button => showAdvancedFilters(button, () => { closeModal(); search($('#hq').value.trim()) }),
-    updateFilterUI(root) {
-      $$('.dis-filter-count', root).forEach(count => { count.textContent = activeCount() || '' });
-      const apply = $('#mfApply');
-      if (apply) apply.textContent = `${CAFES.filter(c => matchesWithQuery(c, $('#hq').value.trim())).length} кафе харах`;
-    }
+    matches,
+    activeCount,
+    onFilters: button => showAdvancedFilters(button, () => { closeModal(); refreshResults() })
   });
   refreshResults = homeDiscovery.refresh;
-  // Phones scroll the five noise cards sideways; the dots under them show which one is in view.
-  const ssRow = $('.ss-row'); let ssFrame;
-  ssRow.addEventListener('scroll', () => { if (ssFrame === undefined) ssFrame = pageTasks.frame(() => { ssFrame = undefined; const cards = $$('.ss-card', ssRow), x = ssRow.scrollLeft + 16; let k = 0; cards.forEach((c, i) => { if (Math.abs(c.offsetLeft - x) < Math.abs(cards[k].offsetLeft - x)) k = i }); if (ssRow.scrollLeft + ssRow.clientWidth >= ssRow.scrollWidth - 4) k = cards.length - 1; $$('.ss-dots i').forEach((d, i) => d.classList.toggle('on', i === k)) }) }, { passive: true });
 }
 
 /* ---------- explore ---------- */

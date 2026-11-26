@@ -93,7 +93,7 @@ class GoingFlow extends Component {
       <div class="going-foot"><button class="btn btn-g" data-step="order">Буцах</button><button class="btn btn-p" data-going-confirm ${raw(busy ? 'disabled' : '')}>${busy ? 'Илгээж байна…' : 'Баталгаажуулах'}</button></div>`;
   }
 }
-function openGoingFlow(cafe, menu, onDone) { Snd.ui('whoosh'); return openModalComponent(GoingFlow, { cafe, menu, onDone }, true); }
+export function openGoingFlow(cafe, menu, onDone) { Snd.ui('whoosh'); return openModalComponent(GoingFlow, { cafe, menu, onDone }, true); }
 
 /* ---------------- café page panel ---------------- */
 export class GoingPanel extends Component {

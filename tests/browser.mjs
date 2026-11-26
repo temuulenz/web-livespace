@@ -56,72 +56,123 @@ try {
     }
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   }
-  await check('home search, map results and cafe navigation', async () => {
+  // New home (Design C). The demo catalogue has no café photos, so the slideshow checks add a
+  // labelled TEST café (live.mode 'test') with the bundled Sunny Day photos at runtime.
+  const addCafe = (id, name, extra = '') => evaluate(`(async () => {
+    const { upsertCafe } = await import('/js/cafes.js'); const { platform } = await import('/js/services/platform.js');
+    upsertCafe({ id: ${JSON.stringify(id)}, name: ${JSON.stringify(name)}, x: 380, y: 200, district: 'Сүхбаатар', hours: '08:00–22:00', open: true,
+      tags: ['Сурах'], description: 'Туршилтын кафе', occ: 28, sound: 1, wifi: 4,
+      live: { mode: 'test', updated_at: new Date().toISOString(), free_pct: 72, wifi_level: 4 } ${extra} });
+    platform.bus.emit('catalog:changed');
+  })()`);
+  const featuredName = () => evaluate(`document.querySelector('.hm-finfo h2')?.textContent`);
+  async function waitLong(expression, ms) { for (let t = 0; t < ms; t += 250) { if (await evaluate(expression)) return true; await delay(250); } return false; }
+  await check('home: dark header pill search filters this page and opens a café', async () => {
     await navigate('#home');
+    assert.ok(await evaluate(`document.body.classList.contains('ls-home') && !!document.querySelector('.hd #hs') && document.querySelectorAll('#hs .hm-seg').length === 3`));
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector('.hd')).backgroundColor`), 'rgb(62, 42, 23)');
+    assert.equal(await evaluate(`document.querySelector('[data-hm-add]').hash`), '#partner');
+    assert.equal(await evaluate(`document.querySelectorAll('.hm-card').length`), 12);
     await input('#hq', 'Кафе A');
     await evaluate(`document.querySelector('#hs').requestSubmit()`);
-    await waitFor(`location.hash === '#explore' && !!document.querySelector('.pv')`);
-    assert.equal(await evaluate(`document.querySelector('.pv').dataset.id`), 'A');
-    await evaluate(`document.querySelector('.pv').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}))`);
+    assert.equal(await evaluate(`location.hash`), '#home');
+    assert.deepEqual(await evaluate(`[...document.querySelectorAll('.hm-card')].map(c => c.dataset.hmCard)`), ['A']);
+    assert.equal(await evaluate(`document.querySelector('[data-hm-count]').textContent`), '1 кафе');
+    await input('#hq', '');
+    await evaluate(`document.querySelector('#hmWhy').value = 'Сурах'; document.querySelector('#hs').requestSubmit()`);
+    assert.equal(await evaluate(`import('/js/cafes.js').then(m => { const ids = [...document.querySelectorAll('.hm-card')].map(c => c.dataset.hmCard); return ids.length === 7 && ids.every(id => m.byId(id).tags.includes('Сурах')); })`), true);
+    await click('.hm-card[data-hm-card="A"] h3 a');
     await waitFor(`location.hash === '#cafe-A' && !!document.querySelector('canvas')`);
+    assert.equal(await evaluate(`document.body.classList.contains('ls-home') || !!document.querySelector('#hs') || !!document.querySelector('[data-hm-add]')`), false);
   });
-  await check('homepage category, feature and additional recommendations synchronize while search stays mounted', async () => {
+  await check('home: category counts match the list; categories without data are hidden; open-now toggle', async () => {
     await navigate('#home');
-    const before = await evaluate(`(() => {
-      window.searchElement = document.querySelector('#hq');
-      const href = document.querySelector('.dis-details').hash;
-      return { href, y: searchElement.getBoundingClientRect().y };
-    })()`);
-    assert.ok(await evaluate(`(() => {
-      const buttons = [...document.querySelectorAll('.dis-chips button')];
-      return buttons.length === 6 && buttons.every(button => button.offsetWidth > 0) &&
-        new Set(buttons.map(button => button.offsetTop)).size === 1;
-    })()`));
-    assert.ok(await evaluate(`document.querySelectorAll('.dis-card').length > 0 && document.querySelectorAll('.dis-card').length <= 4`));
-    assert.equal(await evaluate(`document.querySelector('.dis-map').hash`), '#explore');
-    assert.match(await evaluate(`document.querySelector('.dis-art img').currentSrc`), /cafe-dessert\.webp$/);
-    assert.equal(await evaluate(`document.querySelectorAll('#miniMap,.dis-window .mk').length`), 0);
-    assert.equal(await evaluate(`document.querySelectorAll('[data-dis-dot]:not([hidden])').length`), 6);
-    await click('[data-dis-step="1"]');
-    assert.equal(await evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`), 'dessert');
-    assert.match(await evaluate(`document.querySelector('.dis-feature p').textContent`), /^Жишээ ·/);
-    await waitFor(`document.querySelector('.dis-art img').currentSrc.endsWith('/cafe-bakery-desktop.webp') && document.querySelector('.dis-art img').naturalWidth > 0`);
-    await click('[data-dis-step="1"]');
-    assert.equal(await evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`), 'work');
-    assert.match(await evaluate(`document.querySelector('.dis-copy-panel[data-active] h1').textContent`), /Ажиллахад/);
-    assert.ok(await evaluate(`document.querySelector('#hq') === window.searchElement`));
-    assert.equal(await evaluate(`window.searchElement.getBoundingClientRect().y`), before.y);
-    const grouping = await evaluate(`import('/js/cafes.js').then(m => [...document.querySelectorAll('.dis-details,.dis-card a')].every(a => m.byId(a.hash.slice(6)).tags.includes('Ажиллах')))`);
-    assert.equal(grouping, true);
-    await click('[data-dis-step="-1"]');
-    await click('[data-dis-step="-1"]');
-    assert.equal(await evaluate(`document.querySelector('.dis-details').hash`), before.href);
-    await click('.dis-details');
-    await waitFor(`location.hash === ${JSON.stringify(before.href)} && !!document.querySelector('.cd')`);
-  });
-  await check('search and its controls stay fixed through every desktop category', async () => {
-    try {
-      for (const width of [1024, 1440, 1760]) {
-        await send('Emulation.setDeviceMetricsOverride', { width, height: 929, deviceScaleFactor: 1, mobile: false });
-        await navigate('#home');
-        const positions = () => evaluate(`[...document.querySelectorAll('.dis-search, .dis-chips')].map(el => el.getBoundingClientRect().top)`);
-        const initial = await positions();
-        for (const category of ['dessert', 'work', 'promo', 'coffee', 'seats', 'near']) {
-          await click(`[data-dis-category="${category}"]`);
-          assert.equal(await evaluate(`document.querySelector('.dis-copy-panel[data-active]').dataset.disCopy`), category);
-          assert.deepEqual(await positions(), initial, `${category} at ${width}px`);
-        }
-      }
-    } finally {
-      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    const cats = await evaluate(`[...document.querySelectorAll('[data-hm-cat]')].map(b => [b.dataset.hmCat, +b.querySelector('small').textContent])`);
+    assert.deepEqual(cats.map(([k]) => k), ['all', 'seats', 'study', 'quiet', 'wifi', 'meet']);
+    for (const [key, n] of cats) {
+      await click(`[data-hm-cat="${key}"]`);
+      assert.equal(await evaluate(`document.querySelectorAll('.hm-card').length`), n, key);
+      assert.equal(await evaluate(`document.querySelector('[data-hm-cat="${key}"]').getAttribute('aria-pressed')`), 'true');
     }
+    await click('[data-hm-cat="all"]');
+    await click('[data-hm-open]');
+    assert.equal(await evaluate(`document.querySelector('[data-hm-open]').getAttribute('aria-checked')`), 'true');
+    assert.equal(await evaluate(`import('/js/cafes.js').then(m => [...document.querySelectorAll('.hm-card')].every(c => m.byId(c.dataset.hmCard).open))`), true);
+    assert.equal(await evaluate(`document.querySelectorAll('.hm-card').length`), 10);
+    assert.match(await evaluate(`document.querySelector('[data-hm-pills]').textContent`), /Яг одоо 10 кафе нээлттэй.*ДЕМО/s);
+  });
+  await check('home: slideshow is hidden without photos, then shows a café with photos; arrows, thumbnails, dots, next', async () => {
+    await navigate('#home');
+    assert.equal(await evaluate(`document.querySelector('[data-hm-featured]').hidden`), true);
+    await addCafe('sd', 'Sunny Day Coffee');
+    await waitFor(`!document.querySelector('[data-hm-featured]').hidden`);
+    assert.equal(await featuredName(), 'Sunny Day Coffee');
+    assert.match(await evaluate(`document.querySelector('.hm-badge2').textContent`), /^ТУРШИЛТ · Сул/);
+    assert.match(await evaluate(`document.querySelector('.hm-fmain').src`), /sunny-day-1\.webp$/);
+    assert.equal(await evaluate(`document.querySelectorAll('.hm-fthumbs button').length`), 4);
+    await click('.hm-arr.r');
+    assert.match(await evaluate(`document.querySelector('.hm-fmain').src`), /sunny-day-2\.webp$/);
+    await click('[data-hm-photo="3"]');
+    assert.match(await evaluate(`document.querySelector('.hm-fmain').src`), /sunny-day-4\.webp$/);
+    assert.equal(await evaluate(`document.querySelector('[data-hm-photo="3"]').getAttribute('aria-pressed')`), 'true');
+    await addCafe('p2', 'Хоёрдугаар кафе', `, photos: ['/js/features/home/photos/sunny-day-3.webp']`);
+    await waitFor(`document.querySelectorAll('[data-hm-dot]').length === 2`);
+    assert.match(await evaluate(`document.querySelector('.hm-next').textContent`), /Дараагийнх: Хоёрдугаар кафе/);
+    await click('.hm-next');
+    assert.equal(await featuredName(), 'Хоёрдугаар кафе');
+    await click('[data-hm-dot="0"]');
+    assert.equal(await featuredName(), 'Sunny Day Coffee');
+    assert.equal(await evaluate(`document.querySelector('.hm-finfo [data-hm-go]').textContent.trim()`), '☕ Очих');
+    assert.equal(await evaluate(`document.querySelector('.hm-finfo .hm-b2').hash`), '#cafe-sd');
+  });
+  await check('home: slideshow advances by itself, pauses on hover and stays still with reduced motion', async () => {
+    await navigate('#home');
+    await addCafe('sd', 'Sunny Day Coffee'); await addCafe('p2', 'Хоёрдугаар кафе', `, photos: ['/js/features/home/photos/sunny-day-3.webp']`);
+    await waitFor(`document.querySelectorAll('[data-hm-dot]').length === 2`);
+    await evaluate(`document.activeElement?.blur()`);
+    const first = await featuredName();
+    assert.ok(await waitLong(`document.querySelector('.hm-finfo h2').textContent !== ${JSON.stringify(first)}`, 9000), 'auto-advance');
+    const second = await featuredName();
+    await evaluate(`document.querySelector('[data-hm-featured]').dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }))`);
+    assert.equal(await waitLong(`document.querySelector('.hm-finfo h2').textContent !== ${JSON.stringify(second)}`, 7000), false, 'paused on hover');
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    try {
+      await navigate('#home');
+      await addCafe('sd', 'Sunny Day Coffee'); await addCafe('p2', 'Хоёрдугаар кафе', `, photos: ['/js/features/home/photos/sunny-day-3.webp']`);
+      await waitFor(`document.querySelectorAll('[data-hm-dot]').length === 2`);
+      assert.equal(await evaluate(`!!document.querySelector('[data-hm-pause]')`), false);
+      const still = await featuredName();
+      assert.equal(await waitLong(`document.querySelector('.hm-finfo h2').textContent !== ${JSON.stringify(still)}`, 7000), false, 'reduced motion');
+    } finally { await send('Emulation.setEmulatedMedia', { features: [] }); }
+  });
+  await check('home: hovering or focusing a card highlights its pin; a pin selects its card', async () => {
+    await navigate('#home');
+    await waitFor(`document.querySelector('[data-hm-map]').dataset.map === 'svg' && document.querySelectorAll('.hm-pin').length === 12`);
+    assert.equal(await evaluate(`document.querySelector('.hm-pin[data-mk="A"] .hm-pin-b').textContent`), '36%');
+    await evaluate(`document.querySelector('[data-hm-card="K"] h3 a').dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))`);
+    assert.equal(await evaluate(`document.querySelector('.hm-pin[data-mk="K"]').classList.contains('hov')`), true);
+    await evaluate(`document.querySelector('[data-hm-card="I"] h3 a').focus()`);
+    assert.equal(await evaluate(`document.querySelector('.hm-pin[data-mk="I"]').classList.contains('hov') && !document.querySelector('.hm-pin[data-mk="K"]').classList.contains('hov')`), true);
+    await click('.hm-pin[data-mk="T"]');
+    assert.equal(await evaluate(`document.querySelector('[data-hm-card="T"]').classList.contains('sel') && document.querySelector('.hm-pin[data-mk="T"]').classList.contains('sel')`), true);
+    assert.equal(await evaluate(`location.hash`), '#home');
+  });
+  await check('home: a live update changes the card, pin and counts without a reload', async () => {
+    await navigate('#home');
+    await waitFor(`document.querySelectorAll('.hm-pin').length === 12`);
+    await evaluate(`window.__sameLoad = true; window.__cardA = document.querySelector('[data-hm-card="A"]')`);
+    const seatsBefore = await evaluate(`+document.querySelector('[data-hm-cat="seats"] small').textContent`);
+    await evaluate(`(async () => { const { byId } = await import('/js/cafes.js'); const { platform } = await import('/js/services/platform.js'); byId('A').occ = 80; platform.bus.emit('cafe:updated', 'A'); })()`);
+    await waitFor(`/80%/.test(document.querySelector('[data-hm-card="A"] .hm-occ').textContent)`);
+    assert.match(await evaluate(`document.querySelector('[data-hm-card="A"] .hm-badge').textContent`), /ДЕМО · Дүүрэн/);
+    assert.equal(await evaluate(`document.querySelector('.hm-pin[data-mk="A"] .hm-pin-b').textContent`), '80%');
+    assert.equal(await evaluate(`+document.querySelector('[data-hm-cat="seats"] small').textContent`), seatsBefore - 1);
+    assert.equal(await evaluate(`window.__sameLoad === true && window.__cardA === document.querySelector('[data-hm-card="A"]')`), true);
   });
   await check('map discovery link and goal filters retain markers and map fallback', async () => {
-    await navigate('#home');
-    await click('.dis-map');
-    await waitFor(`location.hash === '#explore' && !!document.querySelector('#exMap .mk')`);
-    // Goal filtering itself still exists on the map page.
+    // The home page links to the map from its tab bar and footer; goal filtering lives on the map page.
     await navigate('#explore');
+    await waitFor(`!!document.querySelector('#exMap .mk')`);
     await click('[data-f="purpose"][data-v="Сурах"]');
     assert.equal(await evaluate(`document.querySelectorAll('.mk:not(.dim)').length`), 7);
     // The real map shows every café with its animated pin, on green land.
@@ -161,34 +212,13 @@ try {
       const { x, y, width, height } = el.getBoundingClientRect();
       return [x, y, width, height];
     })`);
-    await navigate('#home');
+    // The home page has its own dark header with the pill search; every other route keeps the original one.
+    await navigate('#explore');
     const homeLayout = await layout();
     for (const [route, ready] of [['explore', '#exMap'], ['cafes', '#cgrid'], ['about', '.ab-hero'], ['partner', '#pf']]) {
       await click(`.nav [data-nav="${route}"]`);
       await waitFor(`location.hash === '#${route}' && !!document.querySelector(${JSON.stringify(ready)})`);
       assert.deepEqual(await layout(), homeLayout, route);
-    }
-  });
-  await check('recommended café cards fit the reference desktop viewport with complete descriptions', async () => {
-    await send('Emulation.setDeviceMetricsOverride', { width: 1760, height: 929, deviceScaleFactor: 1, mobile: false });
-    try {
-      await navigate('#home');
-      const cards = await evaluate(`[...document.querySelectorAll('.dis-card')].map(card => {
-        const text = card.querySelector('.dis-card-detail > span > span');
-        return {
-          bottom: card.getBoundingClientRect().bottom,
-          clipped: text.scrollWidth > text.clientWidth || text.scrollHeight > text.clientHeight,
-          href: card.querySelector('a').hash
-        };
-      })`);
-      assert.equal(cards.length, 4);
-      for (const card of cards) {
-        assert.ok(card.bottom <= 929, JSON.stringify(card));
-        assert.equal(card.clipped, false);
-        assert.match(card.href, /^#cafe-/);
-      }
-    } finally {
-      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
     }
   });
   await check('favorites persist across reloads', async () => {
@@ -415,7 +445,7 @@ try {
     await navigate('#about'); await click('summary');
     assert.equal(await evaluate(`document.querySelector('details').open`), true);
     await navigate('#missing');
-    assert.equal(await evaluate(`!!document.querySelector('.discovery')`), true);
+    assert.equal(await evaluate(`!!document.querySelector('.hm')`), true);
     await navigate('#cafe-missing');
     assert.equal(await evaluate(`!!document.querySelector('.empty')`), true);
   });
@@ -446,82 +476,60 @@ try {
     assert.equal(await evaluate(`document.querySelectorAll('.mk').length`), 12);
   });
 
-  await check('all nine widths retain the home layout, image and five mobile routes', async () => {
+  await check('home: all nine widths without horizontal scroll; phone map on top with the list as a sheet', async () => {
     for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440, 1920]) {
       await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width <= 820 });
       await navigate('#home');
+      await addCafe('sd', 'Sunny Day Coffee');
+      await waitFor(`!document.querySelector('[data-hm-featured]').hidden`);
       const info = await evaluate(`(() => {
-        const input = document.querySelector('#hq');
-        const photo = document.querySelector('.dis-art img');
-        const heading = document.querySelector('.dis-desktop-copy h1');
-        return { viewport:innerWidth, width:document.documentElement.scrollWidth, picture:photo.complete && photo.naturalWidth > 0,
-          input: input.getBoundingClientRect().width, desktopHeading: heading.getClientRects().length > 0,
-          controls:[...document.querySelectorAll('#hs .dis-setting')].map(b => b.getBoundingClientRect().width) };
+        const box = s => document.querySelector(s).getBoundingClientRect();
+        const shown = s => { const el = document.querySelector(s); return !!el && el.getClientRects().length > 0; };
+        return { viewport: innerWidth, width: document.documentElement.scrollWidth, input: box('#hq').width,
+          why: shown('.hm-why'), thumbs: shown('.hm-fthumbs'), grab: shown('.hm-grab'), pills: shown('[data-hm-pills]'),
+          mapAbove: box('.hm-mapbox').top < box('.hm-sheet').top, cols: getComputedStyle(document.querySelector('.hm-grid')).gridTemplateColumns.split(' ').length };
       })()`);
+      const phone = width <= 820;
       assert.equal(info.viewport, width, `viewport width ${width}`);
       assert.ok(info.width <= width, `homepage overflow at ${width}: ${info.width}`);
-      assert.ok(info.picture);
-      assert.ok(info.input >= 105);
-      assert.equal(info.desktopHeading, width > 820);
-      assert.deepEqual(info.controls, width <= 820 ? [46, 46] : [0, 46]);
+      assert.ok(info.input >= 105, `search input at ${width}`);
+      assert.deepEqual([info.why, info.thumbs, info.grab, info.pills, info.mapAbove], [!phone, !phone, phone, !phone, phone], `layout at ${width}`);
+      assert.equal(info.cols, phone ? 1 : 3, `columns at ${width}`);
     }
-    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 660, deviceScaleFactor: 1, mobile: true });
-    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-    await navigate('#home');
-    assert.ok(await evaluate(`document.querySelector('.discovery').classList.contains('dis-no-motion')`));
-    assert.ok(await evaluate(`document.querySelector('.dis-mobile-heading').getBoundingClientRect().height <= 1`));
-    assert.ok(await evaluate(`!!document.querySelector('#hs button[type="submit"] svg circle')`));
-    await input('#hq', 'Кафе A');
-    await click('#hs button[type="submit"]');
-    await waitFor(`location.hash === '#explore' && document.querySelector('.pv')?.dataset.id === 'A'`);
-    await navigate('#home');
-    assert.equal(await evaluate(`document.querySelectorAll('.dis-search [data-dis-map]').length`), 1);
-    const expected = [['#home','Нүүр'], ['#explore','Газрын зураг'], ['#cafes','Кафенууд'], ['#about','Тухай'], ['#partner','Хамтрах']];
-    assert.deepEqual(await evaluate(`[...document.querySelectorAll('#tabbar a')].map(a=>[a.hash,a.textContent])`), expected);
-    for (const [hash] of expected) {
-      await click(`#tabbar a[href="${hash}"]`);
-      await waitFor(`location.hash === ${JSON.stringify(hash)} && document.querySelector('#tabbar a.on').hash === ${JSON.stringify(hash)}`);
-    }
-    await send('Emulation.setEmulatedMedia', { features: [] });
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   });
-
-  await check('mobile carousel swipes and keyboard dialogs preserve the page', async () => {
+  await check('home: phone tab bar (Хайх, Хадгалсан, Газрын зураг, Профайл), swipe, filters dialog', async () => {
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 660, deviceScaleFactor: 1, mobile: true });
-    await navigate('#home');
-    assert.ok(await evaluate(`(() => {
-      const row = document.querySelector('.dis-chips');
-      const buttons = [...row.querySelectorAll('button')];
-      row.scrollLeft = 60;
-      const scrolls = row.scrollLeft > 0;
-      row.scrollLeft = 0;
-      return buttons.length === 6 && row.scrollWidth > row.clientWidth && scrolls &&
-        new Set(buttons.map(button => button.offsetTop)).size === 1;
-    })()`));
-    const y = await evaluate(`Math.round(document.querySelector('.dis-art').getBoundingClientRect().top + 66)`);
-    await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 280, y }] });
-    await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 160, y }] });
-    await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await waitFor(`document.querySelector('[data-dis-dot="dessert"]').getAttribute('aria-current') === 'true'`);
-    await waitFor(`document.querySelector('.dis-art img').currentSrc.endsWith('/cafe-pastry-cartoon.webp') && document.querySelector('.dis-art img').naturalWidth > 0`);
-    const filterOffset = await evaluate(`(() => {
-      const button = document.querySelector('#hs .dis-filter').getBoundingClientRect();
-      const icon = document.querySelector('#hs .dis-filter svg').getBoundingClientRect();
-      return [icon.x + icon.width / 2 - button.x - button.width / 2, icon.y + icon.height / 2 - button.y - button.height / 2];
-    })()`);
-    assert.deepEqual(filterOffset, [0, 0]);
-    await click('[data-dis-filter]');
-    await waitFor(`document.activeElement.matches('#modal [data-close]')`);
-    assert.equal(await evaluate(`document.querySelector('#modal .mdl').getAttribute('aria-labelledby')`), 'advanced-filters-title');
-    await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true }))`);
-    assert.ok(await evaluate(`document.activeElement.matches('[data-dis-filter]') && location.hash === '#home'`));
-    await input('#hq', 'Кафе A');
-    await click('[data-dis-map]');
-    await waitFor(`location.hash === '#explore' && document.querySelector('.pv')?.dataset.id === 'A'`);
-    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    try {
+      await navigate('#home');
+      assert.deepEqual(await evaluate(`[...document.querySelectorAll('#tabbar a')].map(a => a.textContent)`), ['Хайх', 'Хадгалсан', 'Газрын зураг', 'Профайл']);
+      await click('#tabbar [data-hm-tab="saved"]');
+      assert.equal(await evaluate(`document.querySelector('#favPop').hidden`), false);
+      await addCafe('sd', 'Sunny Day Coffee'); await addCafe('p2', 'Хоёрдугаар кафе', `, photos: ['/js/features/home/photos/sunny-day-3.webp']`);
+      await waitFor(`document.querySelectorAll('[data-hm-dot]').length === 2`);
+      const before = await featuredName();
+      const y = await evaluate(`Math.round(document.querySelector('.hm-fimg').getBoundingClientRect().top + 110)`);
+      await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 300, y }] });
+      await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 140, y }] });
+      await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await waitFor(`document.querySelector('.hm-finfo h2').textContent !== ${JSON.stringify(before)}`);
+      assert.ok(await evaluate(`(() => { const row = document.querySelector('.hm-catbar'); row.scrollLeft = 60; const ok = row.scrollLeft > 0; row.scrollLeft = 0; return ok; })()`));
+      await click('[data-hm-filter]');
+      await waitFor(`document.activeElement.matches('#modal [data-close]')`);
+      assert.equal(await evaluate(`document.querySelector('#modal .mdl').getAttribute('aria-labelledby')`), 'advanced-filters-title');
+      await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+      assert.ok(await evaluate(`document.activeElement.matches('[data-hm-filter]') && location.hash === '#home'`));
+      await click('#tabbar a[href="#explore"]');
+      await waitFor(`location.hash === '#explore' && !!document.querySelector('#exMap')`);
+      const expected = [['#home', 'Нүүр'], ['#explore', 'Газрын зураг'], ['#cafes', 'Кафенууд'], ['#about', 'Тухай'], ['#partner', 'Хамтрах']];
+      assert.deepEqual(await evaluate(`[...document.querySelectorAll('#tabbar a')].map(a => [a.hash, a.textContent])`), expected);
+      assert.equal(await evaluate(`document.querySelector('#tabbar a.on').hash`), '#explore');
+    } finally {
+      await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+    }
   });
 
-  await check('an empty or failed production catalogue never substitutes demo recommendations', async () => {
+  await check('an empty or failed production catalogue never substitutes demo cafés', async () => {
     const mock = await send('Page.addScriptToEvaluateOnNewDocument', { source: `
       const fetchOriginal = window.fetch;
       window.fetch = (url, options) => {
@@ -537,17 +545,18 @@ try {
     });
     try {
       await navigate('#home-error');
-      assert.equal(await evaluate(`document.querySelectorAll('.dis-card').length`), 0);
-      assert.ok(await evaluate(`!!document.querySelector('[data-dis-retry]')`));
+      assert.equal(await evaluate(`document.querySelectorAll('.hm-card, .hm-pin').length`), 0);
+      assert.ok(await evaluate(`!!document.querySelector('[data-hm-retry]') && document.querySelector('[data-hm-featured]').hidden`));
       await navigate('#home');
-      assert.equal(await evaluate(`document.querySelectorAll('.dis-card').length`), 0);
-      assert.match(await evaluate(`document.querySelector('.dis-empty').textContent`), /Тохирох кафе олдсонгүй/);
+      assert.equal(await evaluate(`document.querySelectorAll('.hm-card, .hm-pin').length`), 0);
+      assert.match(await evaluate(`document.querySelector('.hm-empty').textContent`), /Тохирох кафе олдсонгүй/);
+      assert.equal(await evaluate(`document.querySelector('[data-hm-pills]').hidden`), true);
     } finally { await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: mock.identifier }) }
   });
 
   await check('public, account and protected entry routes fit every target viewport', async () => {
     const routes = {
-      home: '.discovery', explore: '#exMap', cafes: '#cgrid', 'cafe-A': '.cd-summary',
+      home: '.hm', explore: '#exMap', cafes: '#cgrid', 'cafe-A': '.cd-summary',
       'cafe-O': '.cd-summary', about: '.ab-hero', partner: '#pf', staff: '#planWrap canvas',
       account: '.gate', owner: '.gate', admin: '.gate'
     };

@@ -1,3 +1,4 @@
+@import url('home.css?v=1');  /* нүүр хуудас (Design C) */
     /* LiveSpace product additions.
        Loaded after the four original stylesheets, which stay byte-identical. Every rule
        here is a scoped change requested for this version; it reuses the original tokens. */

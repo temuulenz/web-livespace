@@ -144,7 +144,8 @@ test('design files: a café is matched by id or name, and a design survives an e
 test('Sunny Day: two rooms behind a glass partition, a children\'s corner, and every seat reachable', () => {
   const sim = build(undefined, { id: 'sunny', name: 'Sunny Day Coffee Shop', occ: 0 });
   const types = sim.L.items.map(o => o.type);
-  for (const t of ['wall', 'kids-mat', 'kids-table', 'kids-books', 'toys', 'mural', 'panel', 'bar', 'bench', 'stairs', 'display']) assert.ok(types.includes(t), t);
+  // The bench and stairs were removed from the design file on purpose (commit 3f3a2a4).
+  for (const t of ['wall', 'kids-mat', 'kids-table', 'kids-books', 'toys', 'mural', 'panel', 'bar', 'display']) assert.ok(types.includes(t), t);
   const glass = sim.L.items.find(o => o.type === 'wall');
   assert.equal(glass.material, 'glass'); assert.equal(glass.color, '#4E8B3A'); assert.ok(glass.gapw >= 60);
   assert.deepEqual(sim.L.items.filter(o => o.type === 'mural').map(o => o.style).sort(), ['books', 'drawings']);
