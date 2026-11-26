@@ -3,6 +3,7 @@
    дотор хязгаарлагдсан тул бусад хуудас өөрчлөгдөхгүй. Анхны 4 CSS файлд хүрэхгүй. */
 
 body.ls-home {
+  color-scheme: light;  /* нүүр үргэлж загварын цайвар, дулаан өнгөтэй */
   --hm-bg: #F7EFE3; --hm-card: #fff; --hm-ink: #3E2A17; --hm-soft: #7A6552; --hm-faint: #A8927B;
   --hm-line: #EFE3D1; --hm-pill-line: #F0DEC2; --hm-dark: #3E2A17; --hm-deep: #5E3F22;
   --hm-free: #2F7A5F; --hm-mid: #C98A10; --hm-full: #B5482E; --hm-none: #B9A58C;
@@ -138,7 +139,7 @@ body.ls-home .hd .ibtn svg { stroke: currentColor }
 .hm-ph { position: relative; overflow: hidden; border-radius: 18px; aspect-ratio: 1 / .95; background: #F0DFC6; transition: box-shadow .2s, transform .2s }
 .hm-ph > img { display: block; width: 100%; height: 100%; object-fit: cover }
 .hm-card.hov .hm-ph, .hm-card.sel .hm-ph, .hm-card:hover .hm-ph { box-shadow: 0 0 0 3px var(--hm-orange), 0 8px 22px rgba(62, 42, 23, .18) }
-.hm-art-label { position: absolute; right: 10px; bottom: 64px; padding: 3px 8px; border-radius: 999px; background: rgba(62, 42, 23, .55); color: #fff; font-size: 11px; font-weight: 700 }
+.hm-ph > svg.hm-art { display: block; width: 100%; height: 100% }
 .hm-badge { position: absolute; left: 10px; top: 10px; display: flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 999px; background: #fff; color: var(--hm-ink); font-weight: 700; font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, .08) }
 .hm-badge.is-closed { color: var(--hm-soft) }
 .hm-heart.heart { position: absolute; right: 8px; top: 8px; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .28); color: #fff }
@@ -170,6 +171,12 @@ body.ls-home .hd .ibtn svg { stroke: currentColor }
 .hm-map .maplibregl-ctrl-top-left { top: 54px }
 .hm-legend { position: absolute; left: 16px; bottom: 16px; z-index: 3; display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, .95); color: var(--hm-ink); font-size: 12px; font-weight: 600; pointer-events: none }
 .hm-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; background: var(--lv) }
+
+/* Нүүрний газрын зураг: загвар шиг цайвар шаргал газар, цагаан зам (зөвхөн энэ хуудсанд). */
+.hm-map .map-inner .map-land { fill: #F3E7D3 }
+.hm-map svg.base path[stroke="#B49E80"] { stroke: #FFFBF4 }
+.hm-map svg.base path[stroke="#F4EFE4"] { stroke: #EADBC4 }
+.hm-map .maplibregl-canvas { filter: sepia(.32) saturate(.8) brightness(1.05) }
 
 /* home pins: occupancy pills (only this page) */
 .hm-pin { gap: 2px; padding: 0; border: 0; background: none; cursor: pointer }
@@ -231,22 +238,3 @@ body.ls-home .hd .ibtn svg { stroke: currentColor }
   .hm *, .hm *::before, .hm *::after { transition: none !important; animation: none !important }
 }
 .rm .hm *, .rm .hm *::before, .rm .hm *::after { transition: none !important; animation: none !important }
-
-/* ---------- dark mode (home only) ---------- */
-@media (prefers-color-scheme: dark) {
-  body.ls-home {
-    --hm-bg: #1C140D; --hm-card: #2A1E14; --hm-ink: #F3E6D3; --hm-soft: #C8B39A; --hm-faint: #9C8670;
-    --hm-line: #3E2E20; --hm-pill-line: #4A3726; --hm-deep: #3A2716;
-    --hm-free: #4FB38A; --hm-mid: #E0A93A; --hm-full: #E07A5F; --hm-none: #8E7B66
-  }
-  .hm-bar { background: #4A3726 }
-  .hm-occ { background: rgba(42, 30, 20, .94) }
-  .hm-occ.is-none { background: rgba(42, 30, 20, .88) }
-  .hm-badge { background: #2A1E14 }
-  .hm-mapbox { border-color: #4A3726 }
-  .hm-legend, .hm-mtag { background: rgba(42, 30, 20, .95) }
-  .hm-pin-b { background: #2A1E14 }
-  .hm-pin-n { background: rgba(42, 30, 20, .92) }
-  .hm-grab { background: #5A4430 }
-  .hm-sort select, .hm-fbtn { color-scheme: dark }
-}
