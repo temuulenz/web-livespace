@@ -39,7 +39,7 @@ The `#explore` map is a real map of Ulaanbaatar. It uses [MapLibre GL JS](https:
 - **Markers, preview card, filters and mobile sheet:** unchanged.
 - **«Та энд»:** appears only after the visitor taps «Миний байршил». The location stays in the browser and is never sent to the server.
 - **Directions:** «Чиглэл авах» opens Google Maps. It is disabled for demo cafés, whose points are fictional and labelled ДЕМО.
-- **Fallback:** if the library, the tiles or WebGL fail, the site automatically shows the original drawn SVG map. The homepage links to the map through a compact discovery strip.
+- **Fallback:** if the library, the tiles or WebGL fail, the site automatically shows the original drawn SVG map. The homepage shows the same real map next to its café list, with occupancy pins (`js/features/home/home-page.js`).
 
 To switch tile providers, change `tiles` and `glyphs` in `js/map-config.js` to another OpenMapTiles-schema source. Then add its host to the Content-Security-Policy in `server/lib/http.mjs` and `cloudflare/security.mjs`. OpenFreeMap has no published usage limits but is a donation-funded public service, so use your own tile server or a paid provider for heavy traffic. The «© OpenStreetMap contributors» attribution must stay visible.
 
