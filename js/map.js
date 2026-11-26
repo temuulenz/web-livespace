@@ -53,8 +53,9 @@ function markerHTML(c) {
  </button>`}
 // `markers: false` draws only the illustration (the home page preview): no pins, live pills or pulses.
 // `live` marks the real map, which uses the green land colour from styles/livespace.css.
-function buildSvgMap(vp, { interactive = true, onSelect = null, focus = null, markers: withMarkers = true, live = interactive } = {}) {
-  vp.insertAdjacentHTML('beforeend', `<div class="map-inner${live ? ' map-live' : ''}${withMarkers ? '' : ' map-preview'}">${mapSVG()}<div class="mk-layer">${withMarkers ? getCafes().map(markerHTML).join('') : ''}</div></div>`);
+// `markerHTML` lets a page draw its own pins (the home page); the default is the original marker.
+function buildSvgMap(vp, { interactive = true, onSelect = null, focus = null, markers: withMarkers = true, live = interactive, markerHTML: pin = markerHTML } = {}) {
+  vp.insertAdjacentHTML('beforeend', `<div class="map-inner${live ? ' map-live' : ''}${withMarkers ? '' : ' map-preview'}">${mapSVG()}<div class="mk-layer">${withMarkers ? getCafes().map(c => pin(c)).join('') : ''}</div></div>`);
   let markers = $$('.mk', vp); const markerById = new Map(markers.map(marker => [marker.dataset.mk, marker]));
   const events = new AbortController();
   const listen = (element, type, callback, options = {}) => element.addEventListener(type, callback, { ...options, signal: events.signal });
@@ -82,7 +83,7 @@ function buildSvgMap(vp, { interactive = true, onSelect = null, focus = null, ma
     // A live measurement changed one café: redraw only its marker, keeping its map state.
     refresh(id) {
       const old = markerById.get(id), cafe = byId(id); if (!old || !cafe) return;
-      const tmp = document.createElement('div'); tmp.innerHTML = markerHTML(cafe).trim(); const next = tmp.firstElementChild;
+      const tmp = document.createElement('div'); tmp.innerHTML = pin(cafe).trim(); const next = tmp.firstElementChild;
       ['sel', 'hov', 'dim', 'hit'].forEach(cls => next.classList.toggle(cls, old.classList.contains(cls)));
       old.replaceWith(next); markerById.set(id, next); markers = markers.map(m => m === old ? next : m);
     }, destroy() { ro.disconnect(); events.abort(); pvEl = null; drag = null } }
@@ -110,7 +111,7 @@ function buildMap(vp, options = {}) {
     if (dead) return;
     impl = buildSvgMap(vp, options); vp.dataset.map = 'svg'; replay();
   };
-  impl = buildGlMap(vp, { ...options, markerHTML }, { onReady: replay, onFail: fallback });
+  impl = buildGlMap(vp, { ...options, markerHTML: options.markerHTML || markerHTML }, { onReady: replay, onFail: fallback });
   return {
     fit() { live()?.fit() },
     centerOn(x, y, zoom) { state.center = [x, y, zoom]; live()?.centerOn(x, y, zoom) },
