@@ -468,39 +468,36 @@ try {
     await click('[data-om-new]');
     const ub = shift => new Date(Date.now() + (8 + shift) * 3600000).toISOString().slice(0, 16);
     await submit({ name: 'Туршилтын урамшуулал', starts_at: ub(-1), ends_at: ub(1), discount_value: '15' }, ['published']);
+    // Home (Design C): the café's card, live pin and filters come from the real catalogue.
     await go('#home');
-    await waitFor(`!!document.querySelector('[data-dis-map]')`);
+    await waitFor(`!!document.querySelector('[data-hm-card]')`);
     const target = (await pageFetch('/api/v1/cafes')).cafes.find(c => c.id === cafeId);
     assert.ok(target.district);
-    await click('.dis-map');
-    await waitFor(`location.hash === '#explore' && !!document.querySelector('[data-search-district]')`);
+    assert.equal(await evaluate(`document.querySelectorAll('[data-hm-card]').length`), (await pageFetch('/api/v1/cafes')).cafes.length);
+    await go('#explore');
+    await waitFor(`!!document.querySelector('[data-search-district]')`);
     await evaluate(`(() => {
       const field = document.querySelector('[data-search-district]');
       field.value = ${JSON.stringify(target.district)};
       field.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
     await go('#home');
-    await waitFor(`!!document.querySelector('[data-dis-dot="coffee"]:not([hidden])')`, 200);
-    await click('[data-dis-dot="coffee"]');
-    await waitFor(`document.querySelector('[data-dis-dot="coffee"]').getAttribute('aria-current') === 'true'`, 200);
-    assert.equal(await evaluate(`document.querySelector('.dis-details').hash`), '#cafe-' + cafeId);
-    await waitFor(`!!document.querySelector('[data-dis-dot="promo"]:not([hidden])')`, 200);
-    await click('[data-dis-dot="promo"]');
-    await waitFor(`document.querySelector('[data-dis-dot="promo"]').getAttribute('aria-current') === 'true'`, 200);
-    assert.match(await evaluate(`document.querySelector('.dis-feature p').textContent`), /Туршилтын урамшуулал/);
-    await click('.dis-details');
+    await waitFor(`!!document.querySelector('[data-hm-card="${cafeId}"]')`);
+    assert.match(await evaluate(`document.querySelector('[data-hm-mtag]').textContent`), new RegExp(target.district));
+    await click(`[data-hm-card="${cafeId}"] h3 a`);
     await waitFor(`document.querySelector('#cafeMenu .pm-item')?.textContent.includes('Нийтэлсэн латте')`);
     await click('#cafeMenu [data-pm-chip="' + category.id + '"]');
     await waitFor(`document.querySelector('#cafeMenu [data-pm-chip="${category.id}"]').getAttribute('aria-pressed') === 'true' && !!document.querySelector('#cafeMenu .pm-item')`);
     assert.match(await evaluate(`document.querySelector('#cafeMenu').textContent`), /Том/);
     await waitFor(`document.querySelector('#cafeMenu').textContent.includes('Туршилтын урамшуулал')`);
     await go('#home');
-    await click('[data-dis-filter]');
+    await waitFor(`!!document.querySelector('[data-hm-filter]')`);
+    await click('[data-hm-filter]');
     await waitFor(`!!document.querySelector('#modal [data-f="purpose"]')`);
     await click('#modal [data-f="purpose"][data-v="Сурах"]');
     await click('#mfApply');
-    await waitFor(`location.hash === '#explore' && !!document.querySelector('[data-search-district]')`);
-    assert.equal(await evaluate(`document.querySelector('[data-search-district]').value`), target.district);
+    await waitFor(`!document.querySelector('#modal .mdl') && location.hash === '#home'`);
+    assert.equal(await evaluate(`import('/js/cafes.js').then(m => [...document.querySelectorAll('[data-hm-card]')].every(c => m.byId(c.dataset.hmCard).tags.includes('Сурах') && m.byId(c.dataset.hmCard).district === ${JSON.stringify(target.district)}))`), true);
     await go('#owner');
     await waitFor(`!!document.querySelector('[data-om-ask="${product.id}"]')`);
     await click(`[data-om-ask="${product.id}"]`);
@@ -509,21 +506,13 @@ try {
     assert.equal((await pageFetch('/api/v1/cafes/' + cafeId + '/menu')).products.length, 0);
   });
 
-  await check('autoplay advances after seven seconds, pauses on focus and respects reduced motion', async () => {
+  await check('home with the real server: no photos means no slideshow; counts come from the catalogue', async () => {
     await go('#home');
-    const active = () => evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`);
-    const start = await active();
-    await delay(7300);
-    assert.notEqual(await active(), start);
-    await evaluate(`document.querySelector('#hq').focus()`);
-    const held = await active();
-    await delay(7400);
-    assert.equal(await active(), held);
-    await evaluate(`document.querySelector('#hq').blur()`);
-    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-    await delay(7400);
-    assert.equal(await active(), held);
-    await send('Emulation.setEmulatedMedia', { features: [] });
+    await waitFor(`!!document.querySelector('[data-hm-cats]')`);
+    // No public photo field exists yet (docs/BACKEND_REQUESTS.md), so nothing is featured.
+    assert.equal(await evaluate(`document.querySelector('[data-hm-featured]').hidden`), true);
+    const all = await evaluate(`+document.querySelector('[data-hm-cat="all"] small').textContent`);
+    assert.equal(all, await evaluate(`document.querySelectorAll('[data-hm-card]').length`));
   });
 
   await check('browser console has no uncaught errors', async () => {
