@@ -19,8 +19,21 @@ import { bindFeatured } from './home-featured.js';
 import { ICON, cafeLink, tagsHTML, occHTML, badgeHTML } from './home-parts.js';
 
 // Зураггүй кафены картанд одоо байгаа жишээ зураглал (discovery-ийн зургууд) «Жишээ зураг» шошготой.
-const ART = ['cafe-cartoon-small.webp', 'cafe-dessert-card.webp', 'cafe-interior-desktop.webp', 'cafe-work-desktop.webp', 'cafe-pastry-cartoon.webp'];
-const artOf = c => new URL(ART[[...String(c.id)].reduce((h, ch) => h + ch.codePointAt(0), 0) % ART.length], import.meta.url).href;
+// Зураггүй кафены картанд дулаан lofi зураглал (нуман цонх, унжлагатай гэрэл, ширээ, аяга, ургамал).
+// Энэ нь зурсан дүрслэл тул бодит кафены зураг мэт харагдахгүй.
+const ART_BG = ['#F5D9A8', '#E9C9A0', '#F0D4B4', '#E7C29A', '#F3DDBE', '#EFD5B0', '#EAD0AC'];
+const ART_WALL = ['#7B542F', '#5E3F22', '#8A5A35', '#6B4426'];
+function artSVG(c) {
+  const h = [...String(c.id)].reduce((n, ch) => n * 31 + ch.codePointAt(0) >>> 0, 7);
+  const bg = ART_BG[h % ART_BG.length], wall = ART_WALL[(h >>> 3) % ART_WALL.length], two = h % 2;
+  return `<svg class="hm-art" viewBox="0 0 200 190" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <rect width="200" height="190" fill="${bg}"/><rect y="128" width="200" height="62" fill="${wall}" opacity=".22"/>
+    <path d="M40 128V70a30 30 0 0 1 60 0v58z" fill="#FFF6E6" stroke="${wall}" stroke-width="4"/><path d="M70 40v88M40 92h60" stroke="${wall}" stroke-width="3"/>
+    ${two ? `<path d="M118 128V70a30 30 0 0 1 60 0v58z" fill="#FFF6E6" stroke="${wall}" stroke-width="4"/><path d="M148 40v88M118 92h60" stroke="${wall}" stroke-width="3"/>` : ''}
+    <line x1="150" y1="0" x2="150" y2="34" stroke="${wall}" stroke-width="2"/><path d="M136 46a14 12 0 0 1 28 0z" fill="#FF9D00"/><path d="M150 46l-22 82h44z" fill="#FFD58A" opacity=".35"/>
+    <ellipse cx="60" cy="150" rx="34" ry="6" fill="${wall}"/><rect x="57" y="150" width="6" height="26" fill="${wall}"/><path d="M48 140h16l-1 10H49z" fill="#fff" stroke="#3E2A17" stroke-width="2"/>
+    <path d="M160 176v-24" stroke="#5E8A4A" stroke-width="3"/><path d="M160 158q-14-10-16-24q12 6 16 20q4-16 16-22q-4 16-16 26" fill="#7FA25A"/><path d="M148 162h24l-4 16h-16z" fill="#B6771D"/></svg>`;
+}
 const PURPOSE_LABEL = { 'Сурах': 'Хичээл хийх', 'Ажиллах': 'Ажил хийх', 'Найзуудтай': 'Найзуудтайгаа уулзах', 'Найзууд': 'Найзуудтайгаа уулзах', 'Тухтай': 'Тухтай суух' };
 
 export function homeHTML({ footer }) {
@@ -153,7 +166,7 @@ export function bindHome(root, { cafes, matches, onFilters, activeCount }) {
     const cls = ['hm-card', state.sel === c.id ? 'sel' : '', state.hover === c.id ? 'hov' : ''].filter(Boolean).join(' ');
     return `<article class="${cls}" data-key="${esc(c.id)}" data-hm-card="${esc(c.id)}" data-href="${cafeLink(c)}">
       <div class="hm-ph">${photo ? `<img src="${esc(photo.small)}" alt="${esc(photo.alt)}" loading="lazy" decoding="async" width="640" height="480">`
-        : `<img src="${artOf(c)}" alt="" loading="lazy" decoding="async" width="640" height="480"><span class="hm-art-label">Жишээ зураг</span>`}
+        : artSVG(c)}
         ${badgeHTML(x)}
         <button type="button" class="heart hm-heart" data-fav="${esc(c.id)}" aria-pressed="${favs.has(c.id)}" aria-label="${esc(c.name)} хадгалах">${I.heart}</button>
         ${occHTML(x)}</div>
