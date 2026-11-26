@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 1066 162" preserveAspectRatio="none">
+<defs><pattern id="sh" width="40" height="18" patternUnits="userSpaceOnUse"><path d="M0 18a20 14 0 0 1 40 0" fill="none" stroke="#C2700A" stroke-width="2.5"/></pattern></defs>
+<g fill="#FFF7EA" opacity=".9"><circle cx="806" cy="30" r="8"/><circle cx="823" cy="19" r="6.5"/><circle cx="842" cy="10" r="5"/></g>
+<rect x="770" y="48" width="54" height="66" rx="8" fill="#C0653A" stroke="#7B542F" stroke-width="3" vector-effect="non-scaling-stroke"/>
+<rect x="762" y="40" width="70" height="12" rx="6" fill="#7B542F"/>
+<path d="M40.0 150.0Q6 150 39.0 141.9L471.7 36.2Q530 22 588.3 36.2L1021.0 141.9Q1054 150 1020.0 150.0Z" fill="#E8890A"/>
+<path d="M40.0 150.0Q6 150 39.0 141.9L471.7 36.2Q530 22 588.3 36.2L1021.0 141.9Q1054 150 1020.0 150.0Z" fill="url(#sh)"/>
+<path d="M40.0 150.0Q6 150 39.0 141.9L471.7 36.2Q530 22 588.3 36.2L1021.0 141.9Q1054 150 1020.0 150.0Z" fill="none" stroke="#7B542F" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+</svg>

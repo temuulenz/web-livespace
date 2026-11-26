@@ -37,7 +37,9 @@ const lazy = {
 let navToken = 0;   // a lazily loaded page only renders if the visitor is still on it
 const loadFailed = () => `<div class="wrap page"><div class="card gate" role="alert"><h1>Уучлаарай</h1><p class="muted">Энэ хэсгийг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.</p></div></div>`;
 import { discoveryHTML, bindDiscovery } from './js/features/home/discovery.js';
-import { matchesDiscovery } from './js/features/home/recommendations.js';
+import { matchesDiscovery, UB_DISTRICTS, districtKey } from './js/features/home/recommendations.js';
+import { drinkPrice, loadMenuSummaries } from './js/features/menu/menu-summary.js';
+import { formatMNT } from './js/services/customer-rules.js';
 
 // Customer features (menu, «Очих», pre-orders) mounted into the original pages; released on navigation.
 let custViews = [];
@@ -68,7 +70,7 @@ const emptyHTML = (style = '') => `<div class="empty"${style}>${emptyArt()}<b>Т
 
 /* ================= filters ================= */
 const PURPOSES = [['Сурах', I.book], ['Ажиллах', I.laptop], ['Найзуудтай', I.people], ['Тухтай', I.sofa]];
-function matches(c) { return matchesWithQuery(c, F.q) }
+function matches(c) { return matchesWithQuery(c, F.q) && (!F.only || F.only.ids.has(c.id)) }
 function matchesWithQuery(c, query) {
   if (!matchesDiscovery(c, query, F.district) || (F.openOnly && !c.open)) return false;
   if (F.purpose.size && ![...F.purpose].every(p => c.tags.includes(p))) return false;
@@ -76,12 +78,15 @@ function matchesWithQuery(c, query) {
   if (F.wifi !== 'any' && !(c.open && c.wifi >= (F.wifi === 'good' ? 3 : 4))) return false;
   if (F.seats !== 'any' && !(c.open && freePct(c) != null && freePct(c) >= +F.seats)) return false; return true
 }
-const activeCount = () => Number(Boolean(F.district)) + F.purpose.size + (F.sound ? 1 : 0) + (F.wifi !== 'any') + (F.seats !== 'any') + (F.openOnly ? 1 : 0);
+const activeCount = () => Number(Boolean(F.only)) + Number(Boolean(F.district)) + F.purpose.size + (F.sound ? 1 : 0) + (F.wifi !== 'any') + (F.seats !== 'any') + (F.openOnly ? 1 : 0);
 const soundFilterLabel = () => F.sound ? `${F.sound}/5 · ${SS[F.sound].short}` : 'Бүх түвшин';
 const soundFilterHint = () => F.sound ? `${SS[F.sound].t} — ${SS[F.sound].s.toLowerCase()}` : 'Бүх түвшний кафег харуулна. Гулсуулагчаар сонгоорой.';
 function districtOptions() {
-  const districts = [...new Set(CAFES.map(c => c.district).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'mn'));
-  return districts.length ? '<option value="">Бүх дүүрэг</option>' + districts.map(d => `<option value="${escapeHTML(d)}"${d === F.district ? ' selected' : ''}>${escapeHTML(d)}</option>`).join('') : '';
+  // All nine UB districts, plus any other district a café is registered in.
+  const known = new Set(UB_DISTRICTS.map(districtKey));
+  const extra = [...new Set(CAFES.map(c => c.district).filter(d => d && !known.has(districtKey(d))))].sort((a, b) => a.localeCompare(b, 'mn'));
+  const chosen = districtKey(F.district);
+  return '<option value="">Бүх дүүрэг</option>' + [...UB_DISTRICTS, ...extra].map(d => `<option value="${escapeHTML(d)}"${F.district && districtKey(d) === chosen ? ' selected' : ''}>${escapeHTML(d)}</option>`).join('');
 }
 function filtersHTML(full, geographic = false) {
   const pc = PURPOSES.map(([p, ic]) => `<button class="chip" data-f="purpose" data-v="${p}" aria-pressed="${F.purpose.has(p)}">${ic}${p}</button>`).join('');
@@ -96,7 +101,7 @@ function filtersHTML(full, geographic = false) {
  <div class="fgrp"><span>${I.seat} Сул суудал</span><div class="chips">${opt('seats', 'any', 'Бүгд')}${opt('seats', '30', '30%+ сул')}${opt('seats', '50', '50%+ сул')}</div></div>
  <div class="tgl-row" style="border:0;padding:0"><div><b>Зөвхөн нээлттэй</b><small>Хаалттай кафег нуух</small></div><button class="sw" role="switch" data-f="openOnly" aria-checked="${F.openOnly}" aria-label="Зөвхөн нээлттэй"></button></div>`;
   const districts = geographic && districtOptions();
-  return `${districts ? `<label class="fgrp cf-order"><span>${I.pin} Дүүрэг</span><select data-search-district>${districts}</select></label>` : ''}
+  return `${districts ? `<label class="fgrp cf-district"><span>${I.pin} Дүүрэг</span><select data-search-district>${districts}</select></label>` : ''}
  <div class="fgrp"><span>${I.target} Зорилго</span><div class="chips">${pc}</div></div>
  <div class="fgrp"><span>${ssGlyph(2)} Дуу чимээ</span>${sc}</div>
  ${full ? extra : `<button class="more" data-more aria-expanded="${F.more}">Нарийвчлах (Wi-Fi, суудал) ${I.chev}</button><div class="morebox${F.more ? ' open' : ''}"><div>${extra}</div></div>`}`
@@ -133,12 +138,12 @@ document.addEventListener('click', e => {
     syncFilterUI(); refreshResults(); return
   }
   const m = e.target.closest('[data-more]'); if (m) { F.more = !F.more; m.setAttribute('aria-expanded', F.more); m.nextElementSibling.classList.toggle('open', F.more); Snd.ui('whoosh') }
-  const rm = e.target.closest('[data-rm]'); if (rm) { const [k, v] = rm.dataset.rm.split(':'); Snd.ui('click'); if (k === 'purpose') F.purpose.delete(v); else if (k === 'sound') F.sound = 0; else if (k === 'openOnly') F.openOnly = false; else if (k === 'district') F.district = ''; else F[k] = 'any'; syncFilterUI(); refreshResults() }
+  const rm = e.target.closest('[data-rm]'); if (rm) { const [k, v] = rm.dataset.rm.split(':'); Snd.ui('click'); if (k === 'purpose') F.purpose.delete(v); else if (k === 'only') F.only = null; else if (k === 'sound') F.sound = 0; else if (k === 'openOnly') F.openOnly = false; else if (k === 'district') F.district = ''; else F[k] = 'any'; syncFilterUI(); refreshResults() }
   if (e.target.closest('[data-open-off]')) { F.openOnly = false; Snd.ui('click'); syncFilterUI(); refreshResults() }
-  if (e.target.closest('[data-reset]')) { F.purpose.clear(); F.sound = 0; F.wifi = 'any'; F.seats = 'any'; F.openOnly = false; F.district = ''; F.q = ''; $$('#q,#q2,#hq').forEach(i => i.value = ''); Snd.ui('whoosh'); syncFilterUI(); refreshResults() }
+  if (e.target.closest('[data-reset]')) { F.only = null; F.purpose.clear(); F.sound = 0; F.wifi = 'any'; F.seats = 'any'; F.openOnly = false; F.district = ''; F.q = ''; $$('#q,#q2,#hq').forEach(i => i.value = ''); Snd.ui('whoosh'); syncFilterUI(); refreshResults() }
 });
 function activeHTML(n) {
-  const a = []; if (F.district) a.push(['district:', escapeHTML(F.district)]); F.purpose.forEach(p => a.push([`purpose:${p}`, p])); if (F.sound) a.push(['sound:', SS[F.sound].short]); if (F.wifi !== 'any') a.push(['wifi:', F.wifi === 'good' ? 'Wi-Fi сайн+' : 'Wi-Fi маш сайн']); if (F.seats !== 'any') a.push(['seats:', F.seats + '%+ сул']); if (F.openOnly) a.push(['openOnly:', 'Нээлттэй']);
+  const a = []; if (F.only) a.push(['only:', escapeHTML(F.only.label)]); if (F.district) a.push(['district:', escapeHTML(F.district)]); F.purpose.forEach(p => a.push([`purpose:${p}`, p])); if (F.sound) a.push(['sound:', SS[F.sound].short]); if (F.wifi !== 'any') a.push(['wifi:', F.wifi === 'good' ? 'Wi-Fi сайн+' : 'Wi-Fi маш сайн']); if (F.seats !== 'any') a.push(['seats:', F.seats + '%+ сул']); if (F.openOnly) a.push(['openOnly:', 'Нээлттэй']);
   return `<span><b class="num">${n}</b> кафе</span>` + a.map(([k, l]) => `<span class="ac">${l}<button data-rm="${k}" aria-label="${l} шүүлтүүрийг арилгах">${I.x}</button></span>`).join('') + (a.length ? '<button class="rst" data-reset>Цэвэрлэх</button>' : '')
 }
 function whyLine(c) { if (!c.open) return c.status_text || `Хаалттай · ${c.opens} нээгдэнэ`; const p = []; if (c.sound && (F.sound === c.sound || c.sound <= 2)) p.push(SS[c.sound].short.toLowerCase() + ' орчин'); if (F.wifi !== 'any' || c.wifi >= 4) p.push('Wi-Fi ' + WIFI[c.wifi].toLowerCase()); if (freePct(c) != null && (F.seats !== 'any' || freePct(c) >= 60)) p.push(freePct(c) + '% сул'); if (F.purpose.size) p.unshift([...F.purpose].join(', ').toLowerCase() + 'д тохирно'); return p.length ? `<strong>Яагаад:</strong> ${p.slice(0, 3).join(' · ')}` : c.note }
@@ -244,16 +249,23 @@ $('#favPop').addEventListener('click', e => { if (e.target.closest('[data-fav-lo
 document.addEventListener('click', e => { if (!e.target.closest('#sndPop,#sndBtn')) $('#sndPop').hidden = true; if (!e.target.closest('#favPop,#favBtn')) $('#favPop').hidden = true; if (e.target.closest('#favPop a')) $('#favPop').hidden = true });
 
 /* ================= cafe card (V1 layout, upgraded) ================= */
-function cafeCard(c) {
+// Options used by «Ойролцоох кафенууд»: `top` adds a photo (with a distance badge) above the card,
+// `meta` replaces the line under the name (real walking time · hours), `lamp` shows the open/closed lamp before the tags.
+function cafeCard(c, { top = '', meta = null, lamp = false, classic = false } = {}) {
   const fp_ = freePct(c);
   const tiles = c.open ? `<div class="tile" title="Сул суудал"><div class="ti">${seatRow(c.occ)}</div><b class="num">${fp_ == null ? '—' : fp_ + '%'}</b></div>
   <div class="tile" title="Дуу чимээ · ${SS[c.sound].t}"><div class="ti">${ssGlyph(c.sound)}</div><b>${SS[c.sound].short}</b></div>
   <div class="tile" title="Wi-Fi · ${WIFI_S[c.wifi]}"><div class="ti">${wifiSVG(c.wifi, 26)}</div><b>${WIFI[c.wifi]}</b></div>`
     : `<div class="unav"><b>${closedText(c)}</b></div>`;
-  return `<article class="ccard${c.open ? '' : ' is-closed'}" data-href="#cafe-${encodeURIComponent(c.id)}">
-  <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${escapeHTML(c.name)}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${walkMeta(c)}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${encodeURIComponent(c.id)}" aria-label="${escapeHTML(c.name)} дэлгэрэнгүй">${I.arr}</a></div></div>
+  if (classic) return `<article class="ccard${c.open ? '' : ' is-closed'}" data-href="#cafe-${encodeURIComponent(c.id)}">
+  <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${escapeHTML(c.name)}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${c.walk != null ? `${c.walk} мин · ` : ''}${escapeHTML(c.hours || '')}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${encodeURIComponent(c.id)}" aria-label="${escapeHTML(c.name)} дэлгэрэнгүй">${I.arr}</a></div></div>
+  <div class="tags">${openLamp(c)}${tagPills(c)}</div>${drinkPrice(c.id) != null ? `<p class="cc-price">${I.cup} Ундааны дундаж үнэ <b class="num">${formatMNT(drinkPrice(c.id))}</b></p>` : ''}
+  <div class="tiles">${tiles}</div>${sensorPanelHTML(c, true)}
+ </article>`;
+  return `<article class="ccard${c.open ? '' : ' is-closed'}${top ? ' has-photo' : ''}" data-href="#cafe-${encodeURIComponent(c.id)}">${top}
+  <div class="cc-top">${cardPin(!c.open)}<div class="cc-t"><h3>${escapeHTML(c.name)}</h3><div class="meta num">${I.walk.replace('<svg', '<svg width="14" height="14"')}${meta ?? walkMeta(c)}</div></div><div class="cc-act">${favBtn(c.id)}${cmpBtn(c.id)}<a class="go-arr" href="#cafe-${encodeURIComponent(c.id)}" aria-label="${escapeHTML(c.name)} дэлгэрэнгүй">${I.arr}</a></div></div>
   ${statusBlock(c)}
-  <div class="tags">${tagPills(c)}</div>
+  <div class="tags">${lamp ? openLamp(c) : ''}${tagPills(c)}</div>${drinkPrice(c.id) != null ? `<p class="cc-price">${I.cup} Ундааны дундаж үнэ <b class="num">${formatMNT(drinkPrice(c.id))}</b></p>` : ''}
   <div class="tiles">${tiles}</div>${sensorPanelHTML(c, true)}
   ${moreLink(c)}
  </article>`}
@@ -278,11 +290,12 @@ function renderHome() {
  ${discoveryHTML({ query: F.q, filterCount: activeCount() })}
  <div class="wrap dis-sounds">
   <section class="sec"><div class="sec-h"><h2>Чимээг тоогоор биш, мэдрэмжээр</h2><p>Жишээ дуу — бодит бичлэг биш. Товчоор сонсоорой.</p></div>
-   <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Орчны дууны жишээ сонсох</button></div>`).join('')}</div>
+   <div class="ss-row">${[1, 2, 3, 4, 5].map(l => `<div class="ss-card"><div class="art" style="background:${SSBG[l]}">${ssArt(l, 120)}</div><div class="lvl" aria-label="${l}/5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div><b>${SS[l].t}</b><span>${SS[l].s}</span><button class="play" data-play="${l}">${I.play} Сонсох</button></div>`).join('')}</div>
    <div class="ss-dots" aria-hidden="true">${[1, 2, 3, 4, 5].map((l, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></section>
  </div>${footer()}</div>`;
   const search = query => {
     F.q = query;
+    F.only = null;
     const results = CAFES.filter(matches);
     if (query && results.length === 1) selId = results[0].id;
     else if (selId && !results.some(c => c.id === selId)) selId = null;
@@ -294,7 +307,18 @@ function renderHome() {
     matches: cafe => matchesWithQuery(cafe, ''),
     onSearch: search,
     onMap: () => search($('#hq').value.trim()),
+    cardHTML: cafeCard,
     onFilters: button => showAdvancedFilters(button, () => { closeModal(); search($('#hq').value.trim()) }),
+    // Category chips open the map: «Ажиллах» uses the map's own purpose filter; the other
+    // categories show exactly the cafés recommended for them, as a removable filter chip.
+    onCategory(category, ids) {
+      F.purpose.clear(); F.sound = 0; F.wifi = 'any'; F.seats = 'any'; F.openOnly = false; F.district = ''; F.q = ''; F.only = null;
+      if (category.key === 'work') F.purpose.add('Ажиллах');
+      else if (ids) F.only = { label: category.label, ids: new Set(ids) };
+      selId = null;
+      Snd.ui('whoosh');
+      location.hash = 'explore';
+    },
     updateFilterUI(root) {
       $$('.dis-filter-count', root).forEach(count => { count.textContent = activeCount() || '' });
       const apply = $('#mfApply');
@@ -411,25 +435,34 @@ function selectCafe(id, from, silent) {
 }
 
 /* ---------- cafes page ---------- */
+const SORT_LABEL = { seats: 'сул суудлаар', name: 'нэрээр', 'price-asc': 'үнээр (хямдаас нь)', 'price-desc': 'үнээр (үнэтэйгээс нь)' };
+// Hanging lamps of the previous «Бүх кафе» banner.
+const lampSVG = (c, shape) => shape === 0 ? `<svg viewBox="0 0 110 60"><path d="M10 56C10 30 30 12 55 12s45 18 45 44z" fill="${c}"/><rect x="5" y="52" width="100" height="6" rx="3" fill="#7B542F"/><ellipse cx="55" cy="58" rx="9" ry="4" fill="#FFF4DC"/></svg>` : shape === 1 ? `<svg viewBox="0 0 110 60"><path d="M45 4h20l40 52H5z" fill="${c}"/><rect x="45" y="0" width="20" height="8" rx="2" fill="#7B542F"/><ellipse cx="55" cy="56" rx="9" ry="4" fill="#FFF4DC"/></svg>` : `<svg viewBox="0 0 110 60"><path d="M30 56c0-22 10-40 25-40s25 18 25 40z" fill="${c}"/><rect x="51" y="8" width="8" height="10" fill="#7B542F"/><rect x="24" y="52" width="62" height="6" rx="3" fill="#3E2A17"/><ellipse cx="55" cy="58" rx="8" ry="3.5" fill="#FFF4DC"/></svg>`;
+const lamp = (x, cord, c, shape, cls) => `<div class="lamp ${cls}" style="left:${x}" aria-hidden="true"><div class="cord" style="height:${cord}px"></div>${lampSVG(c, shape)}<div class="cone"></div></div>`;
 function renderCafes() {
-  app.innerHTML = `<div class="page">
- <div class="wrap cf-layout"><header class="cf-mast"><div><h1>Кафенууд</h1><p id="cfCount" role="status"></p></div>
- <label class="cf-order">Эрэмбэ <select id="cfSort"><option value="seats">Нээлттэй · Сул суудал</option><option value="name">Нэрээр</option></select></label></header>
- <div class="mrow cf-mrow"><label class="srch">${I.search}<input id="q2" placeholder="Кафе хайх" aria-label="Кафе хайх" enterkeyhint="search"></label><button class="btn btn-o mf-open" id="mfo">${I.filter} Шүүлтүүр <span id="mfc"></span></button></div>
+  // Same banner, layout and cards as the previous version; the sort select sits on the count row.
+  app.innerHTML = `<div class="page cf-classic"><div class="lamps-hd">${lamp('3%', 0, '#FF9D00', 0, 'l1')}${lamp('13%', 60, '#B6771D', 1, 'l2')}${lamp('23%', 30, '#FFCF71', 0, 'l3')}${lamp('72%', 40, '#FFCF71', 1, 'l4')}${lamp('82%', 10, '#7B542F', 2, 'l5')}${lamp('91%', 50, '#FF9D00', 1, 'l6')}
+  <div><h1>Бүх кафе</h1><p id="cfCount" role="status"></p></div></div>
+ <div class="wrap"><div class="mrow cf-mrow"><label class="srch">${I.search}<input id="q2" placeholder="Кафе хайх" aria-label="Кафе хайх" enterkeyhint="search"></label><button class="btn btn-o mf-open" id="mfo">${I.filter} Шүүлтүүр <span id="mfc"></span></button></div>
  <div class="cafes"><aside class="fpanel" id="fpanel"><h2>Шүүлтүүр <button data-reset>Цэвэрлэх</button></h2><label class="srch fdesk">${I.search}<input id="q" placeholder="Кафе хайх" aria-label="Кафе хайх"></label>${filtersHTML(true, true)}</aside>
- <div class="cf-results"><div class="ex-active" id="exActive" style="padding:0 0 14px"></div><div class="cgrid2" id="cgrid"></div>
+ <div class="cf-results"><div class="cf-bar"><div class="ex-active" id="exActive"></div>
+ <label class="cf-sort">Эрэмбэ <select id="cfSort"><option value="seats">Сул суудлаар</option><option value="name">Нэрээр</option><option value="price-asc">Үнээр: хямдаас нь</option><option value="price-desc">Үнээр: үнэтэйгээс нь</option></select></label></div>
+ <div class="cgrid2" id="cgrid"></div>
  <nav class="cf-pages" aria-label="Кафены жагсаалтын хуудас" hidden><button class="btn btn-o" type="button" data-cf-page="-1">Өмнөх</button><span></span><button class="btn btn-o" type="button" data-cf-page="1">Дараах</button></nav>
  </div></div></div>${footer()}</div>`;
   let pageIndex = 0;
   function updateCafes() {
     const sort = $('#cfSort').value;
+    // Price: average drink price from each café's published menu; cafés without one go last.
+    const byPrice = dir => (a, b) => { const pa = drinkPrice(a.id), pb = drinkPrice(b.id); return (pa == null) - (pb == null) || (pa - pb) * dir || a.name.localeCompare(b.name, 'mn'); };
     const results = CAFES.filter(matches).sort(sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'mn') :
+      sort === 'price-asc' ? byPrice(1) : sort === 'price-desc' ? byPrice(-1) :
       (a, b) => (b.open - a.open) || ((freePct(b) ?? -1) - (freePct(a) ?? -1)));
     const pageSize = 12, pages = Math.max(1, Math.ceil(results.length / pageSize));
     pageIndex = clamp(pageIndex, 0, pages - 1);
     const items = results.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
-    $('#cgrid').innerHTML = items.length ? items.map(cafeCard).join('') : emptyHTML(' style="grid-column:1/-1"');
-    $('#cfCount').textContent = `${results.length} кафе олдлоо`;
+    $('#cgrid').innerHTML = items.length ? items.map(c => cafeCard(c, { classic: true })).join('') : emptyHTML(' style="grid-column:1/-1"');
+    $('#cfCount').textContent = `${results.length} кафе олдлоо · ${SORT_LABEL[sort]} эрэмбэлсэн`;
     $('#exActive').innerHTML = activeHTML(results.length);
     $('#mfc').textContent = activeCount() ? '· ' + activeCount() : '';
     $('.cf-pages').hidden = pages <= 1;
@@ -439,6 +472,9 @@ function renderCafes() {
   }
   const resetPage = () => { pageIndex = 0; updateCafes() };
   $('#cfSort').onchange = resetPage;
+  // Drink prices load in the background; the list re-sorts and the cards show them when they arrive.
+  const grid = $('#cgrid');
+  loadMenuSummaries(CAFES).then(() => { if (grid.isConnected) updateCafes(); });
   $$('[data-cf-page]').forEach(button => button.onclick = () => {
     pageIndex += Number(button.dataset.cfPage);
     updateCafes();

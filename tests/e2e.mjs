@@ -480,13 +480,10 @@ try {
       field.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
     await go('#home');
-    await waitFor(`!!document.querySelector('[data-dis-dot="coffee"]:not([hidden])')`, 200);
-    await click('[data-dis-dot="coffee"]');
-    await waitFor(`document.querySelector('[data-dis-dot="coffee"]').getAttribute('aria-current') === 'true'`, 200);
-    assert.equal(await evaluate(`document.querySelector('.dis-details').hash`), '#cafe-' + cafeId);
     await waitFor(`!!document.querySelector('[data-dis-dot="promo"]:not([hidden])')`, 200);
     await click('[data-dis-dot="promo"]');
     await waitFor(`document.querySelector('[data-dis-dot="promo"]').getAttribute('aria-current') === 'true'`, 200);
+    assert.equal(await evaluate(`document.querySelector('.dis-details').hash`), '#cafe-' + cafeId);
     assert.match(await evaluate(`document.querySelector('.dis-feature p').textContent`), /Туршилтын урамшуулал/);
     await click('.dis-details');
     await waitFor(`document.querySelector('#cafeMenu .pm-item')?.textContent.includes('Нийтэлсэн латте')`);
@@ -495,11 +492,8 @@ try {
     assert.match(await evaluate(`document.querySelector('#cafeMenu').textContent`), /Том/);
     await waitFor(`document.querySelector('#cafeMenu').textContent.includes('Туршилтын урамшуулал')`);
     await go('#home');
-    await click('[data-dis-filter]');
-    await waitFor(`!!document.querySelector('#modal [data-f="purpose"]')`);
-    await click('#modal [data-f="purpose"][data-v="Сурах"]');
-    await click('#mfApply');
-    await waitFor(`location.hash === '#explore' && !!document.querySelector('[data-search-district]')`);
+    await go('#explore');
+    await waitFor(`!!document.querySelector('[data-search-district]')`);
     assert.equal(await evaluate(`document.querySelector('[data-search-district]').value`), target.district);
     await go('#owner');
     await waitFor(`!!document.querySelector('[data-om-ask="${product.id}"]')`);

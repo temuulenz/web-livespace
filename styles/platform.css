@@ -22,25 +22,28 @@
   --r-l: 22px;
 }
 body::before { display: none }
+body { background: #FBF7F0 }
 :where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 a, button { -webkit-tap-highlight-color: #ad4e0d22 }
-.hd { background: var(--cream); border-bottom: 1px solid var(--line); backdrop-filter: none }
+.hd { background: #FFFFFF; border-bottom: 1px solid #F3E6D2; backdrop-filter: none }
 .hd-in { gap: clamp(12px, 2.3vw, 38px) }
-.hd .nav a { font-weight: 800; color: var(--ink) }
-.hd .nav a.on { color: var(--accent-ink) }
-.hd .ibtn, .hd .loc { background: var(--paper); border-color: var(--line2); color: var(--ink) }
-.hd .ibtn { min-width: 44px; min-height: 44px; border-radius: 50% }
+.hd .nav a { font-weight: 600; color: #6B5038 }
+.hd .nav a:hover { color: #3E2A17 }
+.hd .nav a.on { color: #3E2A17; font-weight: 800 }
+.hd .ibtn, .hd .loc { background: #FFFFFF; border-color: #E3D5BF; color: #3E2A17 }
+.hd .ibtn { min-width: 42px; min-height: 42px; border-radius: 12px }
+.hd .ibtn:hover { background: #FFF4DC }
 .hd .ibtn[hidden] { display: none }
 @media (min-width: 821px) {
-  :root { --hd: 80px; scrollbar-gutter: stable }
-  .hd-in { max-width: 1690px; padding-inline: clamp(26px, 5.3vw, 86px); gap: clamp(18px, 4vw, 72px) }
-  .hd .nav { gap: clamp(4px, 1.25vw, 20px) }
-  .hd .nav a { white-space: nowrap; font-weight: 750 }
-  .hd-r { gap: clamp(7px, 1.1vw, 17px) }
-  .hd .ibtn { background: transparent }
+  :root { --hd: 64px; scrollbar-gutter: stable }
+  .hd-in { max-width: 1440px; padding-inline: 24px; gap: 28px }
+  .hd .nav { gap: 6px }
+  .hd .nav a { white-space: nowrap }
+  .hd-r { gap: 8px }
+  .hd .ibtn { width: 42px; height: 42px }
 }
 @media (821px <= width <= 1140px) {
   .hd-in { padding-inline: 24px; gap: 14px }

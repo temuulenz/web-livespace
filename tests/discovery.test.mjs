@@ -13,6 +13,7 @@ test('search covers catalogue metadata and district, without approximate distanc
   assert.equal(matchesDiscovery(cafe, 'coffee', 'Other'), false);
   assert.equal(matchesDiscovery(cafe, 'latte', ''), false);
   assert.equal(matchesDiscovery({ name: 'Minimal' }, 'minimal', ''), true);
+  assert.equal(matchesDiscovery({ name: 'Sunny', district: 'Сүхбаатар дүүрэг' }, '', 'Сүхбаатар'), true);
 });
 
 test('each recommendation needs its own public evidence', () => {
@@ -23,7 +24,6 @@ test('each recommendation needs its own public evidence', () => {
     categories: [{ id: 'unused', name: 'Кофе' }, { id: 'used', name: 'Амттан' }], products: [{ category_id: 'used' }]
   }));
   assert.equal(recommendationEntries([cafe], category('dessert'), ev).length, 1);
-  assert.equal(recommendationEntries([cafe], category('coffee'), ev).length, 0);
   const item = { state: 'active', starts_at: new Date(now - 60000).toISOString(), ends_at: new Date(now + 1000).toISOString(), title: 'Offer' };
   ev.promotions.set(cafe.id, { item: activePromotion({ items: [item] }, now), until: now + 500 });
   assert.equal(recommendationEntries([cafe], category('promo'), ev, { now })[0].reason, 'Offer');

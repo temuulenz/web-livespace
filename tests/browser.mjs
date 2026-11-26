@@ -74,14 +74,14 @@ try {
     })()`);
     assert.ok(await evaluate(`(() => {
       const buttons = [...document.querySelectorAll('.dis-chips button')];
-      return buttons.length === 6 && buttons.every(button => button.offsetWidth > 0) &&
+      return buttons.length === 5 && buttons.every(button => button.offsetWidth > 0) &&
         new Set(buttons.map(button => button.offsetTop)).size === 1;
     })()`));
     assert.ok(await evaluate(`document.querySelectorAll('.dis-card').length > 0 && document.querySelectorAll('.dis-card').length <= 4`));
     assert.equal(await evaluate(`document.querySelector('.dis-map').hash`), '#explore');
     assert.match(await evaluate(`document.querySelector('.dis-art img').currentSrc`), /cafe-dessert\.webp$/);
     assert.equal(await evaluate(`document.querySelectorAll('#miniMap,.dis-window .mk').length`), 0);
-    assert.equal(await evaluate(`document.querySelectorAll('[data-dis-dot]:not([hidden])').length`), 6);
+    assert.equal(await evaluate(`document.querySelectorAll('[data-dis-dot]:not([hidden])').length`), 5);
     await click('[data-dis-step="1"]');
     assert.equal(await evaluate(`document.querySelector('[data-dis-dot][aria-current="true"]').dataset.disDot`), 'dessert');
     assert.match(await evaluate(`document.querySelector('.dis-feature p').textContent`), /^Жишээ ·/);
@@ -106,8 +106,8 @@ try {
         await navigate('#home');
         const positions = () => evaluate(`[...document.querySelectorAll('.dis-search, .dis-chips')].map(el => el.getBoundingClientRect().top)`);
         const initial = await positions();
-        for (const category of ['dessert', 'work', 'promo', 'coffee', 'seats', 'near']) {
-          await click(`[data-dis-category="${category}"]`);
+        for (const category of ['dessert', 'work', 'promo', 'seats', 'near']) {
+          await click(`[data-dis-dot="${category}"]`);
           assert.equal(await evaluate(`document.querySelector('.dis-copy-panel[data-active]').dataset.disCopy`), category);
           assert.deepEqual(await positions(), initial, `${category} at ${width}px`);
         }
@@ -463,7 +463,7 @@ try {
       assert.ok(info.picture);
       assert.ok(info.input >= 105);
       assert.equal(info.desktopHeading, width > 820);
-      assert.deepEqual(info.controls, width <= 820 ? [46, 46] : [0, 46]);
+      assert.deepEqual(info.controls, width <= 820 ? [46, 46] : [0, 0]);
     }
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 660, deviceScaleFactor: 1, mobile: true });
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
@@ -495,7 +495,7 @@ try {
       row.scrollLeft = 60;
       const scrolls = row.scrollLeft > 0;
       row.scrollLeft = 0;
-      return buttons.length === 6 && row.scrollWidth > row.clientWidth && scrolls &&
+      return buttons.length === 5 && row.scrollWidth > row.clientWidth && scrolls &&
         new Set(buttons.map(button => button.offsetTop)).size === 1;
     })()`));
     const y = await evaluate(`Math.round(document.querySelector('.dis-art').getBoundingClientRect().top + 66)`);

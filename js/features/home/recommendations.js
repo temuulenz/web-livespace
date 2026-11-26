@@ -8,7 +8,6 @@ export const categories = [
   { key: 'dessert', label: 'Амттан', icon: dessertIcon, title: 'Гоё <em>амттантай</em> кафенууд', text: 'Нийтэлсэн цэсэндээ амттантай кафенуудыг сонирхоорой.', source: 'menu', menu: 'амттан' },
   { key: 'work', label: 'Ажиллах', icon: I.laptop, title: '<em>Ажиллахад</em> тохиромжтой', text: 'Ажиллах зориулалтаар бүртгэсэн кафенуудаас сонгоорой.' },
   { key: 'promo', label: 'Хямдрал', icon: I.tag || I.star, title: 'Кафены <em>урамшуулал</em>', text: 'Яг одоо нийтэд нээлттэй урамшуулалтай кафенуудыг үзээрэй.', source: 'promotions' },
-  { key: 'coffee', label: 'Кофе', icon: I.cup, title: '<em>Кофетой</em> кафенууд', text: 'Кофены сонголтоо нийтэлсэн цэснээс хараарай.', source: 'menu', menu: 'кофе' },
   { key: 'seats', label: 'Сул суудал', icon: I.seat, title: '<em>Сул суудалтай</em> кафенууд', text: 'Суудлын шинэ хэмжилттэй, нээлттэй кафенуудыг олоорой.' }
 ];
 
@@ -19,8 +18,13 @@ const demoReasons = {
 };
 
 const normalize = value => String(value ?? '').trim().toLowerCase();
+// The nine districts of Ulaanbaatar, offered in every district filter.
+export const UB_DISTRICTS = ['Багануур', 'Багахангай', 'Баянгол', 'Баянзүрх', 'Налайх', 'Сонгинохайрхан', 'Сүхбаатар', 'Хан-Уул', 'Чингэлтэй'];
+// «Сүхбаатар», «Сүхбаатар дүүрэг» and «сүхбаатар» all name the same district.
+export const districtKey = value => normalize(value).replace(/\s+дүүрэг$/, '');
+
 export function matchesDiscovery(cafe, query, district) {
-  if (district && cafe.district !== district) return false;
+  if (district && districtKey(cafe.district) !== districtKey(district)) return false;
   const needle = normalize(query);
   return !needle || [cafe.name, cafe.district, cafe.address, cafe.category, cafe.description, ...(cafe.tags || [])]
     .some(value => normalize(value).includes(needle));

@@ -39,7 +39,7 @@ export function loadMapLibre(config = MAP_CONFIG) {
   return loading;
 }
 
-export function buildGlMap(vp, { onSelect = null, markerHTML }, { onReady, onFail }) {
+export function buildGlMap(vp, { onSelect = null, markerHTML, cooperative = false }, { onReady, onFail }) {
   const host = document.createElement('div'); host.className = 'map-gl';
   vp.prepend(host); vp.dataset.map = 'loading';
   const events = new AbortController();
@@ -63,7 +63,11 @@ export function buildGlMap(vp, { onSelect = null, markerHTML }, { onReady, onFai
       container: host, style: mapStyle(), bounds: [[B.west, B.south], [B.east, B.north]],
       maxBounds: MAP_CONFIG.cityBounds, minZoom: MAP_CONFIG.minZoom, maxZoom: MAP_CONFIG.maxZoom,
       dragRotate: false, pitchWithRotate: false, touchPitch: false, attributionControl: false,
-      fadeDuration: animate() ? 300 : 0, locale: { 'NavigationControl.ZoomIn': 'Томруулах', 'NavigationControl.ZoomOut': 'Жижигрүүлэх' }
+      fadeDuration: animate() ? 300 : 0, cooperativeGestures: cooperative,
+      locale: { 'NavigationControl.ZoomIn': 'Томруулах', 'NavigationControl.ZoomOut': 'Жижигрүүлэх',
+        'CooperativeGesturesHandler.WindowsHelpText': 'Томруулахын тулд Ctrl товч дарж гүйлгэнэ үү',
+        'CooperativeGesturesHandler.MacHelpText': 'Томруулахын тулд ⌘ товч дарж гүйлгэнэ үү',
+        'CooperativeGesturesHandler.MobileHelpText': 'Газрын зургийг хоёр хуруугаар хөдөлгөнө үү' }
     });
     map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();
     // «© OpenStreetMap contributors» заавал харагдана; товч, шошгонд хаагдахгүй зүүн дээд буланд.
@@ -121,10 +125,15 @@ export function buildGlMap(vp, { onSelect = null, markerHTML }, { onReady, onFai
       if (dead || !map) return;
       const ll = [pos.coords.longitude, pos.coords.latitude], [[w, s], [e, n]] = MAP_CONFIG.cityBounds;
       if (ll[0] < w || ll[0] > e || ll[1] < s || ll[1] > n) { toast('Та Улаанбаатар хотоос гадна байна.'); return; }
-      if (!you) { const el = document.createElement('div'); el.className = 'ml-you'; el.innerHTML = '<span class="ml-you-pulse"></span><span class="ml-you-dot"></span><b>Та энд</b>'; you = new gl.Marker({ element: el, anchor: 'center' }); }
-      you.setLngLat(ll).addTo(map);
+      placeYou(ll);
       map.easeTo({ center: ll, zoom: Math.max(map.getZoom(), 15), duration: animate() ? 600 : 0 });
     }, err => toast(err.code === 1 ? 'Байршил ашиглах зөвшөөрөл олгогдоогүй байна.' : 'Байршлыг тодорхойлж чадсангүй.'), { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  }
+
+  // «Та энд» тэмдэг (байршлыг зөвхөн хөтөч дотор ашиглана, сервер рүү илгээхгүй).
+  function placeYou(ll) {
+    if (!you) { const el = document.createElement('div'); el.className = 'ml-you'; el.innerHTML = '<span class="ml-you-pulse"></span><span class="ml-you-dot"></span><b>Та энд</b>'; you = new gl.Marker({ element: el, anchor: 'center' }); }
+    you.setLngLat(ll).addTo(map);
   }
 
   function teardown() {
@@ -148,6 +157,14 @@ export function buildGlMap(vp, { onSelect = null, markerHTML }, { onReady, onFai
       map.easeTo({ center: [lng, lat], zoom: target, offset, duration: instant || !animate() ? 0 : 500 });
     },
     setPv(el) { pvEl = el; placePv(); },
+    // Хэрэглэгчийн байршил (эсвэл хотын төв) ба ойрын кафенуудыг нэг дор багтаана.
+    showNearby(ll, points, { you: showYouMark = true } = {}) {
+      if (!map) return;
+      if (showYouMark) placeYou(ll); else { you?.remove(); }
+      const all = [ll, ...points];
+      const b = all.reduce((acc, [x, y]) => [[Math.min(acc[0][0], x), Math.min(acc[0][1], y)], [Math.max(acc[1][0], x), Math.max(acc[1][1], y)]], [[ll[0], ll[1]], [ll[0], ll[1]]]);
+      map.fitBounds(b, { padding: 56, maxZoom: 15.5, duration: animate() ? 600 : 0 });
+    },
     select(id) { eachMk((m, mid) => m?.classList.toggle('sel', mid === id)); },
     hover(id, on) { mk(id)?.classList.toggle('hov', on); },
     dim(set) { eachMk((m, id) => m?.classList.toggle('dim', !set.has(id))); },

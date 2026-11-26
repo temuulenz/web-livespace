@@ -3,6 +3,7 @@ import { $, $$ } from '../../dom.js';
 import { I } from '../../icons.js';
 import { Prefs, favs } from '../../state.js';
 import { createTour } from './tour.js';
+import { nearbyHTML, mountNearby } from './nearby.js';
 import { platform, loadCatalogue } from '../../services/platform.js';
 import { categories, recommendationEntries, publishedMenuGroups, activePromotion, ratingText, isDemoCafe } from './recommendations.js';
 
@@ -72,9 +73,11 @@ export function discoveryHTML({ query, filterCount }) {
       </div>
     </section>
     <p class="dis-status" role="status"></p>
-    <a class="dis-map" href="#explore">${I.map}<span><b>Газрын зураг дээрээс кафе хайх</b><small>Байршлаар нь үзэж, очих газраа олоорой.</small></span>${expand}</a>
-    <section class="dis-more" aria-labelledby="dis-more-title">
-      <div class="dis-more-head"><h2 id="dis-more-title"><span aria-hidden="true">${I.star}</span><span class="dis-label-desktop">Энэ ангиллын бусад санал</span><span class="dis-label-mobile">Бусад санал</span></h2><button class="dis-tour" type="button" data-dis-tour aria-label="Хэрэглэх заавар">${I.info}</button><a href="#cafes">Бүгдийг харах ${I.arr}</a></div>
+    <a class="dis-map" href="#explore">${I.map}<span><b><em>Газрын зураг</em> дээрээс кафе хайх</b><small>Байршлаар нь үзэж, очих газраа олоорой.</small></span>${expand}</a>
+    <!-- «Танд ойрхон кафенууд» replaces the recommendation cards; they stay hidden so the carousel code keeps working. -->
+    ${nearbyHTML()}
+    <section class="dis-more" aria-labelledby="dis-more-title" hidden>
+      <div class="dis-more-head"><h2 id="dis-more-title"><span aria-hidden="true">${I.star}</span><span class="dis-label-desktop">Танд санал болгох</span><span class="dis-label-mobile">Танд санал болгох</span></h2><button class="dis-tour" type="button" data-dis-tour aria-label="Хэрэглэх заавар">${I.info}</button><a href="#cafes">Бүгдийг харах ${I.arr}</a></div>
       <div class="dis-track" tabindex="0" aria-label="Ижил ангиллын кафенууд"></div>
     </section>
   </div>`;
@@ -101,7 +104,7 @@ function compactCard({ cafe, reason }, index, category) {
   </article>`;
 }
 
-export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters, updateFilterUI }) {
+export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters, onCategory, cardHTML, updateFilterUI }) {
   const controller = new AbortController(), { signal } = controller;
   const on = (element, event, action) => element.addEventListener(event, action, { signal });
   const el = selector => $(selector, root);
@@ -242,6 +245,14 @@ export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters
     render({ manual: true, notice });
   }
 
+  // A category chip opens the map with that category's cafés.
+  async function openCategoryMap(category) {
+    if (category.source && !demoMode()) await enrich(category.source);
+    if (signal.aborted) return;
+    const ids = category.key === 'near' ? null : entryList(category).map(entry => entry.cafe.id);
+    onCategory(category, ids);
+  }
+
   function step(direction, manual = false) {
     const available = cycle(), index = Math.max(0, available.indexOf(current));
     if (available.length < 2) return;
@@ -264,7 +275,8 @@ export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters
       button.textContent = paused ? '▶' : 'Ⅱ';
       button.setAttribute('aria-label', paused ? 'Автомат солилтыг үргэлжлүүлэх' : 'Автомат солилтыг зогсоох');
     }
-    const category = button.dataset.disCategory || button.dataset.disDot;
+    if (button.dataset.disCategory) { openCategoryMap(find(button.dataset.disCategory)); return }
+    const category = button.dataset.disDot;
     if (category) select(find(category));
     if (button.hasAttribute('data-dis-retry')) {
       if (!platform.online) { location.reload(); return }
@@ -275,8 +287,9 @@ export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters
     }
   });
   on(el('#hs'), 'submit', event => { event.preventDefault(); onSearch(el('#hq').value.trim()) });
-  on(root, 'pointerenter', e => { if (e.pointerType === 'mouse') hover = true });
-  on(root, 'pointerleave', e => { if (e.pointerType === 'mouse') { hover = false; afterInteraction = Date.now() } });
+  // Pause only while the pointer is on the featured café itself, not anywhere on the page.
+  on(showcase, 'pointerenter', e => { if (e.pointerType === 'mouse') hover = true });
+  on(showcase, 'pointerleave', e => { if (e.pointerType === 'mouse') { hover = false; afterInteraction = Date.now() } });
   on(root, 'pointerdown', () => { afterInteraction = Date.now() });
   on(root, 'focusout', () => { afterInteraction = Date.now() });
   on(track, 'scroll', () => { if (!track.scrollLeft) return; afterInteraction = Date.now() });
@@ -301,15 +314,17 @@ export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters
   const timer = setInterval(() => {
     if (['promo', 'seats'].includes(current.key) && !entryList(current).length) { current = categories[0]; render() }
     if (paused || busy || hover || touching || !visible || document.hidden || Prefs.reduced || motion.matches ||
-      root.contains(document.activeElement) || $('#modal .mdl') || tour) {
+      showcase.contains(document.activeElement) || $('#modal .mdl') || tour) {
       next = Date.now() + 7000;
       return;
     }
     if (Date.now() >= Math.max(next, afterInteraction + 7000)) { step(1); next = Date.now() + 7000 }
   }, 500);
+  const nearby = mountNearby(el('.dis-near'), { cafes, cardHTML });
   function refresh() {
     if (current.key !== 'near' && !entryList(current).length) current = categories[0];
     render();
+    nearby.refresh();
   }
   const prime = setTimeout(() => {
     if (!platform.online || !cafes.some(c => !isDemoCafe(c))) return;
@@ -319,5 +334,5 @@ export function bindDiscovery(root, { cafes, matches, onSearch, onMap, onFilters
   }, 650);
   const unsub = ['cafe:updated', 'catalog:changed'].map(type => platform.bus.on(type, refresh));
   render();
-  return { refresh, destroy() { controller.abort(); tour?.end(false); observer.disconnect(); clearInterval(timer); clearTimeout(prime); unsub.forEach(fn => fn()) } };
+  return { refresh, destroy() { controller.abort(); nearby.destroy(); tour?.end(false); observer.disconnect(); clearInterval(timer); clearTimeout(prime); unsub.forEach(fn => fn()) } };
 }

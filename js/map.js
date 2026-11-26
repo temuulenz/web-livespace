@@ -49,7 +49,7 @@ function markerHTML(c) {
   return `<button class="mk${c.open ? '' : ' closed'}" data-mk="${c.id}" style="left:${c.x}px;top:${c.y}px;--pc:${toneVar(t)};--pd:${pd}" aria-label="${c.name}: ${c.open ? (freePct(c) == null ? 'суудлын хэмжилтгүй, ' : freePct(c) + '% суудал сул, ') + SS[c.sound].short + ' дуу, Wi-Fi ' + WIFI[c.wifi] : 'хаалттай'}">
   <span class="mk-name">${c.name}</span>
   <span class="mk-pinw">${c.open ? '<span class="mk-ring"></span>' : ''}${pinSVG(c.open ? '#FF9D00' : '#C9C2B4')}</span>
-  <span class="mk-pill">${seatRow(c.occ)}<span class="sep"></span><span class="sg">${ssGlyph(c.sound)}</span><span class="sep"></span>${wifiSVG(c.wifi, 15)}</span>
+  <span class="mk-pill">${seatRow(c.occ)}<span class="sep"></span><span class="sg">${ssGlyph(c.sound)}</span><span class="sep"></span>${wifiSVG(c.wifi, 15)}<b class="mk-v mk-v-seats num">${c.open && freePct(c) != null ? freePct(c) + '%' : '—'}</b><b class="mk-v mk-v-sound">${SS[c.sound]?.short || '—'}</b><b class="mk-v mk-v-wifi">${WIFI[c.wifi] ?? '—'}</b></span>
  </button>`}
 // `markers: false` draws only the illustration (the home page preview): no pins, live pills or pulses.
 // `live` marks the real map, which uses the green land colour from styles/livespace.css.
@@ -96,7 +96,7 @@ function buildSvgMap(vp, { interactive = true, onSelect = null, focus = null, ma
 function buildMap(vp, options = {}) {
   const { interactive = true } = options;
   if (!interactive || !MAP_CONFIG.enabled) { const svg = buildSvgMap(vp, options); vp.dataset.map = 'svg'; return svg; }
-  const state = { sel: null, dim: null, hits: null, pv: null, hov: new Set(), center: null };
+  const state = { sel: null, dim: null, hits: null, pv: null, hov: new Set(), center: null, nearby: null };
   let impl = null, dead = false;
   const live = () => impl && impl.ready !== false ? impl : null;
   const replay = () => {
@@ -105,6 +105,7 @@ function buildMap(vp, options = {}) {
     state.hov.forEach(id => m.hover(id, true));
     if (state.center) m.centerOn(...state.center.slice(0, 3), true);
     if (state.pv) m.setPv(state.pv);
+    if (state.nearby) m.showNearby?.(...state.nearby);
   };
   const fallback = () => {
     if (dead) return;
@@ -115,6 +116,7 @@ function buildMap(vp, options = {}) {
     fit() { live()?.fit() },
     centerOn(x, y, zoom) { state.center = [x, y, zoom]; live()?.centerOn(x, y, zoom) },
     setPv(el) { state.pv = el; live()?.setPv(el) },
+    showNearby(...args) { state.nearby = args; live()?.showNearby?.(...args) },
     select(id) { state.sel = id; live()?.select(id) },
     hover(id, on) { on ? state.hov.add(id) : state.hov.delete(id); live()?.hover(id, on) },
     dim(set) { state.dim = set; live()?.dim(set) },
